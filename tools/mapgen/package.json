@@ -10,6 +10,7 @@
   "dependencies": {
     "@worldline/shared": "workspace:*",
     "d3-geo": "^3.1.1",
+    "earcut": "^3.2.4",
     "fast-png": "^8.0.0",
     "topojson-client": "^3.1.0",
     "topojson-server": "^3.0.1",
@@ -18,6 +19,7 @@
   "devDependencies": {
     "@types/bun": "^1.4.3",
     "@types/d3-geo": "^3.1.1",
+    "@types/earcut": "^3.2.4",
     "@types/topojson-client": "^3.1.5",
     "@types/topojson-server": "^3.0.4",
     "@types/topojson-simplify": "^3.0.3",

@@ -114,7 +114,7 @@ export interface TurnResult {
   votes: ResolutionResult[];
 }
 
-export type ProposalDraft = Pick<Proposal, "kind" | "treatyType" | "members" | "terms" | "peace">;
+export type ProposalDraft = Pick<Proposal, "kind" | "treatyType" | "members" | "terms" | "peace" | "cessions">;
 
 export interface FormationRequest {
   name: string;
@@ -160,7 +160,7 @@ export type ServerMessage =
   | { t: "progress"; stage: "director" | "votes" | "resolver" | "applying" | "consolidating" | "done"; detail?: string }
   | { t: "turn"; result: TurnResult }
   | { t: "ai"; reqId: string; kind: "advisor" | "polish" | "brainstorm" | "formation"; ok: boolean; text?: string; ideas?: string[]; formationId?: string; error?: string }
-  | { t: "chat.typing"; chatId: string; from: string }
+  | { t: "chat.typing"; chatId: string; from: string; stop?: boolean }
   | { t: "toast"; level: "info" | "warn" | "error"; text: string }
   | { t: "error"; message: string };
 

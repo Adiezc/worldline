@@ -1,5 +1,5 @@
 import { BORDER_QUANT, type BordersData } from "@worldline/shared";
-import { fillFrag, fillVert, frontFrag, frontVert, lineFrag, lineVert } from "./shaders.ts";
+import { fillFrag, fillVert, frontFrag, frontVert, lineFrag, lineVert, meshFrag, meshVert } from "./shaders.ts";
 import { theme, type MapTheme } from "./theme.ts";
 
 export interface Camera {
@@ -13,6 +13,9 @@ export interface Camera {
 const PROV_TEX_W = 64;
 const PALETTE_W = 1024;
 const NONE = 0xffff;
+const MESH_MAGIC = 0x314d4c57; // "WLM1"
+/** Device px per map px from which the vector mesh replaces the raster land fill. */
+const MESH_ZOOM = 1.25;
 
 /** WebGL2 political map: a full-screen fill pass plus instanced border lines. */
 export class MapRenderer {
@@ -29,6 +32,9 @@ export class MapRenderer {
   private frontVao!: WebGLVertexArrayObject;
   private frontBuf!: WebGLBuffer;
   private frontCount = 0;
+  private meshProg!: WebGLProgram;
+  private meshVao: WebGLVertexArrayObject | null = null;
+  private meshIndexCount = 0;
   private borders: BordersData = { arcs: [] };
   /** Border arc indices by province pair (min * 65536 + max), built on first use. */
   private arcsByPair: Map<number, number[]> | null = null;
@@ -38,6 +44,8 @@ export class MapRenderer {
   private provData!: Uint16Array;
   private provRows = 0;
   private paletteTex!: WebGLTexture;
+  private marksTex!: WebGLTexture;
+  private marksData!: Uint8Array;
   private idTex!: WebGLTexture;
   private coastTex!: WebGLTexture;
   private reliefTex!: WebGLTexture;
@@ -48,7 +56,9 @@ export class MapRenderer {
   theme: MapTheme = theme;
 
   constructor(readonly canvas: HTMLCanvasElement) {
-    const gl = canvas.getContext("webgl2", { antialias: false, premultipliedAlpha: true, alpha: false });
+    // Multisampling smooths the vector mesh edges and the hard-edged line capsules; depth keeps
+    // overlapping line joints from blending twice.
+    const gl = canvas.getContext("webgl2", { antialias: true, depth: true, premultipliedAlpha: true, alpha: false });
     if (!gl) throw new Error("WebGL2 is not available in this browser");
     this.gl = gl;
   }
@@ -69,6 +79,7 @@ export class MapRenderer {
     this.fillProg = program(gl, fillVert, fillFrag);
     this.lineProg = program(gl, lineVert, lineFrag);
     this.frontProg = program(gl, frontVert, frontFrag);
+    this.meshProg = program(gl, meshVert, meshFrag);
     this.fillVao = gl.createVertexArray()!;
 
     gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
@@ -84,11 +95,42 @@ export class MapRenderer {
     this.provData = new Uint16Array(PROV_TEX_W * this.provRows * 2).fill(NONE);
     this.provTex = texture(gl, gl.RG16UI, PROV_TEX_W, this.provRows, gl.RG_INTEGER, gl.UNSIGNED_SHORT, this.provData, gl.NEAREST);
     this.paletteTex = texture(gl, gl.RGBA8, PALETTE_W, 1, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(PALETTE_W * 4), gl.NEAREST);
+    this.marksData = new Uint8Array(PROV_TEX_W * this.provRows);
+    this.marksTex = texture(gl, gl.R8UI, PROV_TEX_W, this.provRows, gl.RED_INTEGER, gl.UNSIGNED_BYTE, this.marksData, gl.NEAREST);
 
     this.borders = opts.borders;
     this.arcsByPair = null;
     this.buildLines(opts.borders);
     this.buildFrontVao();
+  }
+
+  /** Province mesh from mapgen (provinces.mesh.bin): positions, province ids, triangle indices. */
+  setMesh(buf: ArrayBuffer) {
+    const head = new Uint32Array(buf, 0, 4);
+    if (head[0] !== MESH_MAGIC) throw new Error("provinces.mesh.bin: bad header");
+    const V = head[1], I = head[2];
+    const posBytes = V * 4, idBytes = V * 2, pad = (4 - ((16 + posBytes + idBytes) % 4)) % 4;
+    const gl = this.gl, prog = this.meshProg;
+    const vao = gl.createVertexArray()!;
+    gl.bindVertexArray(vao);
+    const posBuf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Uint16Array(buf, 16, V * 2), gl.STATIC_DRAW);
+    const locPos = gl.getAttribLocation(prog, "aPos");
+    gl.enableVertexAttribArray(locPos);
+    gl.vertexAttribPointer(locPos, 2, gl.UNSIGNED_SHORT, false, 0, 0);
+    const idBuf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, idBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Uint16Array(buf, 16 + posBytes, V), gl.STATIC_DRAW);
+    const locId = gl.getAttribLocation(prog, "aId");
+    gl.enableVertexAttribArray(locId);
+    gl.vertexAttribIPointer(locId, 1, gl.UNSIGNED_SHORT, 0, 0);
+    const idx = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idx);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(buf, 16 + posBytes + idBytes + pad, I), gl.STATIC_DRAW);
+    gl.bindVertexArray(null);
+    this.meshVao = vao;
+    this.meshIndexCount = I;
   }
 
   /** True while front lines are drawn (the view then animates). */
@@ -242,6 +284,15 @@ export class MapRenderer {
     gl.texSubImage2D(gl.TEXTURE_2D, 0, id % PROV_TEX_W, Math.floor(id / PROV_TEX_W), 1, 1, gl.RG_INTEGER, gl.UNSIGNED_SHORT, texel);
   }
 
+  /** Provinces drawn with a gold hatch (picked for a proposal). */
+  setMarked(ids: ArrayLike<number>) {
+    this.marksData.fill(0);
+    for (let i = 0; i < ids.length; i++) if (ids[i] > 0 && ids[i] < this.marksData.length) this.marksData[ids[i]] = 1;
+    const gl = this.gl;
+    gl.bindTexture(gl.TEXTURE_2D, this.marksTex);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, PROV_TEX_W, this.provRows, gl.RED_INTEGER, gl.UNSIGNED_BYTE, this.marksData);
+  }
+
   resize(cssW: number, cssH: number, dpr: number) {
     this.canvas.width = Math.round(cssW * dpr);
     this.canvas.height = Math.round(cssH * dpr);
@@ -252,16 +303,74 @@ export class MapRenderer {
     const dpr = this.canvas.width / Math.max(1, this.canvas.clientWidth);
     const vw = this.canvas.width, vh = this.canvas.height;
     gl.viewport(0, 0, vw, vh);
-    const t = this.theme;
+    const halfW = vw / 2 / (this.camera.zoom * dpr);
+    const offsets = [-this.mapW, 0, this.mapW].filter(
+      (off) => !(this.camera.cx + halfW < off || this.camera.cx - halfW > off + this.mapW),
+    );
+    const meshMode = this.meshVao !== null && this.camera.zoom * dpr >= MESH_ZOOM;
 
-    // Fill pass.
+    // Fill pass: the whole map from the province bitmap, or only the sea when the mesh draws land.
     gl.disable(gl.BLEND);
+    gl.disable(gl.DEPTH_TEST);
     gl.useProgram(this.fillProg);
-    this.bindCommon(this.fillProg, dpr);
-    this.bindTex(this.fillProg, "uIds", this.idTex, 2);
-    this.bindTex(this.fillProg, "uCoast", this.coastTex, 3);
-    this.bindTex(this.fillProg, "uRelief", this.reliefTex, 4);
-    const u = (n: string) => this.loc(this.fillProg, n);
+    this.bindLand(this.fillProg, dpr);
+    gl.uniform1i(this.loc(this.fillProg, "uOceanOnly"), meshMode ? 1 : 0);
+    gl.bindVertexArray(this.fillVao);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+    if (meshMode) {
+      gl.useProgram(this.meshProg);
+      this.bindLand(this.meshProg, dpr);
+      gl.uniform1f(this.loc(this.meshProg, "uQuant"), BORDER_QUANT);
+      gl.bindVertexArray(this.meshVao);
+      for (const off of offsets) {
+        gl.uniform1f(this.loc(this.meshProg, "uOffsetX"), off);
+        gl.drawElements(gl.TRIANGLES, this.meshIndexCount, gl.UNSIGNED_INT, 0);
+      }
+    }
+
+    // Border lines, drawn for each horizontal wrap copy that may be visible.
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    gl.enable(gl.DEPTH_TEST);
+    gl.depthFunc(gl.LESS);
+    gl.depthMask(true);
+    gl.clear(gl.DEPTH_BUFFER_BIT);
+    gl.useProgram(this.lineProg);
+    this.bindCommon(this.lineProg, dpr);
+    gl.bindVertexArray(this.lineVao);
+    for (const off of offsets) {
+      gl.uniform1f(this.loc(this.lineProg, "uOffsetX"), off);
+      gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this.lineCount);
+    }
+    gl.disable(gl.DEPTH_TEST);
+
+    // Front lines above the borders: the casing first, then the core over every joint.
+    if (this.frontCount > 0) {
+      gl.useProgram(this.frontProg);
+      this.bindCommon(this.frontProg, dpr);
+      gl.uniform1f(this.loc(this.frontProg, "uTime"), this.time);
+      gl.bindVertexArray(this.frontVao);
+      for (const pass of [0, 1]) {
+        gl.uniform1i(this.loc(this.frontProg, "uPass"), pass);
+        for (const off of offsets) {
+          gl.uniform1f(this.loc(this.frontProg, "uOffsetX"), off);
+          gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this.frontCount);
+        }
+      }
+    }
+    gl.bindVertexArray(null);
+  }
+
+  /** Uniforms and textures for the land-shading programs (raster fill and mesh fill). */
+  private bindLand(prog: WebGLProgram, dpr: number) {
+    const gl = this.gl, t = this.theme;
+    this.bindCommon(prog, dpr);
+    this.bindTex(prog, "uIds", this.idTex, 2);
+    this.bindTex(prog, "uCoast", this.coastTex, 3);
+    this.bindTex(prog, "uRelief", this.reliefTex, 4);
+    this.bindTex(prog, "uMarks", this.marksTex, 5);
+    const u = (n: string) => this.loc(prog, n);
     gl.uniform1ui(u("uHover"), this.hover);
     gl.uniform1ui(u("uSelected"), this.selected);
     gl.uniform1ui(u("uSelOwner"), this.selectedOwner);
@@ -271,35 +380,6 @@ export class MapRenderer {
     gl.uniform1f(u("uSepia"), t.sepia);
     gl.uniform1f(u("uReliefK"), t.relief);
     gl.uniform3fv(u("uInk"), t.ink);
-    gl.bindVertexArray(this.fillVao);
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
-
-    // Border lines, drawn for each horizontal wrap copy that may be visible.
-    gl.enable(gl.BLEND);
-    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-    gl.useProgram(this.lineProg);
-    this.bindCommon(this.lineProg, dpr);
-    gl.bindVertexArray(this.lineVao);
-    const halfW = vw / 2 / (this.camera.zoom * dpr);
-    for (const off of [-this.mapW, 0, this.mapW]) {
-      if (this.camera.cx + halfW < off || this.camera.cx - halfW > off + this.mapW) continue;
-      gl.uniform1f(this.loc(this.lineProg, "uOffsetX"), off);
-      gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this.lineCount);
-    }
-
-    // Front lines above the borders.
-    if (this.frontCount > 0) {
-      gl.useProgram(this.frontProg);
-      this.bindCommon(this.frontProg, dpr);
-      gl.uniform1f(this.loc(this.frontProg, "uTime"), this.time);
-      gl.bindVertexArray(this.frontVao);
-      for (const off of [-this.mapW, 0, this.mapW]) {
-        if (this.camera.cx + halfW < off || this.camera.cx - halfW > off + this.mapW) continue;
-        gl.uniform1f(this.loc(this.frontProg, "uOffsetX"), off);
-        gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this.frontCount);
-      }
-    }
-    gl.bindVertexArray(null);
   }
 
   private bindCommon(prog: WebGLProgram, dpr: number) {

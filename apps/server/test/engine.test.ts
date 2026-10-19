@@ -415,6 +415,58 @@ describe("peace treaties from diplomacy", () => {
     expect(occupiedBy(state, "UKR", "RUS")).toHaveLength(0);
   });
 
+  /** A Ukrainian-held region on the front (borders Russian-controlled land) and one far from it. */
+  const demandTargets = (state: GameState) => {
+    const map = depsFor(seed).map;
+    const ukr = state.countries.findIndex((c) => c.tag === "UKR"), rus = state.countries.findIndex((c) => c.tag === "RUS");
+    const free = state.owners.flatMap((o, id) => (id > 0 && o === ukr && state.controllers[id] === ukr ? [id] : []));
+    const front = free.find((id) => map.neighbors[id].some((n) => state.controllers[n] === rus))!;
+    const far = free.filter((id) => !map.coastal[id]).sort((a, b) => map.cx[a] - map.cx[b])[0];
+    return { front, far, rus, ukr };
+  };
+
+  test("a named demand for unoccupied land passes when the enemy is near collapse", async () => {
+    const state = newGame(seed, [["p1", "RUS"]]);
+    const { front, rus } = demandTargets(state);
+    state.countries.find((c) => c.tag === "UKR")!.warExhaustion = 75;
+    const chatId = engine.openChat(state, { from: "RUS", with: ["UKR"] });
+    await engine.sendChat(state, depsFor(seed), {
+      chatId, playerId: "p1", text: "Sign, or lose more.",
+      proposal: {
+        kind: "endWar", peace: "keep_occupied", members: ["RUS", "UKR"], terms: "Ukraine cedes the named region.",
+        cessions: [{ from: "UKR", to: "RUS", provinces: [front] }],
+      },
+    });
+    const p = state.chats[0].messages.find((m) => m.proposal)!.proposal!;
+    expect(p.status).toBe("accepted");
+    expect(state.owners[front]).toBe(rus);
+    expect(state.wars.some((w) => w.attackers.includes("RUS") && w.defenders.includes("UKR"))).toBe(false);
+  });
+
+  test("the same demand is refused while the enemy can still fight", async () => {
+    const state = newGame(seed, [["p1", "RUS"]]);
+    const { front, ukr } = demandTargets(state);
+    state.countries.find((c) => c.tag === "UKR")!.warExhaustion = 30;
+    const chatId = engine.openChat(state, { from: "RUS", with: ["UKR"] });
+    await engine.sendChat(state, depsFor(seed), {
+      chatId, playerId: "p1", text: "Sign.",
+      proposal: { kind: "endWar", peace: "white", members: ["RUS", "UKR"], terms: "Ukraine cedes the named region.", cessions: [{ from: "UKR", to: "RUS", provinces: [front] }] },
+    });
+    expect(state.chats[0].messages.find((m) => m.proposal)!.proposal!.status).toBe("rejected");
+    expect(state.owners[front]).toBe(ukr);
+  });
+
+  test("a demand that would leave a region cut off is refused before it is sent", async () => {
+    const state = newGame(seed, [["p1", "RUS"]]);
+    const { far } = demandTargets(state);
+    const chatId = engine.openChat(state, { from: "RUS", with: ["UKR"] });
+    await expect(engine.sendChat(state, depsFor(seed), {
+      chatId, playerId: "p1", text: "",
+      proposal: { kind: "endWar", peace: "white", members: ["RUS", "UKR"], terms: "x", cessions: [{ from: "UKR", to: "RUS", provinces: [far] }] },
+    })).rejects.toThrow(/cut off/);
+    expect(state.chats[0].messages).toHaveLength(0);
+  });
+
   test("a white peace returns occupied land to its owner", async () => {
     const state = newGame(seed, [["p1", "UKR"]]);
     const held = occupiedBy(state, "UKR", "RUS");

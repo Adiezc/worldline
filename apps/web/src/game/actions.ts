@@ -1,6 +1,6 @@
 // User intents → store updates + client messages.
 import type { FormationRequest, GameSettings, ProposalDraft, ResolutionType } from "@worldline/shared";
-import { getMap } from "../map/controller.ts";
+import { getMap, getPickHandler } from "../map/controller.ts";
 import { useMap } from "../store.ts";
 import { flushOrders, scheduleOrdersSync, send } from "./connection.ts";
 import { countryMap } from "./selectors.ts";
@@ -86,6 +86,11 @@ export const setLeftTab = (tab: LeftTab | null) => useGame.setState({ leftTab: t
 export function handleMapClick(provinceId: number) {
   const view = useGame.getState().view;
   if (!view) return;
+  const pick = getPickHandler();
+  if (pick) {
+    if (provinceId) pick(provinceId);
+    return;
+  }
   if (!provinceId) {
     useMap.getState().setSelected(0);
     return;

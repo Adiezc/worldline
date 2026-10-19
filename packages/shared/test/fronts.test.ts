@@ -158,3 +158,27 @@ describe("estimateForces", () => {
     expect(frontName("XYZ", "Freedonia")).toBe("the Freedonia front");
   });
 });
+
+describe("counter placement", () => {
+  test("each side's counter sits in territory its side holds, next to the line", () => {
+    const s = realState();
+    const nearest = (x: number, y: number) => {
+      let best = 1, bd = Infinity;
+      for (let id = 1; id <= MAP.count; id++) {
+        const d = Math.hypot(MAP.cx[id] - x, MAP.cy[id] - y);
+        if (d < bd) { bd = d; best = id; }
+      }
+      return best;
+    };
+    const fronts = computeFronts(input(s));
+    expect(fronts.length).toBeGreaterThan(0);
+    for (const f of fronts) {
+      const holderA = s.countries[s.controllers[nearest(...f.anchorA)]].tag;
+      const holderB = s.countries[s.controllers[nearest(...f.anchorB)]].tag;
+      expect(Object.keys(f.holdersA)).toContain(holderA);
+      expect(Object.keys(f.holdersB)).toContain(holderB);
+      // Close to each other: both hug the same stretch of line.
+      expect(Math.hypot(f.anchorA[0] - f.anchorB[0], f.anchorA[1] - f.anchorB[1])).toBeLessThan(90);
+    }
+  });
+});

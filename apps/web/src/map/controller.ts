@@ -40,6 +40,8 @@ export interface MapController {
   setTheme(theme: EraTheme): void;
   /** Softly highlight every province of this owner index (null = follow the selection). */
   setHighlightOwner(owner: number | null): void;
+  /** Gold-hatch these provinces (e.g. regions picked for a peace deal); empty clears. */
+  setMarked(ids: ArrayLike<number>): void;
 }
 
 /**
@@ -55,6 +57,14 @@ export interface PaintHandler {
 let paintHandler: PaintHandler | null = null;
 export const setPaintHandler = (h: PaintHandler | null) => void (paintHandler = h);
 export const getPaintHandler = () => paintHandler;
+
+/**
+ * Region picker: while set, clicking a province hands it here instead of selecting its country
+ * (used to pick the land a peace deal names).
+ */
+let pickHandler: ((provinceId: number) => void) | null = null;
+export const setPickHandler = (h: ((provinceId: number) => void) | null) => void (pickHandler = h);
+export const getPickHandler = () => pickHandler;
 
 let current: MapController | null = null;
 const readyListeners = new Set<(c: MapController | null) => void>();

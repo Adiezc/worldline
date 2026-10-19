@@ -2,15 +2,20 @@
 // once through the validator, with the chat standing in for a player order.
 
 import {
-  applyEvent, atWar, ChatOutputSchema, countryByTag, getRelation, humanTags, newTurnContext, nextId, relKey,
-  type Chat, type ChatMessage, type Effect, type GameEvent, type GameState, type MapIndex, type Proposal,
-  type ProposalDraft, type TreatyType, type War,
+  applyEvent, atWar, ChatOutputSchema, connectedTransfer, countryByTag, countryIndex, getRelation, humanTags, newTurnContext,
+  nextId, relKey, type Chat, type ChatMessage, type Effect, type GameEvent, type GameState, type MapIndex, type Proposal,
+  type ProposalCession, type ProposalDraft, type TreatyType, type War,
 } from "@worldline/shared";
 import type { EngineDeps } from "./api.ts";
 import { countryDetail, nameOf, occupationSummary, orgsOf, recentEventsBlock, relationList, treatiesBlock } from "./context.ts";
 import { makeEvent } from "./game.ts";
 import { callJson } from "./llm.ts";
 import { chatSystem } from "./prompts.ts";
+
+/** A proposal the rules refuse before it is sent (the player sees the message as is). */
+export class ProposalError extends Error {
+  override name = "ProposalError";
+}
 
 const sameSet = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -37,7 +42,7 @@ export async function sendChat(
   if (!text && !opts.proposal) throw new Error("Empty message.");
 
   const humans = humanTags(state);
-  const proposal = opts.proposal ? draftToProposal(state, chat, from, opts.proposal) : undefined;
+  const proposal = opts.proposal ? draftToProposal(state, deps.map, chat, from, opts.proposal) : undefined;
   const msg: ChatMessage = { id: nextId(state, "m"), from, playerId: opts.playerId, text, at: state.date, proposal };
   const ai = chat.members.filter((m) => !humans.has(m) && countryByTag(state, m)?.alive);
   if (opts.speaker && !ai.includes(opts.speaker)) throw new Error(`${opts.speaker} is not an AI delegation in this conversation.`);
@@ -54,7 +59,7 @@ export async function sendChat(
     kind: "chat",
     schemaName: "ChatOutput",
     system: chatSystem(nameOf(state, speaker), speaker, present),
-    user: chatPrompt(state, chat, speaker, from, [...chat.messages, msg]),
+    user: chatPrompt(state, deps.map, chat, speaker, from, [...chat.messages, msg]),
     maxTokens: 1500,
     temperature: 0.8,
     mockContext: {
@@ -64,6 +69,9 @@ export async function sendChat(
         exhaustion: countryByTag(state, speaker)?.warExhaustion ?? 0,
         // Regions of the speaker held by the enemy: a losing side is readier to settle.
         landLost: state.owners.filter((o, id) => id > 0 && state.countries[o]?.tag === speaker && state.controllers[id] !== o).length,
+        // Named regions the speaker would give up that the other side does not even hold.
+        unheldDemand: (proposal.cessions ?? []).filter((c) => c.from === speaker)
+          .reduce((n, c) => n + c.provinces.filter((id) => state.controllers[id] === state.owners[id]).length, 0),
       } : undefined,
     },
   }, ChatOutputSchema);
@@ -126,16 +134,65 @@ export function respondProposal(
 
 // ---- helpers ----
 
-function draftToProposal(state: GameState, chat: Chat, from: string, d: ProposalDraft): Proposal {
+function draftToProposal(state: GameState, map: MapIndex, chat: Chat, from: string, d: ProposalDraft): Proposal {
   const humans = humanTags(state);
   const members = [...new Set([from, ...d.members])].filter((t) => countryByTag(state, t)?.alive);
-  if (members.length < 2) throw new Error("A proposal needs at least two parties.");
+  if (members.length < 2) throw new ProposalError("A proposal needs at least two parties.");
+  const peace = d.kind === "endWar" ? (d.peace === "keep_occupied" ? "keep_occupied" : "white") : undefined;
+  const cessions = d.kind === "endWar" ? draftCessions(state, map, members, peace!, d.cessions) : undefined;
   return {
     id: nextId(state, "p"), kind: d.kind, treatyType: d.kind === "treaty" ? d.treatyType ?? "nonaggression" : d.treatyType,
-    peace: d.kind === "endWar" ? (d.peace === "keep_occupied" ? "keep_occupied" : "white") : undefined,
+    peace, cessions: cessions?.length ? cessions : undefined,
     members, terms: d.terms.trim().slice(0, 1000), status: "open",
     awaiting: chat.members.filter((m) => m !== from && humans.has(m)),
   };
+}
+
+const warBetween = (state: GameState, members: string[]) =>
+  state.wars.find((w) => members.some((a) => w.attackers.includes(a)) && members.some((d) => w.defenders.includes(d)));
+
+const MAX_NAMED_REGIONS = 150;
+
+/**
+ * Regions a peace proposal names, checked up front so the other side judges terms that can
+ * actually happen: each must belong to the ceding party, the two must be on opposite sides of
+ * the war, and nothing may be left cut off from its new owner.
+ */
+function draftCessions(
+  state: GameState, map: MapIndex, members: string[], peace: "white" | "keep_occupied", raw: unknown,
+): ProposalCession[] | undefined {
+  if (!Array.isArray(raw) || !raw.length) return undefined;
+  const war = warBetween(state, members);
+  if (!war) throw new ProposalError("There is no war between these parties.");
+  const side = (t: string) => (war.attackers.includes(t) ? "a" : war.defenders.includes(t) ? "d" : "");
+  const seen = new Set<number>();
+  const out: ProposalCession[] = [];
+  for (const c of raw.slice(0, 16) as Partial<ProposalCession>[]) {
+    if (!c || typeof c.from !== "string" || typeof c.to !== "string" || !Array.isArray(c.provinces)) continue;
+    if (!members.includes(c.from) || !members.includes(c.to) || !side(c.from) || !side(c.to) || side(c.from) === side(c.to)) {
+      throw new ProposalError(`${nameOf(state, c.from)} and ${nameOf(state, c.to)} are not opposing parties in this war.`);
+    }
+    const fromIdx = countryIndex(state, c.from);
+    const ids = [...new Set(c.provinces.map(Number))].filter((id) =>
+      Number.isInteger(id) && id >= 1 && id <= map.count && state.owners[id] === fromIdx && !seen.has(id));
+    for (const id of ids) seen.add(id);
+    if (ids.length) out.push({ from: c.from, to: c.to, provinces: ids });
+  }
+  if (seen.size > MAX_NAMED_REGIONS) throw new ProposalError(`A peace deal can name at most ${MAX_NAMED_REGIONS} regions.`);
+  // Connectivity per recipient, counting land it would also keep under "keep what you hold".
+  const kept = peace === "keep_occupied" ? occupiedCessions(state, war) : [];
+  for (const to of new Set(out.map((c) => c.to))) {
+    const toIdx = countryIndex(state, to);
+    const named = out.filter((c) => c.to === to).flatMap((c) => c.provinces);
+    const alsoKept = kept.flatMap((e) => (e.type === "transferProvinces" && e.to === to ? e.provinces : []));
+    const linked = connectedTransfer(state, map, [...named, ...alsoKept], toIdx);
+    const stranded = named.filter((id) => !linked.has(id));
+    if (stranded.length) {
+      const list = stranded.slice(0, 4).map((id) => map.names[id] ?? `region ${id}`).join(", ");
+      throw new ProposalError(`${list}${stranded.length > 4 ? ` and ${stranded.length - 4} more` : ""} would be cut off from ${nameOf(state, to)}. Add the regions in between, or pick land that borders it.`);
+    }
+  }
+  return out;
 }
 
 /** Non-speaking AI parties in group chats accept on goodwill: friendly and not at war with a party. */
@@ -161,7 +218,7 @@ function pickSpeaker(state: GameState, chat: Chat, text: string, p: Proposal | u
   return [...ai].sort((a, b) => score(b) - score(a))[0];
 }
 
-function chatPrompt(state: GameState, chat: Chat, speaker: string, from: string, history: ChatMessage[]) {
+function chatPrompt(state: GameState, map: MapIndex, chat: Chat, speaker: string, from: string, history: ChatMessage[]) {
   const humans = humanTags(state);
   const me = countryByTag(state, speaker)!, them = countryByTag(state, from)!;
   const focus = new Set(chat.members.length > 2 ? chat.members : [speaker, from]);
@@ -180,7 +237,7 @@ function chatPrompt(state: GameState, chat: Chat, speaker: string, from: string,
     if (m.proposal) {
       const p = m.proposal;
       s += `\n  PROPOSAL (${p.status}): ${p.kind}${p.treatyType ? ` (${p.treatyType})` : ""} between ${p.members.join(", ")}; terms: ${p.terms}`;
-      if (p.kind === "endWar") s += `\n  PEACE TERMS: ${describePeace(state, p)}`;
+      if (p.kind === "endWar") s += `\n  PEACE TERMS: ${describePeace(state, p, map)}`;
     }
     return s;
   });
@@ -214,6 +271,7 @@ export function applyProposal(state: GameState, map: MapIndex, chat: Chat, p: Pr
   const joined = names.length > 2 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names.join(" and ");
   let effect: Effect | undefined;
   let cessions: Effect[] = [];
+  let negotiated = false;
   let headline = `${joined} reach an agreement`;
 
   switch (p.kind) {
@@ -224,12 +282,23 @@ export function applyProposal(state: GameState, map: MapIndex, chat: Chat, p: Pr
       break;
     }
     case "endWar": {
-      const war = state.wars.find((w) =>
-        p.members.some((a) => w.attackers.includes(a)) && p.members.some((d) => w.defenders.includes(d)));
+      const war = warBetween(state, p.members);
       if (!war) return { ok: false, message: "There is no war between these parties." };
       effect = { type: "makePeace", warId: war.id, terms: p.terms };
-      cessions = p.peace === "keep_occupied" ? occupiedCessions(state, war) : [];
-      headline = cessions.length ? `${joined} make peace; occupied land changes hands` : `${joined} agree to end the ${war.name}`;
+      // Regions named in the deal go where it says; "keep what you hold" covers the rest.
+      const named = new Set((p.cessions ?? []).flatMap((c) => c.provinces));
+      const kept = p.peace === "keep_occupied"
+        ? occupiedCessions(state, war).flatMap((e) => {
+          if (e.type !== "transferProvinces") return [];
+          const provinces = e.provinces.filter((id) => !named.has(id));
+          return provinces.length ? [{ ...e, provinces }] : [];
+        })
+        : [];
+      cessions = [...kept, ...(p.cessions ?? []).map((c): Effect => ({ type: "transferProvinces", provinces: c.provinces, from: c.from, to: c.to }))];
+      negotiated = named.size > 0;
+      headline = named.size
+        ? `${joined} sign a peace treaty; ${(p.cessions ?? []).map((c) => `${nameOf(state, c.from)} cedes ${c.provinces.length} region${c.provinces.length === 1 ? "" : "s"} to ${nameOf(state, c.to)}`).join(", ")}`
+        : cessions.length ? `${joined} make peace; occupied land changes hands` : `${joined} agree to end the ${war.name}`;
       break;
     }
     case "joinOrg": {
@@ -255,6 +324,8 @@ export function applyProposal(state: GameState, map: MapIndex, chat: Chat, p: Pr
   const parties = p.members.filter((m) => humans.has(m));
   const causes = parties.map((h, i) => (i === 0 ? `chat:${chat.id}` : `chat:${chat.id}#${h}`));
   const ctx = newTurnContext(30, parties.map((h, i) => ({ id: causes[i], country: h })));
+  // Both sides signed off on exactly these regions, so they may include unoccupied land.
+  ctx.negotiated = negotiated;
   const ev = makeEvent(state, {
     date: state.date, headline, body: p.terms, countries: p.members, causes: causes.length ? causes : [`chat:${chat.id}`],
     effects: effect ? [effect, ...cessions] : [], scope: "player",
@@ -289,10 +360,24 @@ export function occupiedCessions(state: GameState, war: War): Effect[] {
   });
 }
 
-function describePeace(state: GameState, p: Proposal) {
-  const war = state.wars.find((w) => p.members.some((a) => w.attackers.includes(a)) && p.members.some((d) => w.defenders.includes(d)));
+function describePeace(state: GameState, p: Proposal, map?: MapIndex) {
+  const war = warBetween(state, p.members);
   if (!war) return "no war exists between these parties";
-  if (p.peace !== "keep_occupied") return "white peace: every occupied region returns to its owner";
-  const moves = occupiedCessions(state, war).map((e) => (e.type === "transferProvinces" ? `${e.from} cedes ${e.provinces.length} region(s) to ${e.to}` : ""));
-  return moves.length ? `each side keeps what it holds: ${moves.join("; ")}` : "each side keeps what it holds (nothing is occupied, so this equals a white peace)";
+  let base: string;
+  if (p.peace !== "keep_occupied") base = "otherwise white peace: every other occupied region returns to its owner";
+  else {
+    const moves = occupiedCessions(state, war).map((e) => (e.type === "transferProvinces" ? `${e.from} cedes ${e.provinces.length} region(s) to ${e.to}` : ""));
+    base = moves.length ? `otherwise each side keeps what it holds: ${moves.join("; ")}` : "otherwise each side keeps what it holds (nothing is occupied, so this equals a white peace)";
+  }
+  const named = (p.cessions ?? []).map((c) => {
+    const toSide = new Set((war.attackers.includes(c.to) ? war.attackers : war.defenders).map((t) => countryIndex(state, t)));
+    const held = c.provinces.filter((id) => toSide.has(state.controllers[id])).length;
+    const names = c.provinces.slice(0, 12).map((id) => map?.names[id] ?? `region ${id}`).join(", ");
+    const more = c.provinces.length > 12 ? ` and ${c.provinces.length - 12} more` : "";
+    const holding = held === c.provinces.length
+      ? `all already occupied by ${c.to}'s side`
+      : `${c.provinces.length - held} of them NOT occupied by ${c.to}'s side (${c.from} would hand over land it still holds)`;
+    return `${c.from} CEDES ${c.provinces.length} named region(s) to ${c.to}: ${names}${more}; ${holding}`;
+  });
+  return named.length ? `${named.join("; ")}; ${base}` : base.replace(/^otherwise /, "");
 }

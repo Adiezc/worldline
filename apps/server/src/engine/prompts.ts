@@ -126,6 +126,7 @@ OUTPUT: one JSON object, nothing else:
 - relationDelta: how this exchange changes your view of them, -5..5 (usually -2..2).
 - acceptsPlayerProposal: include it ONLY when their last message contains a PROPOSAL; true only if your government would really sign it now.
 - Peace proposals: weigh the war honestly. Accept when the war is going badly for you (heavy exhaustion, land lost, little chance of reversing it) or the terms are generous; refuse when you are winning or the terms give away land you still hold or could retake. PEACE TERMS says exactly what changes hands.
+- Named cessions of land the other side does NOT occupy are a demand for territory it has not won. Governments almost never sign those away: accept only if your position is collapsing (very high war exhaustion, much of your land already lost, a far stronger enemy) or the regions are few, peripheral and the deal gives you something real in return. Otherwise refuse, say which regions are unacceptable, and you may counter with "keep_occupied" or "white" terms.
 - proposal: optional, only if you want to offer a concrete deal yourself. kind treaty (with treatyType alliance|defensive|trade|nonaggression|customs_union), endWar (members = the two warring sides; add "peace":"white" or "keep_occupied"), joinOrg, or custom. You must be one of the members. Omit it otherwise.`;
 }
 

@@ -40,7 +40,7 @@ export interface Front {
   pairs: [number, number][];
   /** Estimated length in km. */
   length: number;
-  /** Counter positions in map px, just inside each side's territory. */
+  /** Counter positions in map px: either side of the line, at its middle. */
   anchorA: [number, number];
   anchorB: [number, number];
   /** Frontline km held by each controller on either side (co-belligerents included). */
@@ -153,21 +153,22 @@ function buildFront(input: FrontsInput, warId: string, root: number, pairs: [num
     provB.add(b);
     gap += Math.hypot(ux(map.cx[a]) - ux(map.cx[b]), map.cy[a] - map.cy[b]);
   }
-  const centroid = (set: Set<number>): [number, number] => {
-    let x = 0, y = 0;
-    for (const id of set) {
-      x += ux(map.cx[id]);
-      y += map.cy[id];
-    }
-    return [x / set.size, y / set.size];
-  };
-  const ca = centroid(provA), cb = centroid(provB);
-  // Nudge each anchor a quarter of a province step away from the other side.
-  let dx = ca[0] - cb[0], dy = ca[1] - cb[1];
-  const d = Math.hypot(dx, dy);
-  if (d < 1e-3) [dx, dy] = [-1, 0];
-  else [dx, dy] = [dx / d, dy / d];
-  const nudge = Math.min(40, Math.max(4, (gap / pairs.length) * 0.25));
+  // Counters sit on the line itself: take the pair nearest the middle of the front (a medoid,
+  // so an L-shaped front can't pull it off the line) and place each side's counter part-way into
+  // its own province of that pair. Centroids of whole sides could land on the wrong side.
+  const mids = pairs.map(([a, b]) => [(ux(map.cx[a]) + ux(map.cx[b])) / 2, (map.cy[a] + map.cy[b]) / 2] as const);
+  const mx = mids.reduce((s, m) => s + m[0], 0) / mids.length, my = mids.reduce((s, m) => s + m[1], 0) / mids.length;
+  let best = 0;
+  for (let i = 1; i < mids.length; i++) {
+    if (Math.hypot(mids[i][0] - mx, mids[i][1] - my) < Math.hypot(mids[best][0] - mx, mids[best][1] - my)) best = i;
+  }
+  const [pa, pb] = pairs[best];
+  const mid = mids[best];
+  const toward = (id: number, k: number): [number, number] => [mid[0] + (ux(map.cx[id]) - mid[0]) * k, mid[1] + (map.cy[id] - mid[1]) * k];
+  // Far enough to clear the line, never more than ~40 map px from it.
+  const reach = (id: number) => Math.min(0.45, 40 / Math.max(1, Math.hypot(ux(map.cx[id]) - mid[0], map.cy[id] - mid[1])));
+  const ca = toward(pa, reach(pa)), cb = toward(pb, reach(pb));
+  void gap;
   const wrap = (x: number) => ((x % W) + W) % W;
   const main = (h: Record<string, number>) => Object.entries(h).sort((x, y) => y[1] - x[1])[0][0];
   return {
@@ -177,8 +178,8 @@ function buildFront(input: FrontsInput, warId: string, root: number, pairs: [num
     sideB: main(holdersB),
     pairs,
     length: Math.round(length),
-    anchorA: [wrap(ca[0] + dx * nudge), ca[1] + dy * nudge],
-    anchorB: [wrap(cb[0] - dx * nudge), cb[1] - dy * nudge],
+    anchorA: [wrap(ca[0]), ca[1]],
+    anchorB: [wrap(cb[0]), cb[1]],
     holdersA,
     holdersB,
   };

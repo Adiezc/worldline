@@ -100,14 +100,10 @@ function CountryDetails({ view, c }: { view: GameView; c: Country }) {
             <Button size="sm" variant="primary" icon="chat" onClick={() => openDiplomacy(c.tag)}>
               Open diplomacy
             </Button>
-            <Button size="sm" variant="secondary" icon="scroll" onClick={() => openDiplomacy(c.tag, true)}>
-              Propose treaty
+            {/* At war, the treaty builder opens on peace terms; other kinds stay one click away. */}
+            <Button size="sm" variant="secondary" icon="scroll" onClick={() => openDiplomacy(c.tag, true, atWarWithMe ? "peace" : undefined)}>
+              {atWarWithMe ? "Propose peace treaty" : "Propose treaty"}
             </Button>
-            {atWarWithMe && (
-              <Button size="sm" variant="secondary" icon="flag" onClick={() => openDiplomacy(c.tag, true, "peace")}>
-                Negotiate peace
-              </Button>
-            )}
           </>
         )}
         {isMe && (

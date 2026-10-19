@@ -154,7 +154,7 @@ function director(c: DirectorCtx, rng: Rng) {
   return { intents, agendaUpdates: [], resolutions: [] };
 }
 
-function chat(c: { speaker: string; speakerName: string; player: string; playerName: string; relation: number; hasProposal: boolean; peace?: { exhaustion: number; landLost: number } }) {
+function chat(c: { speaker: string; speakerName: string; player: string; playerName: string; relation: number; hasProposal: boolean; peace?: { exhaustion: number; landLost: number; unheldDemand?: number } }) {
   const r = c.relation ?? 0;
   const tone = r > 40 ? "warm" : r > 0 ? "neutral" : r > -40 ? "cold" : "hostile";
   const reply = {
@@ -168,7 +168,10 @@ function chat(c: { speaker: string; speakerName: string; player: string; playerN
   };
   if (c.hasProposal) {
     // Peace is judged on the war, not on friendship: exhausted or losing sides settle.
-    const accept = c.peace ? c.peace.exhaustion >= 25 || c.peace.landLost > 0 : r > 20;
+    // Demands for land the enemy has not taken only pass when this side is close to collapse.
+    const accept = c.peace
+      ? (c.peace.exhaustion >= 25 || c.peace.landLost > 0) && (!c.peace.unheldDemand || c.peace.exhaustion >= 60)
+      : r > 20;
     out.acceptsPlayerProposal = accept;
     out.reply = c.peace
       ? accept ? `${c.speakerName} is prepared to end this war on these terms.` : `${c.speakerName} will not make peace on these terms while the fighting favours us.`

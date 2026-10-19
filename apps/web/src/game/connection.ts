@@ -108,6 +108,14 @@ function handleMessage(msg: ServerMessage) {
       handleAi(msg);
       break;
     case "chat.typing":
+      if (msg.stop) {
+        useGame.setState((st) => {
+          const typing = { ...st.typing };
+          delete typing[msg.chatId];
+          return { typing };
+        });
+        break;
+      }
       useGame.setState((st) => {
         const count = st.view?.chats.find((c) => c.id === msg.chatId)?.messages.length ?? 0;
         return { typing: { ...st.typing, [msg.chatId]: { from: msg.from, until: Date.now() + 15000, count } } };

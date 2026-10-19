@@ -33,7 +33,8 @@ void main() {
   gl_Position = vec4(vClip, 0.0, 1.0);
 }`;
 
-export const fillFrag = common + /* glsl */ `
+// Land shading shared by the raster fill (zoomed out) and the vector mesh fill (zoomed in).
+const landLib = common + /* glsl */ `
 uniform usampler2D uIds;
 uniform sampler2D uCoast;
 uniform sampler2D uRelief; // 8-bit hillshade, flat = 206
@@ -46,9 +47,9 @@ uniform float uPoliticalMix;
 uniform float uSepia;
 uniform float uReliefK;
 uniform vec3 uInk;
+uniform usampler2D uMarks; // 1 = province picked for a proposal (64 wide, like uProv)
 
-in vec2 vClip;
-out vec4 outColor;
+bool marked(uint id) { return texelFetch(uMarks, ivec2(int(id) % 64, int(id) / 64), 0).r != 0u; }
 
 ivec2 wrapTexel(vec2 p) {
   int w = int(uMapSize.x);
@@ -58,7 +59,27 @@ ivec2 wrapTexel(vec2 p) {
 }
 uint idAt(vec2 p) { return texelFetch(uIds, wrapTexel(p), 0).r; }
 
-float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+// Sin-free hashes: sin() of large arguments loses precision on many GPUs and turns into grain.
+float hash(vec2 p) {
+  vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.x + p3.y) * p3.z);
+}
+vec2 hash2(vec2 p) {
+  vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.103, 0.0973));
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.xx + p3.yz) * p3.zy) * 2.0 - 1.0;
+}
+// Gradient noise on a lattice that repeats every \`period\` cells in x, so the sea is seamless
+// across the date line; quintic fade avoids the square blotches of value noise.
+float gnoise(vec2 p, float period) {
+  vec2 i = floor(p), f = fract(p);
+  vec2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+  vec2 i0 = vec2(mod(i.x, period), i.y), i1 = vec2(mod(i.x + 1.0, period), i.y);
+  float a = dot(hash2(i0), f), b = dot(hash2(i1), f - vec2(1, 0));
+  float c = dot(hash2(i0 + vec2(0, 1)), f - vec2(0, 1)), d = dot(hash2(i1 + vec2(0, 1)), f - vec2(1, 1));
+  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
 float noise(vec2 p) {
   vec2 i = floor(p), f = fract(p);
   vec2 u = f * f * (3.0 - 2.0 * f);
@@ -67,7 +88,7 @@ float noise(vec2 p) {
 float fbm(vec2 p) { return noise(p) * 0.5 + noise(p * 2.03) * 0.25 + noise(p * 4.1) * 0.125 + noise(p * 8.3) * 0.0625; }
 
 vec3 countryColor(uint owner) {
-  if (owner == NONE) return vec3(0.62, 0.6, 0.55);
+  if (owner >= NONE - 1u) return vec3(0.62, 0.6, 0.55);
   return texelFetch(uPalette, ivec2(int(owner), 0), 0).rgb;
 }
 
@@ -75,9 +96,21 @@ vec3 landColor(uint id, vec2 world) {
   uvec2 info = provInfo(id);
   vec3 c = countryColor(info.x);
   if (info.y != info.x) {
-    // Occupation: diagonal stripes in the controller's colour.
-    float s = step(0.5, fract((world.x + world.y) / 7.0));
+    // Occupation: diagonal stripes in the controller's colour, edges filtered to the pixel size.
+    float v = (world.x + world.y) / 7.0;
+    float tri = abs(fract(v) - 0.5);
+    float aa = 1.0 / (7.0 * uZoom);
+    float s = smoothstep(0.25 - aa, 0.25 + aa, tri);
     c = mix(c, countryColor(info.y), s * 0.85);
+  }
+  if (marked(id)) {
+    // Picked for a peace deal: a gold wash with a fine cross-hatch (unlike occupation's
+    // single-direction stripes in the occupier's colour).
+    float period = 7.0 * max(uDpr, 1.0) / uZoom; // ~7 CSS px at any zoom
+    float aa = 1.0 / (period * uZoom);
+    float d1 = abs(fract((world.x - world.y) / period) - 0.5), d2 = abs(fract((world.x + world.y) / period) - 0.5);
+    float h = max(smoothstep(0.38 - aa, 0.38 + aa, d1), smoothstep(0.38 - aa, 0.38 + aa, d2));
+    c = mix(mix(c, vec3(0.96, 0.78, 0.33), 0.45), vec3(0.42, 0.3, 0.08), h * 0.55);
   }
   if (id == uSelected) c = mix(c, vec3(1.0), 0.28);
   else if (id == uHover) c = mix(c, vec3(1.0), 0.14);
@@ -86,9 +119,21 @@ vec3 landColor(uint id, vec2 world) {
 }
 
 vec3 oceanColor(vec2 world) {
-  // Flat sea with a faint texture; lighter coastal water read as a glow around the land.
-  return uOceanDeep + (fbm(world * 0.02) - 0.5) * 0.045;
+  // Calm sea: a few broad, soft swells. Octaves finer than ~4 device px fade out, so zooming
+  // never shows speckle.
+  vec2 q = vec2(mod(world.x, uMapSize.x), world.y);
+  float fp = 1.0 / uZoom;
+  float n = 0.0, amp = 0.55, cells = 48.0;
+  for (int k = 0; k < 4; k++) {
+    float cell = uMapSize.x / cells;
+    n += gnoise(q / cell, cells) * amp * (1.0 - smoothstep(0.12, 0.25, fp / cell));
+    cells *= 2.0;
+    amp *= 0.5;
+  }
+  return uOceanDeep * (1.0 + n * 0.09);
 }
+
+vec3 paperColor(vec2 world) { return uPaper + (fbm(world * 0.35) - 0.5) * 0.06; }
 
 // Cubic B-spline relief lookup from four bilinear taps: hides the texel grid up close.
 vec4 cubicW(float v) {
@@ -116,11 +161,78 @@ float reliefAt(vec2 uv) {
 
 uint ownerOf(uint id) { return id == 0u ? NONE - 1u : provInfo(id).x; }
 
+// Inward country-border tint (Victoria 3 style): how much of a ring around us belongs to
+// someone else. Sampled from the province bitmap, so it fades out up close where its texels
+// would show as steps (the vector border line carries the edge there).
+vec3 borderTint(vec3 col, uint id, vec2 world) {
+  float fade = 1.0 - smoothstep(2.0, 5.0, uZoom);
+  if (fade <= 0.0) return col;
+  float fp = 1.0 / uZoom;
+  uint me = ownerOf(id);
+  float r = clamp(7.0 * fp, 1.2, 28.0);
+  float other = 0.0;
+  for (int k = 0; k < 8; k++) {
+    float a = float(k) * 0.785398;
+    vec2 d = vec2(cos(a), sin(a));
+    uint o1 = ownerOf(idAt(world + d * r));
+    uint o2 = ownerOf(idAt(world + d * r * 0.45));
+    other += (o1 != me && o1 != NONE - 1u ? 0.6 : 0.0) + (o2 != me && o2 != NONE - 1u ? 0.4 : 0.0);
+  }
+  float edge = clamp(other / 4.0, 0.0, 1.0) * fade;
+  col = mix(col, countryColor(me) * 0.72, edge * 0.55);
+  // Gentle inland darkening keeps continents from looking flat at world scale.
+  float inland = texture(uCoast, world / uMapSize).r;
+  return col * (1.0 - smoothstep(0.5, 1.0, inland) * 0.05);
+}
+
+// Relief, ink contour and sepia. Must run in uniform control flow (uses derivatives).
+vec3 finish(vec3 col, vec2 world, float landW) {
+  float zoomCss = uZoom / max(uDpr, 1.0);
+  float shade = reliefAt(world / uMapSize) - 206.0 / 255.0;
+  // Up close a hillshade texel spans many pixels and reads as soft blobs: add fine ridged
+  // detail where the terrain is already rough, so mountains keep a crisp texture.
+  float closeUp = smoothstep(1.2, 4.0, zoomCss);
+  if (closeUp > 0.0) {
+    float n = fbm(world * 0.9) - 0.5;
+    float ridge = 0.5 - abs(fbm(world * 0.45 + 17.0) - 0.5);
+    shade += (n * 0.6 + (ridge - 0.25) * 0.8) * min(abs(shade) * 3.0 + 0.02, 0.25) * closeUp;
+  }
+  // Soft-clip the extremes so deep shadows never go black.
+  shade = shade / (1.0 + abs(shade) * 1.2);
+  float contour = abs(shade + 0.12) / max(fwidth(shade), 1e-4);
+  if (landW > 0.0) {
+    // Subtle at world scale so political colours stay readable, stronger at regional zoom,
+    // easing off again up close where the half-resolution hillshade would look smeared.
+    float k = uReliefK * mix(1.15, 1.9, smoothstep(0.35, 2.0, zoomCss)) * mix(1.0, 0.6, smoothstep(2.0, 7.0, zoomCss));
+    col *= 1.0 + shade * k * landW;
+    // A faint hand-inked outline where slopes turn into deep shadow (mountains only).
+    float line = (1.0 - smoothstep(0.6, 1.6, contour)) * smoothstep(0.7, 1.8, zoomCss);
+    col = mix(col, uInk, line * 0.14 * landW);
+  }
+  if (uSepia > 0.0) {
+    float l = dot(col, vec3(0.299, 0.587, 0.114));
+    vec3 sep = vec3(l * 1.08 + 0.04, l * 0.98 + 0.02, l * 0.78);
+    col = mix(col, sep, uSepia);
+  }
+  return col;
+}
+`;
+
+export const fillFrag = landLib + /* glsl */ `
+uniform int uOceanOnly; // 1 while the vector mesh draws the land
+in vec2 vClip;
+out vec4 outColor;
+
 void main() {
   vec2 screen = vec2(vClip.x, -vClip.y) * 0.5 * uViewport;
   vec2 world = uCenter + screen / uZoom;
   if (world.y < 0.0 || world.y >= uMapSize.y) {
     outColor = vec4(uOceanDeep * 0.75, 1.0);
+    return;
+  }
+  vec3 ocean = oceanColor(world);
+  if (uOceanOnly == 1) {
+    outColor = vec4(finish(ocean, world, 0.0), 1.0);
     return;
   }
   float fp = 1.0 / uZoom; // map px per device px
@@ -140,75 +252,62 @@ void main() {
     weights = vec4(0.25);
   }
 
-  vec3 ocean = oceanColor(world);
-  float grain = fbm(world * 0.35) - 0.5;
-  vec3 paper = uPaper + grain * 0.06;
+  vec3 paper = paperColor(world);
   vec3 col = vec3(0.0);
   float landW = 0.0;
-  uint centreId = idAt(world);
   for (int i = 0; i < 4; i++) {
     uint id = idAt(taps[i]);
     vec3 c = id == 0u ? ocean : mix(paper, landColor(id, world), uPoliticalMix);
     col += c * weights[i];
     landW += id == 0u ? 0.0 : weights[i];
   }
-
-  if (centreId != 0u) {
-    // Inward border gradient: how much of a ring around us belongs to someone else.
-    uint me = ownerOf(centreId);
-    float r = clamp(7.0 * fp, 1.2, 28.0);
-    float other = 0.0;
-    for (int k = 0; k < 8; k++) {
-      float a = float(k) * 0.785398;
-      vec2 d = vec2(cos(a), sin(a));
-      uint o1 = ownerOf(idAt(world + d * r));
-      uint o2 = ownerOf(idAt(world + d * r * 0.45));
-      other += (o1 != me && o1 != NONE - 1u ? 0.6 : 0.0) + (o2 != me && o2 != NONE - 1u ? 0.4 : 0.0);
-    }
-    float edge = clamp(other / 4.0, 0.0, 1.0);
-    vec3 strong = countryColor(me) * 0.72;
-    col = mix(col, strong, edge * 0.55);
-    // Gentle inland darkening keeps continents from looking flat at world scale.
-    float inland = texture(uCoast, world / uMapSize).r;
-    col *= 1.0 - smoothstep(0.5, 1.0, inland) * 0.05;
-  }
-
-  // Terrain relief (Victoria 3 style): a hillshade multiplied under the political colour.
-  // Sampled outside any branch so screen-space derivatives stay defined for the ink contour.
-  float shade = reliefAt(world / uMapSize) - 206.0 / 255.0;
-  // Soft-clip the extremes so deep shadows never go black.
-  shade = shade / (1.0 + abs(shade) * 1.2);
-  float contour = abs(shade + 0.12) / max(fwidth(shade), 1e-4);
-  if (landW > 0.0) {
-    float zoomCss = uZoom / max(uDpr, 1.0);
-    // Subtle at world scale so political colours stay readable, stronger at regional zoom,
-    // easing off again up close where the half-resolution hillshade would look smeared.
-    float k = uReliefK * mix(1.15, 1.9, smoothstep(0.35, 2.0, zoomCss)) * mix(1.0, 0.72, smoothstep(3.0, 8.0, zoomCss));
-    col *= 1.0 + shade * k * landW;
-    // A faint hand-inked outline where slopes turn into deep shadow (mountains only).
-    float line = (1.0 - smoothstep(0.6, 1.6, contour)) * smoothstep(0.7, 1.8, zoomCss);
-    col = mix(col, uInk, line * 0.14 * landW);
-  }
-
-  if (uSepia > 0.0) {
-    float l = dot(col, vec3(0.299, 0.587, 0.114));
-    vec3 sep = vec3(l * 1.08 + 0.04, l * 0.98 + 0.02, l * 0.78);
-    col = mix(col, sep, uSepia);
-  }
-
-  outColor = vec4(col, 1.0);
+  uint centreId = idAt(world);
+  if (centreId != 0u) col = borderTint(col, centreId, world);
+  outColor = vec4(finish(col, world, landW), 1.0);
 }`;
 
+// Vector province fill: the triangulated outlines from mapgen, crisp at any zoom.
+export const meshVert = common + /* glsl */ `
+in vec2 aPos;      // map px × uQuant
+in uint aId;
+uniform float uQuant;
+uniform float uOffsetX;
+out vec2 vWorld;
+flat out uint vId;
+void main() {
+  vec2 world = aPos / uQuant + vec2(uOffsetX, 0.0);
+  vec2 p = (world - uCenter) * uZoom;
+  gl_Position = vec4(p.x / (uViewport.x * 0.5), -p.y / (uViewport.y * 0.5), 0.5, 1.0);
+  vWorld = world;
+  vId = aId;
+}`;
+
+export const meshFrag = landLib + /* glsl */ `
+in vec2 vWorld;
+flat in uint vId;
+out vec4 outColor;
+void main() {
+  // Wrapped copies: shade in the canonical map so noise and textures line up.
+  vec2 world = vec2(mod(vWorld.x, uMapSize.x), vWorld.y);
+  vec3 col = mix(paperColor(world), landColor(vId, world), uPoliticalMix);
+  col = borderTint(col, vId, world);
+  outColor = vec4(finish(col, world, 1.0), 1.0);
+}`;
+
+// Border lines: one capsule per segment (round joins). Hard edges inside the capsule; the
+// multisampled framebuffer smooths them, and a per-kind depth keeps overlapping joints from
+// blending twice.
 export const lineVert = common + /* glsl */ `
 in vec2 aCorner;   // x: 0 = segment start, 1 = end; y: side −1/+1
 in vec2 aA;
 in vec2 aB;
 in uvec2 aProv;    // provinces on either side (b = 0 for coasts)
 uniform float uOffsetX;
-out float vSide;
-out float vWidth;
+out vec2 vLocal;   // device px: x along the segment from A, y across
+flat out float vLen;
+flat out float vWidth;
 flat out int vKind;
-out float vFade;
+flat out float vFade;
 
 void main() {
   uint oa = provInfo(aProv.x).x;
@@ -217,9 +316,9 @@ void main() {
   float zoomCss = uZoom / uDpr;
   float w;
   float fade = 1.0;
-  if (kind == 0) w = mix(0.7, 1.4, clamp(zoomCss / 2.0, 0.0, 1.0));
-  else if (kind == 2) w = mix(1.2, 2.6, clamp(zoomCss / 2.5, 0.0, 1.0));
-  else { w = 0.9; fade = smoothstep(0.55, 1.4, zoomCss); }
+  if (kind == 0) w = mix(0.8, 1.5, clamp(zoomCss / 2.0, 0.0, 1.0));
+  else if (kind == 2) w = mix(1.3, 2.8, clamp(zoomCss / 2.5, 0.0, 1.0));
+  else { w = mix(0.8, 1.1, clamp(zoomCss / 4.0, 0.0, 1.0)); fade = smoothstep(0.55, 1.4, zoomCss); }
   w *= uDpr;
 
   vec2 a = (aA + vec2(uOffsetX, 0.0) - uCenter) * uZoom;
@@ -228,10 +327,14 @@ void main() {
   float len = length(dir);
   dir = len > 0.0 ? dir / len : vec2(1.0, 0.0);
   vec2 n = vec2(-dir.y, dir.x);
-  float half_ = w * 0.5 + 1.0; // +1px for antialiasing
-  vec2 p = mix(a, b, aCorner.x) + n * aCorner.y * half_ + dir * (aCorner.x * 2.0 - 1.0) * w * 0.5;
-  gl_Position = vec4(p.x / (uViewport.x * 0.5), -p.y / (uViewport.y * 0.5), 0.0, 1.0);
-  vSide = aCorner.y * half_;
+  float r = w * 0.5 + 1.0;
+  float along = aCorner.x * (len + 2.0 * r) - r;
+  vec2 p = a + dir * along + n * aCorner.y * r;
+  // Country borders sit above coasts, coasts above province lines.
+  float z = kind == 2 ? 0.1 : (kind == 0 ? 0.2 : 0.3);
+  gl_Position = vec4(p.x / (uViewport.x * 0.5), -p.y / (uViewport.y * 0.5), z * 2.0 - 1.0, 1.0);
+  vLocal = vec2(along, aCorner.y * r);
+  vLen = len;
   vWidth = w;
   vKind = kind;
   vFade = fade;
@@ -239,75 +342,79 @@ void main() {
 
 export const lineFrag = /* glsl */ `#version 300 es
 precision highp float;
-in float vSide;
-in float vWidth;
+in vec2 vLocal;
+flat in float vLen;
+flat in float vWidth;
 flat in int vKind;
-in float vFade;
+flat in float vFade;
 out vec4 outColor;
 void main() {
-  float a = clamp(vWidth * 0.5 - abs(vSide) + 0.5, 0.0, 1.0);
+  float d = length(vec2(max(0.0, max(-vLocal.x, vLocal.x - vLen)), vLocal.y));
+  if (d > vWidth * 0.5) discard;
   vec4 c;
-  if (vKind == 2) c = vec4(0.16, 0.12, 0.09, 0.82);
-  else if (vKind == 1) c = vec4(0.22, 0.18, 0.13, 0.28 * vFade);
+  if (vKind == 2) c = vec4(0.16, 0.12, 0.09, 0.85);
+  else if (vKind == 1) c = vec4(0.22, 0.18, 0.13, 0.3 * vFade);
   else c = vec4(0.13, 0.17, 0.2, 0.55);
-  outColor = vec4(c.rgb, c.a * a);
-  outColor.rgb *= outColor.a; // premultiplied
+  if (c.a < 0.01) discard;
+  outColor = vec4(c.rgb * c.a, c.a); // premultiplied
 }`;
 
-// Front lines: a thick dark-red band with a dark rim, a soft halo and slowly marching dashes.
+// Front lines: crisp capsules drawn in two passes — a dark maroon casing, then a red core with
+// slowly marching lighter dashes — so the core runs unbroken through every joint.
 export const frontVert = common + /* glsl */ `
 in vec2 aCorner;
 in vec2 aA;
 in vec2 aB;
 in float aDist;    // map px along the arc at the segment start
 uniform float uOffsetX;
-out float vSide;   // device px from the centre line
+uniform int uPass; // 0 casing, 1 core
+out vec2 vLocal;
 out float vAlong;  // device px along the arc
-out float vWidth;
-out float vHalo;
+flat out float vLen;
+flat out float vWidth;
 
 void main() {
   float zoomCss = uZoom / uDpr;
-  float w = mix(3.0, 7.5, smoothstep(0.25, 3.0, zoomCss)) * uDpr;
-  float halo = 2.5 * uDpr;
+  float casing = mix(3.2, 6.5, smoothstep(0.25, 3.0, zoomCss)) * uDpr;
+  float w = uPass == 0 ? casing : casing * 0.52;
   vec2 a = (aA + vec2(uOffsetX, 0.0) - uCenter) * uZoom;
   vec2 b = (aB + vec2(uOffsetX, 0.0) - uCenter) * uZoom;
   vec2 dir = b - a;
   float len = length(dir);
   dir = len > 0.0 ? dir / len : vec2(1.0, 0.0);
   vec2 n = vec2(-dir.y, dir.x);
-  float half_ = w * 0.5 + halo + 1.0;
-  float ext = (aCorner.x * 2.0 - 1.0) * w * 0.5;
-  vec2 p = mix(a, b, aCorner.x) + n * aCorner.y * half_ + dir * ext;
-  gl_Position = vec4(p.x / (uViewport.x * 0.5), -p.y / (uViewport.y * 0.5), 0.0, 1.0);
-  vSide = aCorner.y * half_;
-  vAlong = aDist * uZoom + aCorner.x * len + ext;
+  float r = w * 0.5 + 1.0;
+  float along = aCorner.x * (len + 2.0 * r) - r;
+  vec2 p = a + dir * along + n * aCorner.y * r;
+  gl_Position = vec4(p.x / (uViewport.x * 0.5), -p.y / (uViewport.y * 0.5), -0.9, 1.0);
+  vLocal = vec2(along, aCorner.y * r);
+  vAlong = aDist * uZoom + along;
+  vLen = len;
   vWidth = w;
-  vHalo = halo;
 }`;
 
 export const frontFrag = /* glsl */ `#version 300 es
 precision highp float;
+precision highp int;
 uniform float uTime;  // seconds
 uniform float uDpr;
-in float vSide;
+uniform int uPass;
+in vec2 vLocal;
 in float vAlong;
-in float vWidth;
-in float vHalo;
+flat in float vLen;
+flat in float vWidth;
 out vec4 outColor;
 void main() {
-  float d = abs(vSide);
-  float h = vWidth * 0.5;
-  float body = clamp(h + 0.5 - d, 0.0, 1.0);
-  // Rim darkens the outer third; the centre carries the moving dashes.
-  float rim = smoothstep(h * 0.45, h * 0.8, d);
-  float period = max(vWidth * 3.2, 14.0 * uDpr);
-  float u = fract((vAlong - uTime * 9.0 * uDpr) / period);
-  float dash = smoothstep(0.0, 0.1, u) * (1.0 - smoothstep(0.5, 0.6, u)) * (1.0 - smoothstep(h * 0.25, h * 0.55, d));
-  vec3 c = mix(vec3(0.56, 0.07, 0.06), vec3(0.2, 0.03, 0.03), rim);
-  c = mix(c, vec3(0.86, 0.26, 0.16), dash * 0.75);
-  float halo = (1.0 - smoothstep(h, h + vHalo, d)) * 0.35;
-  float a = max(body * 0.96, halo);
-  vec3 col = mix(vec3(0.08, 0.02, 0.02), c, body);
-  outColor = vec4(col * a, a); // premultiplied
+  float d = length(vec2(max(0.0, max(-vLocal.x, vLocal.x - vLen)), vLocal.y));
+  if (d > vWidth * 0.5) discard;
+  if (uPass == 0) {
+    outColor = vec4(0.27, 0.04, 0.05, 1.0);
+    return;
+  }
+  float period = max(vWidth * 4.0, 16.0 * uDpr);
+  float u = fract((vAlong - uTime * 8.0 * uDpr) / period);
+  float e = 1.2 * uDpr / period;
+  float dash = smoothstep(0.0, e, u) * (1.0 - smoothstep(0.45, 0.45 + e, u));
+  vec3 c = mix(vec3(0.78, 0.13, 0.11), vec3(0.93, 0.36, 0.26), dash * 0.55);
+  outColor = vec4(c, 1.0);
 }`;

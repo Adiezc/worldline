@@ -22,6 +22,26 @@ const WEB_DIST = join(ROOT, "apps/web/dist");
 const port = Number(process.env.PORT ?? SERVER_PORT);
 
 const json = (data: unknown, status = 200) => Response.json(data, { status });
+
+/** Text and binary map assets worth compressing (the province mesh and borders are megabytes). */
+const COMPRESSIBLE = /\.(?:js|css|html|json|svg|bin|txt|map)$/;
+const gzipCache = new Map<string, { mtime: number; body: Uint8Array<ArrayBuffer> }>();
+
+/** Static file, gzipped (once per file version) when the client accepts it. */
+async function serveStatic(req: Request, file: ReturnType<typeof Bun.file>) {
+  const name = file.name ?? "";
+  if (!COMPRESSIBLE.test(name) || !/\bgzip\b/.test(req.headers.get("accept-encoding") ?? "") || file.size < 1024) {
+    return new Response(file);
+  }
+  let hit = gzipCache.get(name);
+  if (!hit || hit.mtime !== file.lastModified) {
+    hit = { mtime: file.lastModified, body: Bun.gzipSync(new Uint8Array(await file.arrayBuffer())) as Uint8Array<ArrayBuffer> };
+    gzipCache.set(name, hit);
+  }
+  return new Response(hit.body, {
+    headers: { "Content-Type": file.type, "Content-Encoding": "gzip", Vary: "Accept-Encoding" },
+  });
+}
 const MAX_SCENARIO_BYTES = 3 * 1024 * 1024;
 
 // ---- accounts ----
@@ -185,7 +205,7 @@ const server = Bun.serve<SocketData>({
     // Production: static client with SPA fallback.
     if (existsSync(WEB_DIST)) {
       const file = Bun.file(join(WEB_DIST, path === "/" ? "index.html" : path));
-      if (!path.includes("..") && (await file.exists())) return new Response(file);
+      if (!path.includes("..") && (await file.exists())) return serveStatic(req, file);
       return new Response(Bun.file(join(WEB_DIST, "index.html")));
     }
     return new Response("Worldline server. Run the web client with `bun run dev`.", { status: 200 });

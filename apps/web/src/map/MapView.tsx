@@ -7,7 +7,7 @@ import { LabelLayer } from "./labelLayer.ts";
 import { CounterLayer } from "./counterLayer.ts";
 import { getTheme, theme } from "./theme.ts";
 import type { WorkerRequest, WorkerResponse } from "./map.worker.ts";
-import { emitMapClick, getPaintHandler, publishMap, type FocusOptions, type FocusTarget, type MapController } from "./controller.ts";
+import { emitMapClick, getPaintHandler, getPickHandler, publishMap, type FocusOptions, type FocusTarget, type MapController } from "./controller.ts";
 import { useMap } from "../store.ts";
 
 const MAX_ZOOM = 10;
@@ -50,6 +50,8 @@ export function MapView() {
 
     try {
       renderer = new MapRenderer(glCanvas);
+      // Dev only: lets the console time and inspect the renderer.
+      if (import.meta.env.DEV) (window as unknown as { __mapRenderer?: MapRenderer }).__mapRenderer = renderer;
     } catch (e) {
       useMap.setState({ status: "error", error: String(e) });
       return;
@@ -247,6 +249,10 @@ export function MapView() {
         highlightOwner = o;
         dirty = true;
       },
+      setMarked: (ids) => {
+        renderer.setMarked(ids);
+        dirty = true;
+      },
     };
 
     async function onLoaded(data: Uint16Array, width: number, height: number) {
@@ -276,6 +282,16 @@ export function MapView() {
       publishMap(controller);
       // The menu may already have picked another scenario to preview; MapSync applies it.
       useMap.setState((st) => ({ status: "ready", meta: m, scenario: st.scenario ?? scenario }));
+      // Vector province outlines for crisp close-ups; loaded after the map is usable, and the
+      // raster fill keeps working if it never arrives.
+      fetch("/map/provinces.mesh.bin")
+        .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`provinces.mesh.bin: ${r.status}`))))
+        .then((buf) => {
+          if (disposed) return;
+          renderer.setMesh(buf);
+          dirty = true;
+        })
+        .catch((e) => console.warn("Province mesh unavailable:", e));
     }
 
     // --- Input: drag to pan, wheel to zoom at the cursor, click to select.
@@ -359,7 +375,8 @@ export function MapView() {
       }
       if (drag && !drag.moved && e.button === 0 && !getPaintHandler()) {
         const id = pick(e.clientX, e.clientY);
-        useMap.getState().setSelected(id);
+        // Picking regions for a proposal leaves the selection alone.
+        if (!getPickHandler()) useMap.getState().setSelected(id);
         emitMapClick(id);
       }
       drag = null;

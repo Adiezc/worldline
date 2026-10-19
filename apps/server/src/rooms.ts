@@ -344,7 +344,9 @@ export class Room {
         try {
           await engine.sendChat(s, deps, { chatId: msg.chatId, playerId: me.id, text: String(msg.text ?? "").slice(0, 2000), proposal: msg.proposal, speaker });
         } catch (e) {
-          fail(`The envoy could not get through: ${errorText(e)}`);
+          if (aiMember) this.broadcastTo(chat.members, { t: "chat.typing", chatId: chat.id, from: aiMember, stop: true });
+          // Rule refusals (e.g. land that would be cut off) are the player's to fix, not a lost envoy.
+          fail(e instanceof Error && e.name === "ProposalError" ? e.message : `The envoy could not get through: ${errorText(e)}`);
         }
         return this.changed();
       }

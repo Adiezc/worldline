@@ -43,6 +43,11 @@ export interface TurnContext {
   occupyUsed: Map<string, number>;
   newWars: number;
   spawned: number;
+  /**
+   * Set only by code applying a peace both sides signed with explicitly listed regions: those
+   * cessions may include land the receiver does not occupy. AI-written events never set it.
+   */
+  negotiated?: boolean;
 }
 
 export function newTurnContext(days: number, orders: { id: string; country: string }[]): TurnContext {
@@ -149,7 +154,7 @@ export function applyEvent(state: GameState, map: MapIndex, event: GameEvent, ct
         // A peace deal (without a treaty or a voluntary cession behind it) cedes only what the
         // receiving side actually occupies: a model guessing region ids must not hand over land
         // nobody fought for (that is how stray exclaves appeared).
-        const byPeaceOnly = peacePairs.has(pair) && !treatyPairs.has(pair) && !spawnedHere.has(effect.to) && !voluntary;
+        const byPeaceOnly = peacePairs.has(pair) && !treatyPairs.has(pair) && !spawnedHere.has(effect.to) && !voluntary && !ctx.negotiated;
         if (byPeaceOnly) {
           const war = peaceWars.find((w) =>
             (w.attackers.includes(effect.to) && w.defenders.includes(effect.from)) || (w.defenders.includes(effect.to) && w.attackers.includes(effect.from)));

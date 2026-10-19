@@ -2,7 +2,8 @@
 // Usage: bun run src/build.ts   (expects data/raw/*.geojson, see README)
 
 import { topology } from "topojson-server";
-import { feature } from "topojson-client";
+import { feature, merge } from "topojson-client";
+import earcut from "earcut";
 import { presimplify, simplify, planarTriangleArea } from "topojson-simplify";
 import { geoArea, geoCentroid, geoDistance } from "d3-geo";
 import { encode } from "fast-png";
@@ -341,6 +342,7 @@ await Bun.write(join(OUT, "provinces.png"), encode({ width: MAP_W, height: MAP_H
 await Bun.write(join(OUT, "coast.png"), encode({ width: CW, height: CH, data: coast, depth: 8, channels: 1 }));
 await Bun.write(join(OUT, "provinces.json"), JSON.stringify({ width: MAP_W, height: MAP_H, provinces }));
 await Bun.write(join(OUT, "borders.json"), JSON.stringify({ arcs }));
+await Bun.write(join(OUT, "provinces.mesh.bin"), buildMesh());
 await Bun.write(join(OUT, "countries.base.json"), JSON.stringify(countriesBase, null, 1));
 
 // Sanity checks.
@@ -354,4 +356,48 @@ log(`wrote ${provinces.length} provinces, ${ownerTags.length} owners → ${OUT}`
 if (problems.length) {
   console.warn(`${problems.length} sanity problems:\n` + problems.slice(0, 20).join("\n"));
   process.exitCode = 1;
+}
+
+// ---------------------------------------------------------------------------
+// Province mesh: each province's merged outline from the same simplified topology as the border
+// arcs, triangulated, so the client can draw crisp vector fills when zoomed in (the raster
+// province bitmap looks soft once a texel covers many screen pixels).
+// Layout: u32 magic "WLM1", u32 vertexCount, u32 indexCount, u32 reserved;
+//         u16[2·V] positions in map px × BORDER_QUANT; u16[V] province ids; (pad to 4) u32[I] indices.
+function buildMesh() {
+  const xs: number[] = [], ids: number[] = [], indices: number[] = [];
+  const geometries = simple.objects.provinces.geometries;
+  ordered.forEach((c, k) => {
+    const pid = k + 1;
+    const merged: any = merge(simple, c.members.map((m) => geometries[m]));
+    const polys: number[][][][] = merged.type === "Polygon" ? [merged.coordinates] : merged.coordinates ?? [];
+    for (const poly of polys) {
+      const flat: number[] = [], holes: number[] = [];
+      poly.forEach((ring, r) => {
+        if (r > 0) holes.push(flat.length / 2);
+        // Drop the closing point; earcut wants open rings.
+        for (const [lon, lat] of ring.slice(0, -1)) flat.push(...project(lon, lat));
+      });
+      if (flat.length < 6) continue;
+      const tri = earcut(flat, holes.length ? holes : undefined, 2);
+      const base = xs.length / 2;
+      for (let i = 0; i < flat.length; i += 2) {
+        xs.push(Math.max(0, Math.min(65535, Math.round(flat[i] * BORDER_QUANT))), Math.max(0, Math.min(65535, Math.round(flat[i + 1] * BORDER_QUANT))));
+        ids.push(pid);
+      }
+      for (const t of tri) indices.push(base + t);
+    }
+  });
+  const V = ids.length, I = indices.length;
+  const posBytes = V * 4, idBytes = V * 2, pad = (4 - ((16 + posBytes + idBytes) % 4)) % 4;
+  const buf = new ArrayBuffer(16 + posBytes + idBytes + pad + I * 4);
+  const head = new Uint32Array(buf, 0, 4);
+  head[0] = 0x314d4c57; // "WLM1"
+  head[1] = V;
+  head[2] = I;
+  new Uint16Array(buf, 16, V * 2).set(xs);
+  new Uint16Array(buf, 16 + posBytes, V).set(ids);
+  new Uint32Array(buf, 16 + posBytes + idBytes + pad, I).set(indices);
+  log(`province mesh: ${V} vertices, ${I / 3} triangles, ${(buf.byteLength / 1e6).toFixed(1)} MB`);
+  return new Uint8Array(buf);
 }

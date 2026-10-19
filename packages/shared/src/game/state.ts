@@ -194,12 +194,21 @@ export interface ChatMessage {
 
 export type PeaceTerms = "white" | "keep_occupied";
 
+/** Land a peace deal hands over by name, whether or not the receiver occupies it. */
+export interface ProposalCession {
+  from: string;
+  to: string;
+  provinces: number[];
+}
+
 export interface Proposal {
   id: string;
   kind: "treaty" | "endWar" | "joinOrg" | "custom";
   treatyType?: TreatyType;
   /** endWar only: "white" returns all occupied land; "keep_occupied" cedes it to whoever holds it. */
   peace?: PeaceTerms;
+  /** endWar only: regions picked by the proposer that change hands on top of the base terms. */
+  cessions?: ProposalCession[];
   members: string[];
   terms: string;
   status: "open" | "accepted" | "rejected";

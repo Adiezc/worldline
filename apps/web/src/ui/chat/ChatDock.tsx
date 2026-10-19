@@ -1,11 +1,13 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { markRead, requestNotificationPermission } from "../../game/chatNotify.ts";
 import { createPortal } from "react-dom";
-import type { Chat, ChatMessage, GameView, Proposal, ProposalDraft, TreatyType, PeaceTerms } from "@worldline/shared";
+import type { Chat, ChatMessage, GameView, PeaceTerms, Proposal, ProposalCession, ProposalDraft, TreatyType, War } from "@worldline/shared";
 import { closeChat, openChat, openConference, respondProposal, sendChat, setChatBuilder, toggleChatMinimized } from "../../game/actions.ts";
 import { fmtShortDate } from "../../game/format.ts";
 import { countryMap, TREATY_LABELS } from "../../game/selectors.ts";
-import { useGame, type ChatWindowState } from "../../game/store.ts";
+import { toast, useGame, type ChatWindowState } from "../../game/store.ts";
+import { getMap, setPickHandler } from "../../map/controller.ts";
+import { provinceName } from "../../store.ts";
 import { Badge, Button, CountryChip, Field, Modal, Spinner } from "../common/ui.tsx";
 import { Flag } from "../common/Flag.tsx";
 import { Icon } from "../common/Icon.tsx";
@@ -166,11 +168,55 @@ function Message({ m, chatId, view, mine }: { m: ChatMessage; chatId: string; vi
 
 /** Standard peace terms; the text becomes the treaty's terms when the player writes none. */
 const PEACE_LABELS: Record<PeaceTerms, { label: string; terms: string }> = {
-  white: { label: "White peace", terms: "White peace: all occupied territory returns to its pre-war owner." },
-  keep_occupied: { label: "Keep what we hold", terms: "Each side keeps the territory it occupies when the fighting stops." },
+  white: { label: "Returns to owner", terms: "All other occupied territory returns to its pre-war owner." },
+  keep_occupied: { label: "Stays with holder", terms: "Each side keeps the other territory it occupies when the fighting stops." },
 };
 
-const KIND_LABELS: Record<Proposal["kind"], string> = { treaty: "Treaty", endWar: "Peace terms", joinOrg: "Membership", custom: "Agreement" };
+const KIND_LABELS: Record<Proposal["kind"], string> = { treaty: "Treaty", endWar: "Peace treaty", joinOrg: "Membership", custom: "Agreement" };
+
+const MAX_PICKED = 150;
+
+/** The war between me and another member of this conversation, with the enemies present. */
+function warInChat(view: GameView, me: string | null | undefined, members: string[]): { war: War; enemies: string[] } | null {
+  if (!me) return null;
+  for (const war of view.wars) {
+    const enemySide = war.attackers.includes(me) ? war.defenders : war.defenders.includes(me) ? war.attackers : null;
+    const enemies = enemySide?.filter((t) => members.includes(t)) ?? [];
+    if (enemies.length) return { war, enemies };
+  }
+  return null;
+}
+
+/** Picked regions grouped into cessions: enemy land comes to me, my own land goes to the enemy. */
+function cessionsFor(view: GameView, me: string, enemies: string[], parties: string[], picked: number[]): ProposalCession[] {
+  const groups = new Map<string, ProposalCession>();
+  const enemy = enemies.find((t) => parties.includes(t));
+  for (const id of picked) {
+    const owner = view.countries[view.owners[id]]?.tag;
+    if (!owner) continue;
+    const [from, to] = owner === me ? [me, enemy] : [owner, me];
+    if (!to || !parties.includes(from) || (owner !== me && !enemies.includes(owner))) continue;
+    const key = `${from}>${to}`;
+    if (!groups.has(key)) groups.set(key, { from, to, provinces: [] });
+    groups.get(key)!.provinces.push(id);
+  }
+  return [...groups.values()];
+}
+
+/** "Russia cedes Kursk, Belgorod and 3 more to Ukraine." */
+function cessionSentence(view: GameView, c: ProposalCession) {
+  const byTag = countryMap(view.countries);
+  const names = c.provinces.slice(0, 6).map(provinceName);
+  const more = c.provinces.length > 6 ? ` and ${c.provinces.length - 6} more` : "";
+  return `${byTag.get(c.from)?.name ?? c.from} cedes ${names.join(", ")}${more} to ${byTag.get(c.to)?.name ?? c.to}.`;
+}
+
+/** Regions of a cession the receiving side does not already occupy. */
+function unheld(view: GameView, war: War | undefined, c: ProposalCession) {
+  if (!war) return [];
+  const side = new Set((war.attackers.includes(c.to) ? war.attackers : war.defenders).map((t) => view.countries.findIndex((k) => k.tag === t)));
+  return c.provinces.filter((id) => !side.has(view.controllers[id]));
+}
 
 function ProposalCard({ p, chatId, view }: { p: Proposal; chatId: string; view: GameView }) {
   const me = view.you.country;
@@ -183,13 +229,27 @@ function ProposalCard({ p, chatId, view }: { p: Proposal; chatId: string; view: 
         <span className="font-display text-[12px] text-gold-bright">
           {KIND_LABELS[p.kind]}
           {p.kind === "treaty" && p.treatyType ? ` — ${TREATY_LABELS[p.treatyType]}` : ""}
-          {p.kind === "endWar" && p.peace ? ` — ${PEACE_LABELS[p.peace].label}` : ""}
         </span>
         <Badge tone={tone} className="ml-auto">
           {p.status}
         </Badge>
       </div>
       <p className="mt-1.5 text-[12px] leading-snug whitespace-pre-line text-parchment/85 select-text">{p.terms}</p>
+      {p.cessions?.map((c) => (
+        <button
+          key={`${c.from}>${c.to}`}
+          type="button"
+          onClick={() => getMap()?.focusOn(c.provinces)}
+          title="Show these regions on the map"
+          className="mt-1 flex w-full items-start gap-1.5 rounded-sm border border-gold/25 bg-black/15 px-1.5 py-1 text-left text-[11.5px] leading-snug text-parchment/80 hover:border-gold/60"
+        >
+          <Icon name="map" size={12} className="mt-0.5 shrink-0 text-gold" />
+          <span>
+            {countryMap(view.countries).get(c.from)?.name ?? c.from} → {countryMap(view.countries).get(c.to)?.name ?? c.to}: {c.provinces.length} region{c.provinces.length === 1 ? "" : "s"}
+            <span className="text-parchment/45"> · show on map</span>
+          </span>
+        </button>
+      ))}
       <div className="mt-1.5 flex flex-wrap gap-1">
         {p.members.map((t) => (
           <CountryChip key={t} tag={t} small />
@@ -212,6 +272,72 @@ function ProposalCard({ p, chatId, view }: { p: Proposal; chatId: string; view: 
   );
 }
 
+/** The land clauses of a peace treaty: regions picked on the map, grouped by who cedes them. */
+function TerritoryPicker(props: {
+  view: GameView; me: string; cessions: ProposalCession[]; war: War | undefined; unheldCount: number;
+  picking: boolean; onTogglePicking: () => void; onRemove: (id: number) => void; onClear: () => void;
+}) {
+  const { view, me, cessions, war } = props;
+  const byTag = countryMap(view.countries);
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <span className="hud-label">Territory</span>
+        <div className="flex gap-1">
+          {cessions.length > 0 && (
+            <Button size="sm" variant="ghost" onClick={props.onClear}>
+              Clear
+            </Button>
+          )}
+          <Button size="sm" variant={props.picking ? "primary" : "secondary"} icon="map" onClick={props.onTogglePicking}>
+            {props.picking ? "Done picking" : "Pick on map"}
+          </Button>
+        </div>
+      </div>
+      {props.picking && (
+        <p className="mb-1 text-[11px] leading-snug text-gold-bright/80">
+          Click enemy regions to demand them, or your own to offer them. Click again to remove.
+        </p>
+      )}
+      {cessions.length === 0 && !props.picking && (
+        <p className="text-[11px] leading-snug text-parchment/45 italic">No land named. Pick regions on the map to demand any enemy territory, held or not.</p>
+      )}
+      {cessions.map((c) => {
+        const notHeld = new Set(c.to === me ? unheld(view, war, c) : []);
+        return (
+          <div key={`${c.from}>${c.to}`} className="mb-1.5">
+            <div className="mb-1 flex items-center gap-1 text-[11px] text-parchment/65">
+              <Flag country={byTag.get(c.from) ?? { tag: c.from }} size={12} />
+              {byTag.get(c.from)?.name ?? c.from} cedes to {byTag.get(c.to)?.name ?? c.to} ({c.provinces.length})
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {c.provinces.map((id) => (
+                <span
+                  key={id}
+                  title={notHeld.has(id) ? "Not occupied by your forces" : "Occupied by your side"}
+                  className={`flex items-center gap-1 rounded-sm border px-1.5 py-0.5 text-[11px] ${notHeld.has(id) ? "border-dashed border-amber-400/60 text-amber-200/90" : "border-gold/50 text-parchment"}`}
+                >
+                  <button type="button" className="hover:underline" onClick={() => getMap()?.focusOn(id, { zoom: "keep" })}>
+                    {provinceName(id)}
+                  </button>
+                  <button type="button" aria-label={`Remove ${provinceName(id)}`} className="text-parchment/50 hover:text-parchment" onClick={() => props.onRemove(id)}>
+                    <Icon name="close" size={10} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+      {props.unheldCount > 0 && (
+        <p className="text-[11px] leading-snug text-amber-200/80">
+          {props.unheldCount} demanded region{props.unheldCount === 1 ? " is" : "s are"} not under your control. Expect a refusal unless they are close to collapse.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function Composer({ chat, win, view, speaker }: { chat: Chat; win: ChatWindowState; view: GameView; speaker?: string }) {
   const me = view.you.country;
   const [text, setText] = useState("");
@@ -225,11 +351,31 @@ function Composer({ chat, win, view, speaker }: { chat: Chat; win: ChatWindowSta
     el.style.height = `${Math.min(el.scrollHeight + 2, max)}px`;
     el.style.overflowY = el.scrollHeight + 2 > max ? "auto" : "hidden";
   }, [text]);
-  const [kind, setKind] = useState<Proposal["kind"]>(win.preset === "peace" ? "endWar" : "treaty");
+  const fight = warInChat(view, me, chat.members);
+  const [kind, setKind] = useState<Proposal["kind"]>(win.preset === "peace" || fight ? "endWar" : "treaty");
   const [peace, setPeace] = useState<PeaceTerms>("white");
   useEffect(() => {
     if (win.preset === "peace") setKind("endWar");
   }, [win.preset]);
+  // Peace treaties only exist between warring parties.
+  useEffect(() => {
+    if (!fight && kind === "endWar") setKind("treaty");
+  }, [fight, kind]);
+  const [picked, setPicked] = useState<number[]>([]);
+  /** Message count when a proposal was sent; cleared once it appears in the chat. */
+  const [sentAt, setSentAt] = useState<number | null>(null);
+  useEffect(() => {
+    if (sentAt === null) return;
+    if (chat.messages.slice(sentAt).some((m) => m.from === me && m.proposal)) {
+      setSentAt(null);
+      setTerms("");
+      setPicked([]);
+      setPicking(false);
+      setChatBuilder(chat.id, false);
+    }
+  }, [chat.messages, chat.id, sentAt, me]);
+  const [picking, setPicking] = useState(false);
+  const peaceOpen = win.builder && kind === "endWar" && !!fight;
   const [treatyType, setTreatyType] = useState<TreatyType>("trade");
   const [members, setMembers] = useState<string[]>(chat.members);
   // A conference's proposal names every delegation by default.
@@ -238,30 +384,66 @@ function Composer({ chat, win, view, speaker }: { chat: Chat; win: ChatWindowSta
   const [terms, setTerms] = useState("");
   const byTag = countryMap(view.countries);
 
+  // Region picking: map clicks toggle regions while the peace builder is picking.
+  useEffect(() => {
+    if (!peaceOpen || !picking || !me || !fight) return;
+    setPickHandler((id) => {
+      const owner = view.countries[view.owners[id]];
+      if (!owner || (owner.tag !== me && !fight.enemies.includes(owner.tag))) {
+        toast(`${provinceName(id)} belongs to ${owner?.name ?? "no one"}, which is not on the other side of this war.`, "warn");
+        return;
+      }
+      setPicked((list) => {
+        if (list.includes(id)) return list.filter((x) => x !== id);
+        if (list.length >= MAX_PICKED) {
+          toast(`A peace treaty can name at most ${MAX_PICKED} regions.`, "warn");
+          return list;
+        }
+        return [...list, id];
+      });
+    });
+    return () => setPickHandler(null);
+  }, [peaceOpen, picking, me, fight, view]);
+  useEffect(() => {
+    if (!peaceOpen || !picked.length) return;
+    getMap()?.setMarked(picked);
+    return () => getMap()?.setMarked([]);
+  }, [peaceOpen, picked]);
+  useEffect(() => {
+    if (!peaceOpen) setPicking(false);
+  }, [peaceOpen]);
+
   if (!me) return <div className="border-t border-panel-edge/40 px-3 py-2 text-[11px] text-parchment/40 italic">Spectators cannot speak.</div>;
 
+  const cessions = peaceOpen && fight ? cessionsFor(view, me, fight.enemies, members, picked) : [];
+  const unheldCount = cessions.reduce((n, c) => n + (c.to === me ? unheld(view, fight?.war, c).length : 0), 0);
+
   const submit = () => {
-    const peaceText = kind === "endWar" && !terms.trim() ? PEACE_LABELS[peace].terms : terms.trim();
+    // Without written terms, the treaty text spells out the land clauses and the base terms.
+    const peaceText = kind === "endWar" && !terms.trim()
+      ? [...cessions.map((c) => cessionSentence(view, c)), PEACE_LABELS[peace].terms].join(" ")
+      : terms.trim();
     const proposal: ProposalDraft | undefined = win.builder && peaceText
-      ? { kind, treatyType: kind === "treaty" ? treatyType : undefined, peace: kind === "endWar" ? peace : undefined, members, terms: peaceText }
+      ? {
+        kind, treatyType: kind === "treaty" ? treatyType : undefined, peace: kind === "endWar" ? peace : undefined,
+        cessions: kind === "endWar" && cessions.length ? cessions : undefined, members, terms: peaceText,
+      }
       : undefined;
     if (!text.trim() && !proposal) return;
     sendChat(chat.id, text.trim(), proposal, speaker);
     setText("");
-    if (proposal) {
-      setTerms("");
-      setChatBuilder(chat.id, false);
-    }
+    // The builder stays as it is until the proposal arrives, so a refusal loses nothing.
+    if (proposal) setSentAt(chat.messages.length);
   };
 
   return (
     <div className="shrink-0 border-t border-panel-edge/40 p-2">
       {win.builder && (
-        <div className="hud-scroll mb-2 max-h-56 space-y-2 rounded border border-gold/40 bg-gold/[0.04] p-2">
+        <div className="hud-scroll mb-2 max-h-80 space-y-2 rounded border border-gold/40 bg-gold/[0.04] p-2">
           <div className="grid grid-cols-2 gap-2">
             <Field label="Kind">
               <select className="hud-input py-1 text-[12px]" value={kind} onChange={(e) => setKind(e.target.value as Proposal["kind"])}>
-                {Object.entries(KIND_LABELS).map(([k, l]) => (
+                {Object.entries(KIND_LABELS).filter(([k]) => k !== "endWar" || fight).map(([k, l]) => (
                   <option key={k} value={k}>
                     {l}
                   </option>
@@ -269,7 +451,7 @@ function Composer({ chat, win, view, speaker }: { chat: Chat; win: ChatWindowSta
               </select>
             </Field>
             {kind === "endWar" && (
-              <Field label="Terms">
+              <Field label="Other occupied land">
                 <select className="hud-input py-1 text-[12px]" value={peace} onChange={(e) => setPeace(e.target.value as PeaceTerms)}>
                   {Object.entries(PEACE_LABELS).map(([k, l]) => (
                     <option key={k} value={k}>
@@ -311,8 +493,21 @@ function Composer({ chat, win, view, speaker }: { chat: Chat; win: ChatWindowSta
               })}
             </div>
           </div>
-          <Field label="Terms">
-            <textarea className="hud-input min-h-14 resize-none text-[12px]" value={terms} onChange={(e) => setTerms(e.target.value)} placeholder={kind === "endWar" ? PEACE_LABELS[peace].terms : chat.members.length > 2 ? "All parties agree to…" : "Both parties agree to…"} />
+          {peaceOpen && (
+            <TerritoryPicker
+              view={view}
+              me={me}
+              cessions={cessions}
+              war={fight?.war}
+              unheldCount={unheldCount}
+              picking={picking}
+              onTogglePicking={() => setPicking((v) => !v)}
+              onRemove={(id) => setPicked((list) => list.filter((x) => x !== id))}
+              onClear={() => setPicked([])}
+            />
+          )}
+          <Field label={kind === "endWar" ? "Treaty text (optional)" : "Terms"}>
+            <textarea className="hud-input min-h-14 resize-none text-[12px]" value={terms} onChange={(e) => setTerms(e.target.value)} placeholder={kind === "endWar" ? "Written from the clauses above if left empty" : chat.members.length > 2 ? "All parties agree to…" : "Both parties agree to…"} />
           </Field>
         </div>
       )}
