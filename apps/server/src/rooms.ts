@@ -351,7 +351,7 @@ export class Room {
 
       case "proposal.respond": {
         if (!myTag) return;
-        const r = engine.respondProposal(s, { chatId: msg.chatId, proposalId: msg.proposalId, byTag: myTag, accept: msg.accept });
+        const r = engine.respondProposal(s, { chatId: msg.chatId, proposalId: msg.proposalId, byTag: myTag, accept: msg.accept, map: this.deps.map });
         if (!r.ok) fail(r.message);
         else this.send(ws, { t: "toast", level: "info", text: r.message });
         return this.changed();

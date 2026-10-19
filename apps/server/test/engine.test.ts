@@ -392,3 +392,41 @@ describe("turn latency and long-game upkeep", () => {
     expect(offline.memory[0].text).toContain("Chronicle 1.");
   });
 });
+
+describe("peace treaties from diplomacy", () => {
+  const seed = seeds[0][1];
+  const occupiedBy = (state: GameState, owner: string, holder: string) => {
+    const o = state.countries.findIndex((c) => c.tag === owner), h = state.countries.findIndex((c) => c.tag === holder);
+    return state.owners.flatMap((ow, id) => (id > 0 && ow === o && state.controllers[id] === h ? [id] : []));
+  };
+
+  test("'keep what we hold' cedes exactly the occupied regions to the occupier", async () => {
+    const state = newGame(seed, [["p1", "RUS"]]);
+    const held = occupiedBy(state, "UKR", "RUS");
+    expect(held.length).toBeGreaterThan(0);
+    const chatId = engine.openChat(state, { from: "RUS", with: ["UKR"] });
+    await engine.sendChat(state, depsFor(seed), {
+      chatId, playerId: "p1", text: "Let us end this.",
+      proposal: { kind: "endWar", peace: "keep_occupied", members: ["RUS", "UKR"], terms: "Each side keeps what it holds." },
+    });
+    expect(state.wars.some((w) => w.attackers.includes("RUS") && w.defenders.includes("UKR"))).toBe(false);
+    const rus = state.countries.findIndex((c) => c.tag === "RUS");
+    for (const id of held) expect(state.owners[id]).toBe(rus);
+    expect(occupiedBy(state, "UKR", "RUS")).toHaveLength(0);
+  });
+
+  test("a white peace returns occupied land to its owner", async () => {
+    const state = newGame(seed, [["p1", "UKR"]]);
+    const held = occupiedBy(state, "UKR", "RUS");
+    const chatId = engine.openChat(state, { from: "UKR", with: ["RUS"] });
+    await engine.sendChat(state, depsFor(seed), {
+      chatId, playerId: "p1", text: "We propose a ceasefire.",
+      proposal: { kind: "endWar", peace: "white", members: ["UKR", "RUS"], terms: "White peace." },
+    });
+    const ukr = state.countries.findIndex((c) => c.tag === "UKR");
+    for (const id of held) {
+      expect(state.owners[id]).toBe(ukr);
+      expect(state.controllers[id]).toBe(ukr);
+    }
+  });
+});

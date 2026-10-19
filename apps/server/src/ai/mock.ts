@@ -94,7 +94,8 @@ function resolver(c: ResolverCtx, rng: Rng) {
     events.push({ date: date(), headline: intent.summary.replace(/\.$/, ""), body: intent.summary, countries: [intent.country], causes: [], effects: [] });
   }
 
-  const worldCount = 2 + Math.floor(rng() * 3);
+  // At least 3, matching the resolver's minimum for a month-long turn.
+  const worldCount = 3 + Math.floor(rng() * 3);
   for (let i = 0; i < worldCount && npcs.length; i++) {
     const t = pick(rng, npcs);
     const tpl = pick(rng, [...WORLD]);
@@ -153,7 +154,7 @@ function director(c: DirectorCtx, rng: Rng) {
   return { intents, agendaUpdates: [], resolutions: [] };
 }
 
-function chat(c: { speaker: string; speakerName: string; player: string; playerName: string; relation: number; hasProposal: boolean }) {
+function chat(c: { speaker: string; speakerName: string; player: string; playerName: string; relation: number; hasProposal: boolean; peace?: { exhaustion: number; landLost: number } }) {
   const r = c.relation ?? 0;
   const tone = r > 40 ? "warm" : r > 0 ? "neutral" : r > -40 ? "cold" : "hostile";
   const reply = {
@@ -166,8 +167,12 @@ function chat(c: { speaker: string; speakerName: string; player: string; playerN
     speaker: c.speaker, reply, tone, relationDelta: { warm: 2, neutral: 1, cold: 0, hostile: -1 }[tone],
   };
   if (c.hasProposal) {
-    out.acceptsPlayerProposal = r > 20;
-    out.reply = `${reply} ${r > 20 ? "We accept your proposal." : "We cannot accept your proposal at this time."}`;
+    // Peace is judged on the war, not on friendship: exhausted or losing sides settle.
+    const accept = c.peace ? c.peace.exhaustion >= 25 || c.peace.landLost > 0 : r > 20;
+    out.acceptsPlayerProposal = accept;
+    out.reply = c.peace
+      ? accept ? `${c.speakerName} is prepared to end this war on these terms.` : `${c.speakerName} will not make peace on these terms while the fighting favours us.`
+      : `${reply} ${accept ? "We accept your proposal." : "We cannot accept your proposal at this time."}`;
   }
   return out;
 }

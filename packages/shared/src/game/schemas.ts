@@ -94,6 +94,7 @@ export const ChatOutputSchema = z.object({
   proposal: z.object({
     kind: z.enum(["treaty", "endWar", "joinOrg", "custom"]),
     treatyType: treatyType.optional(),
+    peace: z.enum(["white", "keep_occupied"]).optional(),
     members: z.array(tag).min(2),
     terms: z.string(),
   }).optional(),

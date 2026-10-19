@@ -192,10 +192,14 @@ export interface ChatMessage {
   proposal?: Proposal;
 }
 
+export type PeaceTerms = "white" | "keep_occupied";
+
 export interface Proposal {
   id: string;
   kind: "treaty" | "endWar" | "joinOrg" | "custom";
   treatyType?: TreatyType;
+  /** endWar only: "white" returns all occupied land; "keep_occupied" cedes it to whoever holds it. */
+  peace?: PeaceTerms;
   members: string[];
   terms: string;
   status: "open" | "accepted" | "rejected";

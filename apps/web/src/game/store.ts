@@ -43,6 +43,8 @@ export interface ChatWindowState {
   minimized: boolean;
   /** Proposal builder open in the composer. */
   builder: boolean;
+  /** Open the builder preset to a kind of proposal (e.g. peace terms from the country panel). */
+  preset?: "peace";
 }
 
 export type LeftTab = "orders" | "advisor" | "orgs" | "formation" | "history";
@@ -92,7 +94,7 @@ export interface GameStore {
   feedOpen: boolean;
   feedTab: FeedTab;
   chats: ChatWindowState[];
-  pendingChat: { members: string[]; builder: boolean } | null;
+  pendingChat: { members: string[]; builder: boolean; preset?: "peace" } | null;
   /** `count` = messages in the chat when typing began; a newer reply from `from` clears it. */
   typing: Record<string, { from: string; until: number; count: number }>;
   /** Front lines and troop counters on the map (persisted in localStorage). */
@@ -215,7 +217,7 @@ export function applyView(view: GameView) {
     if (s.pendingChat) {
       const chat = view.chats.find((c) => sameMembers(c.members, s.pendingChat!.members));
       if (chat) {
-        patch.chats = openWindow(s.chats, chat.id, s.pendingChat.builder);
+        patch.chats = openWindow(s.chats, chat.id, s.pendingChat.builder, s.pendingChat.preset);
         patch.pendingChat = null;
       }
     }
@@ -223,13 +225,13 @@ export function applyView(view: GameView) {
   });
 }
 
-export function openWindow(list: ChatWindowState[], chatId: string, builder = false): ChatWindowState[] {
+export function openWindow(list: ChatWindowState[], chatId: string, builder = false, preset?: "peace"): ChatWindowState[] {
   const existing = list.find((w) => w.chatId === chatId);
   if (existing) {
-    return list.map((w) => (w.chatId === chatId ? { ...w, minimized: false, builder: builder || w.builder } : w));
+    return list.map((w) => (w.chatId === chatId ? { ...w, minimized: false, builder: builder || w.builder, preset: preset ?? w.preset } : w));
   }
   // Keep at most three windows; the oldest drops off.
-  return [...list, { chatId, minimized: false, builder }].slice(-3);
+  return [...list, { chatId, minimized: false, builder, preset }].slice(-3);
 }
 
 export { sameMembers };

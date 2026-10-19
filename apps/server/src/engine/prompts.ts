@@ -32,7 +32,7 @@ export function effectReference(state: GameState, days: number) {
 {"type":"joinWar","warId":"w1","country":"POL","side":"defenders"}
 {"type":"setController","provinces":[812,813],"controller":"RUS"}   military occupation. Only for countries AT WAR with the current controller, and only regions bordering territory their side holds (or coastal regions within ~2,000 km of a coast their side holds, by sea). At most ${c.occupy} regions per country per turn; fighting is usually slower.
 {"type":"makePeace","warId":"w1","terms":"ceasefire along current lines"}   occupied land returns to its owner unless the same event transfers it.
-{"type":"transferProvinces","provinces":[812],"from":"UKR","to":"RUS"}   territory changes hands ONLY in the same event as a makePeace for their war or a createTreaty between the two, or as a voluntary cession ordered by a player.
+{"type":"transferProvinces","provinces":[812],"from":"UKR","to":"RUS"}   territory changes hands ONLY in the same event as a makePeace for their war or a createTreaty between the two, or as a voluntary cession ordered by a player. A peace deal may cede ONLY regions listed under that war's "occupied regions" (by id); unoccupied land and regions that would be cut off from the receiver are refused.
 {"type":"spawnCountry","name":"Republic of X","government":"provisional government","leader":"Name","provinces":[101,102],"tag":"optional","flag":"optional, e.g. gen:vertical:#1f4fa0,#f4f1e8,#c8102e (patterns: vertical, horizontal, bicolor-v, bicolor-h, nordic, canton, diagonal, triband-star)"}   secession or independence; at most 2 per turn.
 {"type":"annexCountry","target":"AAA","by":"BBB"}   needs a vassal treaty, a voluntary union, or a war in which BBB occupies 60% of AAA.
 {"type":"changeLeader","country":"AAA","leader":"Full Name","government":"optional new form of government"}
@@ -125,7 +125,8 @@ OUTPUT: one JSON object, nothing else:
 {"speaker":"${speakerTag}","reply":"...","tone":"warm|neutral|cold|hostile","relationDelta":2,"acceptsPlayerProposal":true,"proposal":{"kind":"treaty","treatyType":"trade","members":["${speakerTag}","XXX"],"terms":"..."}}
 - relationDelta: how this exchange changes your view of them, -5..5 (usually -2..2).
 - acceptsPlayerProposal: include it ONLY when their last message contains a PROPOSAL; true only if your government would really sign it now.
-- proposal: optional, only if you want to offer a concrete deal yourself. kind treaty (with treatyType alliance|defensive|trade|nonaggression|customs_union), endWar (members = the two warring sides), joinOrg, or custom. You must be one of the members. Omit it otherwise.`;
+- Peace proposals: weigh the war honestly. Accept when the war is going badly for you (heavy exhaustion, land lost, little chance of reversing it) or the terms are generous; refuse when you are winning or the terms give away land you still hold or could retake. PEACE TERMS says exactly what changes hands.
+- proposal: optional, only if you want to offer a concrete deal yourself. kind treaty (with treatyType alliance|defensive|trade|nonaggression|customs_union), endWar (members = the two warring sides; add "peace":"white" or "keep_occupied"), joinOrg, or custom. You must be one of the members. Omit it otherwise.`;
 }
 
 export function advisorSystem(name: string) {

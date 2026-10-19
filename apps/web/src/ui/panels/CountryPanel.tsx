@@ -26,6 +26,8 @@ function CountryDetails({ view, c }: { view: GameView; c: Country }) {
   const isMe = c.tag === me;
   const player = view.players.find((p) => p.country === c.tag);
   const rel = me && !isMe ? relationBetween(view.relations, me, c.tag) : null;
+  const atWarWithMe = !!me && !isMe && view.wars.some((w) =>
+    (w.attackers.includes(me) && w.defenders.includes(c.tag)) || (w.defenders.includes(me) && w.attackers.includes(c.tag)));
   const treaties = view.treaties.filter((t) => t.members.includes(c.tag));
   const wars = view.wars.filter((w) => w.attackers.includes(c.tag) || w.defenders.includes(c.tag));
   const calls = view.wars.flatMap((w) => (w.calls ?? []).filter((k) => k.tag === c.tag).map((k) => ({ war: w, via: k.via })));
@@ -101,6 +103,11 @@ function CountryDetails({ view, c }: { view: GameView; c: Country }) {
             <Button size="sm" variant="secondary" icon="scroll" onClick={() => openDiplomacy(c.tag, true)}>
               Propose treaty
             </Button>
+            {atWarWithMe && (
+              <Button size="sm" variant="secondary" icon="flag" onClick={() => openDiplomacy(c.tag, true, "peace")}>
+                Negotiate peace
+              </Button>
+            )}
           </>
         )}
         {isMe && (

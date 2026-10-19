@@ -111,7 +111,7 @@ async function askKeyVoters(state: GameState, deps: EngineDeps, plans: Plan[]) {
   const involved = new Set(asked.flatMap(({ r }) => [r.proposer, ...(r.target ? [r.target] : [])]));
   const user = [
     `DATE: ${state.date}`,
-    warsBlock(state),
+    warsBlock(state, deps.map),
     recentEventsBlock(state, { involving: involved, max: 15 }),
     `RESOLUTIONS:\n${lines.join("\n")}`,
     "TASK: Give each listed voter's vote on each resolution.",

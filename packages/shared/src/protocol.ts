@@ -114,7 +114,7 @@ export interface TurnResult {
   votes: ResolutionResult[];
 }
 
-export type ProposalDraft = Pick<Proposal, "kind" | "treatyType" | "members" | "terms">;
+export type ProposalDraft = Pick<Proposal, "kind" | "treatyType" | "members" | "terms" | "peace">;
 
 export interface FormationRequest {
   name: string;

@@ -7,6 +7,7 @@ const DONETSK = prov("Donets'k", "UKR");
 const LUHANSK = prov("Luhans'k", "UKR");
 const KHARKIV = prov("Kharkiv", "UKR");
 const SUMY = prov("Sumy", "UKR");
+const LVIV = prov("L'viv", "UKR");
 const BELGOROD = prov("Belgorod", "RUS");
 const ROSTOV = prov("Rostov", "RUS");
 const NOVGOROD = prov("Novgorod", "RUS");
@@ -42,6 +43,7 @@ describe("transferProvinces", () => {
       { type: "transferProvinces", provinces: [DONETSK, DONETSK, 99999, KHARKIV], from: "UKR", to: "RUS" },
       { type: "makePeace", warId: w, terms: "ceasefire" },
     ]);
+    s.controllers[KHARKIV] = idx(s, "RUS"); // Russia holds both regions it receives
     const r = applyEvent(s, MAP, e, ctx());
     expect(r.rejected).toHaveLength(0);
     expect(s.owners[DONETSK]).toBe(idx(s, "RUS"));
@@ -49,6 +51,32 @@ describe("transferProvinces", () => {
     expect(s.wars).toHaveLength(0);
     // Only the provinces that actually moved are recorded (deduplicated, invalid ids dropped).
     expect(r.applied[0]).toMatchObject({ type: "transferProvinces", provinces: [DONETSK, KHARKIV] });
+  });
+
+  test("a peace deal cedes only land the receiving side occupies", () => {
+    const s = makeState();
+    const w = war(s, ["RUS"], ["UKR"]);
+    // Russia occupies Donetsk (start state) but not Kharkiv or Sumy.
+    const r = applyEvent(s, MAP, ev([
+      { type: "makePeace", warId: w, terms: "ceasefire" },
+      { type: "transferProvinces", provinces: [DONETSK, KHARKIV, SUMY], from: "UKR", to: "RUS" },
+    ]), ctx());
+    expect(s.owners[DONETSK]).toBe(idx(s, "RUS"));
+    expect(s.owners[KHARKIV]).toBe(idx(s, "UKR"));
+    expect(s.owners[SUMY]).toBe(idx(s, "UKR"));
+    expect(reasons(r.rejected)).toContain("not occupied");
+  });
+
+  test("no cession may strand a landlocked exclave", () => {
+    const s = makeState();
+    // A trade treaty legitimises a cession, but eastern Sumy can't belong to Poland.
+    const r = applyEvent(s, MAP, ev([
+      { type: "createTreaty", treatyType: "trade", members: ["UKR", "POL"] },
+      { type: "transferProvinces", provinces: [SUMY, LVIV], from: "UKR", to: "POL" },
+    ]), ctx());
+    expect(s.owners[LVIV]).toBe(idx(s, "POL"));
+    expect(s.owners[SUMY]).toBe(idx(s, "UKR"));
+    expect(reasons(r.rejected)).toContain("cut off");
   });
 
   test("allowed with a treaty between the two countries in the same event", () => {
@@ -451,9 +479,9 @@ describe("player protection", () => {
 
   test("a player may cede voluntarily by order, without a peace or treaty", () => {
     const { s, c } = setup();
-    const r = applyEvent(s, MAP, ev([{ type: "transferProvinces", provinces: [SUMY], from: "UKR", to: "POL" }], { causes: ["o-ukr"] }), c);
+    const r = applyEvent(s, MAP, ev([{ type: "transferProvinces", provinces: [LVIV], from: "UKR", to: "POL" }], { causes: ["o-ukr"] }), c);
     expect(r.applied).toHaveLength(1);
-    expect(s.owners[SUMY]).toBe(idx(s, "POL"));
+    expect(s.owners[LVIV]).toBe(idx(s, "POL"));
   });
 
   test("cannot be made to join a treaty, war, organisation or sanctions regime", () => {

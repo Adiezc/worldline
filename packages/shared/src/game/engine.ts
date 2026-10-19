@@ -107,6 +107,8 @@ export function applyEvent(state: GameState, map: MapIndex, event: GameEvent, ct
   // will itself pass validation counts (a makePeace blocked by a player must not legitimise a
   // cession in the same event).
   const peacePairs = new Set<string>();
+  /** Wars ended in this event, kept so cessions can check who occupied what (makePeace removes them). */
+  const peaceWars: GameState["wars"] = [];
   const treatyPairs = new Set<string>();
   const unionPairs = new Set<string>();
   for (const e of event.effects) {
@@ -114,6 +116,7 @@ export function applyEvent(state: GameState, map: MapIndex, event: GameEvent, ct
       const w = state.wars.find((x) => x.id === e.warId);
       if (w && [...w.attackers, ...w.defenders].every(humanOk)) {
         for (const a of w.attackers) for (const d of w.defenders) peacePairs.add(relKey(a, d));
+        peaceWars.push(w);
       }
     }
     if (e.type === "createTreaty" && e.members.every((m) => alive(m) && humanOk(m))) {
@@ -141,8 +144,28 @@ export function applyEvent(state: GameState, map: MapIndex, event: GameEvent, ct
           break;
         }
         if (humans.has(effect.from) && !causedBy.has(effect.from)) { reject(`${effect.from} is player-controlled and did not agree`); break; }
-        const valid = [...new Set(effect.provinces)].filter((id) => id >= 1 && id <= map.count && state.owners[id] === fromIdx);
+        let valid = [...new Set(effect.provinces)].filter((id) => id >= 1 && id <= map.count && state.owners[id] === fromIdx);
         if (valid.length === 0) { reject("none of those provinces belong to the ceding country"); break; }
+        // A peace deal (without a treaty or a voluntary cession behind it) cedes only what the
+        // receiving side actually occupies: a model guessing region ids must not hand over land
+        // nobody fought for (that is how stray exclaves appeared).
+        const byPeaceOnly = peacePairs.has(pair) && !treatyPairs.has(pair) && !spawnedHere.has(effect.to) && !voluntary;
+        if (byPeaceOnly) {
+          const war = peaceWars.find((w) =>
+            (w.attackers.includes(effect.to) && w.defenders.includes(effect.from)) || (w.defenders.includes(effect.to) && w.attackers.includes(effect.from)));
+          const side = new Set((war?.attackers.includes(effect.to) ? war.attackers : war?.defenders ?? [effect.to]).map((t) => countryIndex(state, t)));
+          const notHeld = valid.filter((id) => !side.has(state.controllers[id]));
+          if (notHeld.length) reject(`regions ${notHeld.join(", ")} are not occupied by ${effect.to}'s side; a peace deal cedes only occupied land`);
+          valid = valid.filter((id) => side.has(state.controllers[id]));
+          if (!valid.length) break;
+        }
+        // No transfer may strand a landlocked exclave: each region must connect to the recipient's
+        // land (directly or through other regions in this transfer) or be a coast it can reach by sea.
+        const linked = connectedTransfer(state, map, valid, toIdx);
+        const stranded = valid.filter((id) => !linked.has(id));
+        if (stranded.length) reject(`regions ${stranded.join(", ")} would be cut off from ${effect.to}`);
+        valid = valid.filter((id) => linked.has(id));
+        if (!valid.length) break;
         for (const id of valid) {
           state.owners[id] = toIdx;
           state.controllers[id] = toIdx;
@@ -499,6 +522,41 @@ export function applyEvent(state: GameState, map: MapIndex, event: GameEvent, ct
   if (clamped.length) event.clamped = clamped;
   if (diff.size) event.mapDiff = [...diff].map((province) => ({ province, owner: state.owners[province], controller: state.controllers[province] }));
   return { applied, rejected, clamped };
+}
+
+/**
+ * Regions of a cession that end up connected to the recipient: by land through its existing
+ * territory or other ceded regions, or by sea to a coast within naval range of its own coasts.
+ */
+export function connectedTransfer(state: GameState, map: MapIndex, ids: number[], toIdx: number) {
+  const pending = new Set(ids);
+  const linked = new Set<number>();
+  const owned = (id: number) => state.owners[id] === toIdx || linked.has(id);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const id of pending) {
+      if (map.neighbors[id]?.some(owned)) {
+        linked.add(id);
+        pending.delete(id);
+        grew = true;
+      }
+    }
+  }
+  if (pending.size && map.cx) {
+    const ports: number[] = [];
+    for (let id = 1; id <= map.count; id++) if (map.coastal[id] && state.owners[id] === toIdx) ports.push(id);
+    for (const id of pending) {
+      if (!map.coastal[id]) continue;
+      const reachable = ports.some((p) => {
+        let dx = Math.abs(map.cx[p] - map.cx[id]);
+        dx = Math.min(dx, map.width - dx);
+        return Math.hypot(dx, map.cy[p] - map.cy[id]) <= NAVAL_RANGE;
+      });
+      if (reachable) linked.add(id);
+    }
+  }
+  return linked;
 }
 
 /** Members of mutual-defence organisations and defensive treaties are called to defend. */

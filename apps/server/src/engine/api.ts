@@ -85,7 +85,7 @@ export interface EngineApi {
   /** `speaker` picks which AI member answers in a group chat (default: the most relevant one). */
   sendChat(state: GameState, deps: EngineDeps, opts: { chatId: string; playerId: string; text: string; proposal?: ProposalDraft; speaker?: string }): Promise<void>;
   openChat(state: GameState, opts: { from: string; with: string[] }): string;
-  respondProposal(state: GameState, opts: { chatId: string; proposalId: string; byTag: string; accept: boolean }): { ok: boolean; message: string };
+  respondProposal(state: GameState, opts: { chatId: string; proposalId: string; byTag: string; accept: boolean; map?: MapIndex }): { ok: boolean; message: string };
   advisor(state: GameState, deps: EngineDeps, opts: { country: string; question?: string }): Promise<string>;
   polish(state: GameState, deps: EngineDeps, opts: { country: string; text: string }): Promise<string>;
   brainstorm(state: GameState, deps: EngineDeps, opts: { country: string }): Promise<string[]>;

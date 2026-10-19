@@ -64,7 +64,7 @@ export async function planDirector(state: GameState, deps: EngineDeps, opts: { d
     memoryBlock(state, deps.seed),
     countriesBlock(state, acting, [...humans]).replace("COUNTRIES IN FOCUS:", "ACTING COUNTRIES:"),
     relationsBlock(state, scope),
-    warsBlock(state),
+    warsBlock(state, deps.map),
     treatiesBlock(state, new Set(acting), 30),
     sanctionsBlock(state, 15),
     orgsBlock(state, { maxMembers: 12 }),

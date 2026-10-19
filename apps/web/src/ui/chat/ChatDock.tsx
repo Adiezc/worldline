@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { markRead, requestNotificationPermission } from "../../game/chatNotify.ts";
 import { createPortal } from "react-dom";
-import type { Chat, ChatMessage, GameView, Proposal, ProposalDraft, TreatyType } from "@worldline/shared";
+import type { Chat, ChatMessage, GameView, Proposal, ProposalDraft, TreatyType, PeaceTerms } from "@worldline/shared";
 import { closeChat, openChat, openConference, respondProposal, sendChat, setChatBuilder, toggleChatMinimized } from "../../game/actions.ts";
 import { fmtShortDate } from "../../game/format.ts";
 import { countryMap, TREATY_LABELS } from "../../game/selectors.ts";
@@ -164,6 +164,12 @@ function Message({ m, chatId, view, mine }: { m: ChatMessage; chatId: string; vi
   );
 }
 
+/** Standard peace terms; the text becomes the treaty's terms when the player writes none. */
+const PEACE_LABELS: Record<PeaceTerms, { label: string; terms: string }> = {
+  white: { label: "White peace", terms: "White peace: all occupied territory returns to its pre-war owner." },
+  keep_occupied: { label: "Keep what we hold", terms: "Each side keeps the territory it occupies when the fighting stops." },
+};
+
 const KIND_LABELS: Record<Proposal["kind"], string> = { treaty: "Treaty", endWar: "Peace terms", joinOrg: "Membership", custom: "Agreement" };
 
 function ProposalCard({ p, chatId, view }: { p: Proposal; chatId: string; view: GameView }) {
@@ -177,6 +183,7 @@ function ProposalCard({ p, chatId, view }: { p: Proposal; chatId: string; view: 
         <span className="font-display text-[12px] text-gold-bright">
           {KIND_LABELS[p.kind]}
           {p.kind === "treaty" && p.treatyType ? ` — ${TREATY_LABELS[p.treatyType]}` : ""}
+          {p.kind === "endWar" && p.peace ? ` — ${PEACE_LABELS[p.peace].label}` : ""}
         </span>
         <Badge tone={tone} className="ml-auto">
           {p.status}
@@ -208,7 +215,21 @@ function ProposalCard({ p, chatId, view }: { p: Proposal; chatId: string; view: 
 function Composer({ chat, win, view, speaker }: { chat: Chat; win: ChatWindowState; view: GameView; speaker?: string }) {
   const me = view.you.country;
   const [text, setText] = useState("");
-  const [kind, setKind] = useState<Proposal["kind"]>("treaty");
+  // Grow the message box with its text (up to ~8 lines, then scroll) so nothing is clipped.
+  const boxRef = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    const max = 168; // about 8 lines
+    el.style.height = `${Math.min(el.scrollHeight + 2, max)}px`;
+    el.style.overflowY = el.scrollHeight + 2 > max ? "auto" : "hidden";
+  }, [text]);
+  const [kind, setKind] = useState<Proposal["kind"]>(win.preset === "peace" ? "endWar" : "treaty");
+  const [peace, setPeace] = useState<PeaceTerms>("white");
+  useEffect(() => {
+    if (win.preset === "peace") setKind("endWar");
+  }, [win.preset]);
   const [treatyType, setTreatyType] = useState<TreatyType>("trade");
   const [members, setMembers] = useState<string[]>(chat.members);
   // A conference's proposal names every delegation by default.
@@ -220,7 +241,10 @@ function Composer({ chat, win, view, speaker }: { chat: Chat; win: ChatWindowSta
   if (!me) return <div className="border-t border-panel-edge/40 px-3 py-2 text-[11px] text-parchment/40 italic">Spectators cannot speak.</div>;
 
   const submit = () => {
-    const proposal: ProposalDraft | undefined = win.builder && terms.trim() ? { kind, treatyType: kind === "treaty" ? treatyType : undefined, members, terms: terms.trim() } : undefined;
+    const peaceText = kind === "endWar" && !terms.trim() ? PEACE_LABELS[peace].terms : terms.trim();
+    const proposal: ProposalDraft | undefined = win.builder && peaceText
+      ? { kind, treatyType: kind === "treaty" ? treatyType : undefined, peace: kind === "endWar" ? peace : undefined, members, terms: peaceText }
+      : undefined;
     if (!text.trim() && !proposal) return;
     sendChat(chat.id, text.trim(), proposal, speaker);
     setText("");
@@ -244,6 +268,17 @@ function Composer({ chat, win, view, speaker }: { chat: Chat; win: ChatWindowSta
                 ))}
               </select>
             </Field>
+            {kind === "endWar" && (
+              <Field label="Terms">
+                <select className="hud-input py-1 text-[12px]" value={peace} onChange={(e) => setPeace(e.target.value as PeaceTerms)}>
+                  {Object.entries(PEACE_LABELS).map(([k, l]) => (
+                    <option key={k} value={k}>
+                      {l.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            )}
             {kind === "treaty" && (
               <Field label="Treaty">
                 <select className="hud-input py-1 text-[12px]" value={treatyType} onChange={(e) => setTreatyType(e.target.value as TreatyType)}>
@@ -277,7 +312,7 @@ function Composer({ chat, win, view, speaker }: { chat: Chat; win: ChatWindowSta
             </div>
           </div>
           <Field label="Terms">
-            <textarea className="hud-input min-h-14 resize-none text-[12px]" value={terms} onChange={(e) => setTerms(e.target.value)} placeholder={chat.members.length > 2 ? "All parties agree to…" : "Both parties agree to…"} />
+            <textarea className="hud-input min-h-14 resize-none text-[12px]" value={terms} onChange={(e) => setTerms(e.target.value)} placeholder={kind === "endWar" ? PEACE_LABELS[peace].terms : chat.members.length > 2 ? "All parties agree to…" : "Both parties agree to…"} />
           </Field>
         </div>
       )}
@@ -291,6 +326,7 @@ function Composer({ chat, win, view, speaker }: { chat: Chat; win: ChatWindowSta
           <Icon name="scroll" size={14} />
         </button>
         <textarea
+          ref={boxRef}
           autoFocus
           value={text}
           rows={1}
@@ -302,12 +338,12 @@ function Composer({ chat, win, view, speaker }: { chat: Chat; win: ChatWindowSta
             }
           }}
           placeholder={win.builder ? "Covering note (optional)…" : "Write a message…"}
-          className="hud-input max-h-24 min-h-8 resize-none py-1.5 text-[12.5px]"
+          className="hud-input min-h-8 resize-none py-1.5 text-[12.5px] leading-snug"
         />
         <button
           type="button"
           onClick={submit}
-          disabled={!text.trim() && !(win.builder && terms.trim())}
+          disabled={!text.trim() && !(win.builder && (terms.trim() || kind === "endWar"))}
           className="grid h-8 w-8 shrink-0 place-items-center rounded border border-gold/70 bg-gold/20 text-gold-bright hover:bg-gold/30 disabled:opacity-40"
           title="Send"
         >

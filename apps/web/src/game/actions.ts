@@ -105,16 +105,16 @@ export function handleMapClick(provinceId: number) {
 // --- Diplomacy -------------------------------------------------------------------------------
 
 /** Open (or create) the bilateral chat with `tag`. */
-export function openDiplomacy(tag: string, builder = false) {
+export function openDiplomacy(tag: string, builder = false, preset?: "peace") {
   const s = useGame.getState();
   const me = s.view?.you.country;
   if (!s.view || !me || me === tag) return;
   const members = [me, tag];
   const chat = s.view.chats.find((c) => sameMembers(c.members, members));
   if (chat) {
-    useGame.setState({ chats: openWindow(s.chats, chat.id, builder) });
+    useGame.setState({ chats: openWindow(s.chats, chat.id, builder, preset) });
   } else {
-    useGame.setState({ pendingChat: { members, builder } });
+    useGame.setState({ pendingChat: { members, builder, preset } });
     send({ t: "chat.open", with: [tag] });
   }
 }

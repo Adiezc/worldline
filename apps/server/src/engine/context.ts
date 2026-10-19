@@ -111,8 +111,9 @@ export function treatiesBlock(state: GameState, focus?: Set<string>, max = 45) {
 }
 
 /** Regions of the other side held by each belligerent, as "RUS holds 14 UKR regions". */
-function occupationSummary(state: GameState, w: War) {
+export function occupationSummary(state: GameState, w: War, map?: MapIndex) {
   const counts = new Map<string, number>();
+  const regions: string[] = [];
   const sideOf = (t: string) => (w.attackers.includes(t) ? "a" : w.defenders.includes(t) ? "d" : "");
   for (let id = 1; id < state.owners.length; id++) {
     const o = state.owners[id], c = state.controllers[id];
@@ -121,15 +122,19 @@ function occupationSummary(state: GameState, w: War) {
     if (!ot || !ct || !sideOf(ot) || !sideOf(ct) || sideOf(ot) === sideOf(ct)) continue;
     const key = `${ct} holds ${ot}`;
     counts.set(key, (counts.get(key) ?? 0) + 1);
+    if (map) regions.push(`${id} ${regionName(map, id)} (${ot}, held by ${ct})`);
   }
-  return [...counts].map(([k, n]) => `${k.replace(" holds ", ` holds ${n} `)} regions`).join(", ");
+  const summary = [...counts].map(([k, n]) => `${k.replace(" holds ", ` holds ${n} `)} regions`).join(", ");
+  // Exact ids, so a peace deal cedes the regions that were actually taken.
+  const list = regions.length ? `; occupied regions: ${regions.slice(0, 40).join("; ")}${regions.length > 40 ? ` (+${regions.length - 40} more)` : ""}` : "";
+  return summary + list;
 }
 
-export function warsBlock(state: GameState) {
+export function warsBlock(state: GameState, map?: MapIndex) {
   if (!state.wars.length) return "WARS: none";
   const lines = state.wars.map((w) => {
     let s = `${w.id} "${w.name}" since ${w.since} — attackers ${w.attackers.join(", ")}; defenders ${w.defenders.join(", ")}; goal: ${w.goal}`;
-    const occ = occupationSummary(state, w);
+    const occ = occupationSummary(state, w, map);
     if (occ) s += `; occupation: ${occ}`;
     if (w.calls?.length) s += `; CALLS TO ARMS pending: ${w.calls.map((c) => `${c.tag} (via ${c.via})`).join(", ")}`;
     return s;
@@ -310,7 +315,7 @@ export function worldContext(state: GameState, deps: { map: MapIndex; seed: Scen
     countriesBlock(state, focus, others),
     relationsBlock(state, tiered),
     treatiesBlock(state, tiered),
-    warsBlock(state),
+    warsBlock(state, deps.map),
     sanctionsBlock(state),
     orgsBlock(state),
     regionsBlock(state, map),
