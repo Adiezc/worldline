@@ -1,0 +1,20 @@
+[
+  { "date": "1962-10-08", "title": "Algeria admitted to the United Nations", "kind": "event", "countries": ["DZA"], "note": "The General Assembly votes on Algeria's admission as the 109th member." },
+  { "date": "1962-10-09", "title": "Uganda becomes independent", "kind": "event", "countries": ["GBR"], "note": "The Uganda Protectorate becomes an independent Commonwealth realm under Prime Minister Milton Obote (the British-held provinces should pass to a new Ugandan state)." },
+  { "date": "1962-10-11", "title": "Second Vatican Council opens", "kind": "event", "countries": ["VAT"], "note": "Pope John XXIII opens the ecumenical council in St Peter's Basilica." },
+  { "date": "1962-10-28", "title": "French referendum on direct election of the President", "kind": "election", "countries": ["FRA"], "note": "De Gaulle asks voters to approve election of the President by universal suffrage, bypassing Parliament's objections." },
+  { "date": "1962-10-30", "title": "Northern Rhodesian general election", "kind": "election", "countries": ["RNY"], "note": "First election under the new constitution; African nationalist parties (UNIP, ANC) could win a majority, threatening the Federation." },
+  { "date": "1962-11-01", "title": "Tanganyikan presidential election", "kind": "election", "countries": ["TZA"], "note": "Julius Nyerere is the TANU candidate for the presidency of the new republic." },
+  { "date": "1962-11-06", "title": "US midterm elections", "kind": "election", "countries": ["USA"], "note": "All House seats and 39 Senate seats; Cuba is a Republican campaign theme." },
+  { "date": "1962-12-09", "title": "Tanganyika becomes a republic", "kind": "event", "countries": ["TZA"], "note": "First anniversary of independence; the President takes office." },
+  { "date": "1962-12-14", "title": "Southern Rhodesian general election", "kind": "election", "countries": ["RNY"], "note": "Whitehead's United Federal Party faces the new segregationist Rhodesian Front." },
+  { "date": "1962-12-18", "title": "Kennedy-Macmillan conference at Nassau", "kind": "summit", "countries": ["USA", "GBR"], "note": "Scheduled Anglo-American summit in the Bahamas; the future of Skybolt and Britain's deterrent are on the table." },
+  { "date": "1962-12-20", "title": "Dominican general election", "kind": "election", "countries": ["DOM"], "note": "First free election after the Trujillo dictatorship; Juan Bosch (PRD) against Viriato Fiallo (UCN)." },
+  { "date": "1962-12-31", "title": "Indonesian flag raised in West New Guinea", "kind": "deadline", "countries": ["NLD", "IDN"], "note": "Under the New York Agreement the Indonesian flag flies beside the UN flag from this date." },
+  { "date": "1963-01-06", "title": "Brazilian plebiscite on the presidential system", "kind": "election", "countries": ["BRA"], "note": "Voters decide whether to keep the 1961 parliamentary system or restore Goulart's full presidential powers." },
+  { "date": "1963-04-28", "title": "Italian general election", "kind": "election", "countries": ["ITA"], "note": "Test for Fanfani's centre-left 'opening to the left'." },
+  { "date": "1963-04-28", "title": "Austrian presidential election", "kind": "election", "countries": ["AUT"], "note": "President Adolf Schärf seeks re-election." },
+  { "date": "1963-05-01", "title": "UNTEA hands West New Guinea to Indonesia", "kind": "deadline", "countries": ["NLD", "IDN"], "note": "End of the UN Temporary Executive Authority; administration passes to Indonesia, with an 'Act of Free Choice' promised by 1969." },
+  { "date": "1963-05-18", "title": "Kenyan general election", "kind": "election", "countries": ["GBR"], "note": "Pre-independence election for internal self-government (KANU vs KADU), held 18-26 May." },
+  { "date": "1963-08-31", "title": "Planned formation of Malaysia", "kind": "deadline", "countries": ["MYS", "GBR"], "note": "Target date agreed in London (July 1962) for Malaya, Singapore, North Borneo and Sarawak (and possibly Brunei) to federate. Opposed by Indonesia and the Philippines." }
+]

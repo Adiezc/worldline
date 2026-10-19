@@ -1,4 +1,5 @@
 // Imperative handle onto the live map, published by MapView once the renderer is ready.
+import type { EraTheme } from "@worldline/shared";
 
 export type FocusTarget =
   | number // province id
@@ -26,7 +27,25 @@ export interface MapController {
   focusOn(target: FocusTarget, opts?: FocusOptions): void;
   /** Owner index per province as currently drawn. */
   owners(): ArrayLike<number>;
+  /** Era look: paper, sea, sepia and label ink. */
+  setTheme(theme: EraTheme): void;
+  /** Softly highlight every province of this owner index (null = follow the selection). */
+  setHighlightOwner(owner: number | null): void;
 }
+
+/**
+ * Editor brush: while set, a left-button drag on the map paints instead of panning
+ * (right/middle drag or Space+drag still pan). Ids are 0 over the sea.
+ */
+export interface PaintHandler {
+  start(provinceId: number): void;
+  move(provinceId: number): void;
+  end(): void;
+}
+
+let paintHandler: PaintHandler | null = null;
+export const setPaintHandler = (h: PaintHandler | null) => void (paintHandler = h);
+export const getPaintHandler = () => paintHandler;
 
 let current: MapController | null = null;
 const readyListeners = new Set<(c: MapController | null) => void>();

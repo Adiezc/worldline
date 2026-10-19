@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { MapMeta, ScenarioStart } from "@worldline/shared";
+import type { EraTheme, MapMeta, ScenarioStart } from "@worldline/shared";
 
 /** Map-level UI state: assets, hover and the selected province. */
 export interface MapState {
@@ -7,8 +7,12 @@ export interface MapState {
   error?: string;
   /** Province metadata from /map/provinces.json (index = id - 1). */
   meta?: MapMeta;
-  /** The static scenario start, used as the menu backdrop. */
+  /** The menu backdrop: the static modern start, or the scenario picked in the menu. */
   scenario?: ScenarioStart;
+  /** Era theme when no game view decides it (menu backdrop, editor). */
+  theme: EraTheme;
+  /** The scenario editor owns the map: MapSync stands aside. */
+  editing: boolean;
   hoverId: number;
   pointer: { x: number; y: number };
   selectedId: number;
@@ -18,6 +22,8 @@ export interface MapState {
 
 export const useMap = create<MapState>((set) => ({
   status: "loading",
+  theme: "modern",
+  editing: false,
   hoverId: 0,
   pointer: { x: 0, y: 0 },
   selectedId: 0,

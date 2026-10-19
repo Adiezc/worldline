@@ -2,11 +2,19 @@
 //
 // REST (JSON):
 //   GET  /api/health            → HealthResponse
-//   POST /api/games             CreateGameRequest → { gameId }
+//   POST /api/games             CreateGameRequest → { gameId }          (Authorization optional)
 //   GET  /api/games/:id         → GameSummary
+//   GET  /api/scenarios         → ScenarioInfo[]
+//   GET  /api/scenarios/:id     → ScenarioSeed (full, used by the editor and menu previews)
+//   POST /api/scenarios         CustomScenarioRequest → { id }          (Authorization required)
+//   POST /api/auth/register     AuthRequest → AuthResponse
+//   POST /api/auth/login        AuthRequest → AuthResponse
+//   POST /api/auth/logout       (Authorization) → { ok: true }
+//   GET  /api/me                (Authorization) → MeResponse
+// Authorization header: `Bearer <token>`.
 // WebSocket: /ws   (first client message must be `join`)
 
-import type { CalendarEntry, Formable } from "./game/scenario.ts";
+import type { CalendarEntry, EraTheme, Formable, ScenarioSeed } from "./game/scenario.ts";
 import type {
   Chat, GameEvent, GameSettings, GameState, Order, OrderVerdict, Proposal, ResolutionType, TreatyType,
 } from "./game/state.ts";
@@ -23,6 +31,40 @@ export interface HealthResponse {
 export interface CreateGameRequest {
   name: string;
   scenarioId?: string;
+}
+
+export interface ScenarioInfo {
+  id: string;
+  name: string;
+  date: string;
+  description: string;
+  theme: EraTheme;
+  custom: boolean;
+  author?: string;
+  countries: number;
+}
+
+/** A scenario built in the editor: a full seed whose id/author the server assigns. */
+export type CustomScenarioRequest = Omit<ScenarioSeed, "id" | "author">;
+
+export interface AuthRequest {
+  username: string;
+  password: string;
+}
+
+export interface AuthResponse {
+  token: string;
+  user: { id: string; username: string };
+}
+
+export interface MeResponse {
+  user: { id: string; username: string };
+  games: (GameSummary & { lastPlayed: number; myCountry: string | null })[];
+}
+
+export interface Snapshot {
+  turn: number;
+  date: string;
 }
 
 export interface GameSummary {
@@ -46,6 +88,11 @@ export type GameView = Omit<GameState, "orders" | "chats" | "events" | "jumpVote
   formables: Formable[];
   /** Scheduled real-world events from the current date onward. */
   calendar: CalendarEntry[];
+  theme: EraTheme;
+  /** Turns that can be rewound to (host only; empty for others). */
+  snapshots: Snapshot[];
+  /** Event ids of the last resolved turn the host may intervene at (empty once new orders exist). */
+  intervenable: string[];
   ai: { provider: "openrouter" | "mock"; usedToday: number; dailyLimit: number };
 };
 
@@ -80,7 +127,7 @@ export interface FormationRequest {
 }
 
 export type ClientMessage =
-  | { t: "join"; gameId: string; playerId?: string; name: string }
+  | { t: "join"; gameId: string; playerId?: string; name: string; token?: string }
   | { t: "claim"; tag: string | null }
   | { t: "settings"; settings: Partial<GameSettings> }
   | { t: "start" }
@@ -89,7 +136,8 @@ export type ClientMessage =
   | { t: "jump"; days: number }
   | { t: "ai"; reqId: string; kind: "advisor" | "polish" | "brainstorm"; text?: string }
   | { t: "chat.open"; with: string[] }
-  | { t: "chat.send"; chatId: string; text: string; proposal?: ProposalDraft }
+  /** `speaker` asks a specific AI member of a group chat to answer. */
+  | { t: "chat.send"; chatId: string; text: string; proposal?: ProposalDraft; speaker?: string }
   | { t: "proposal.respond"; chatId: string; proposalId: string; accept: boolean }
   | { t: "org.propose"; orgId: string; resolutionType: ResolutionType; target?: string; text: string }
   | { t: "org.vote"; resolutionId: string; vote: "yes" | "no" | "abstain" }
@@ -97,7 +145,11 @@ export type ClientMessage =
   | { t: "formation.recheck"; reqId: string; formationId: string }
   | { t: "formation.proclaim"; formationId: string }
   | { t: "formation.consent"; formationId: string; accept: boolean }
-  | { t: "formation.abandon"; formationId: string };
+  | { t: "formation.abandon"; formationId: string }
+  /** Host: restore the game to the start of an earlier turn (from per-turn snapshots). */
+  | { t: "rewind"; turn: number }
+  /** Host: stop the last turn at this event; later events are discarded and the date set to it. */
+  | { t: "intervene"; eventId: string };
 
 export type ServerMessage =
   | { t: "welcome"; playerId: string; view: GameView }

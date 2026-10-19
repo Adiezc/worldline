@@ -14,6 +14,7 @@ uniform vec2 uMapSize;
 uniform usampler2D uProv;  // (owner, controller) per province, 64 wide
 uniform sampler2D uPalette;
 uniform int uMode;         // 0 political
+uniform float uDpr;        // device px per CSS px
 
 const uint NONE = 65535u;
 
@@ -35,12 +36,16 @@ void main() {
 export const fillFrag = common + /* glsl */ `
 uniform usampler2D uIds;
 uniform sampler2D uCoast;
+uniform sampler2D uRelief; // 8-bit hillshade, flat = 206
 uniform uint uHover;
 uniform uint uSelected;
 uniform uint uSelOwner;
 uniform vec3 uPaper;
 uniform vec3 uOceanDeep;
 uniform float uPoliticalMix;
+uniform float uSepia;
+uniform float uReliefK;
+uniform vec3 uInk;
 
 in vec2 vClip;
 out vec4 outColor;
@@ -85,6 +90,30 @@ vec3 oceanColor(vec2 world) {
   return uOceanDeep + (fbm(world * 0.02) - 0.5) * 0.045;
 }
 
+// Cubic B-spline relief lookup from four bilinear taps: hides the texel grid up close.
+vec4 cubicW(float v) {
+  vec4 n = vec4(1.0, 2.0, 3.0, 4.0) - v;
+  vec4 s = n * n * n;
+  float x = s.x, y = s.y - 4.0 * s.x, z = s.z - 4.0 * s.y + 6.0 * s.x;
+  return vec4(x, y, z, 6.0 - x - y - z) * (1.0 / 6.0);
+}
+float reliefAt(vec2 uv) {
+  vec2 size = vec2(textureSize(uRelief, 0));
+  // Zoomed out (a relief texel under ~1.5 device px): one mipmapped tap is enough.
+  if (uZoom * uMapSize.x / size.x < 1.5) return texture(uRelief, uv).r;
+  vec2 tc = uv * size - 0.5;
+  vec2 f = fract(tc);
+  tc -= f;
+  vec4 xc = cubicW(f.x), yc = cubicW(f.y);
+  vec4 c = tc.xxyy + vec2(-0.5, 1.5).xyxy;
+  vec4 s = vec4(xc.xz + xc.yw, yc.xz + yc.yw);
+  vec4 o = (c + vec4(xc.yw, yc.yw) / s) / size.xxyy;
+  float s0 = textureLod(uRelief, o.xz, 0.0).r, s1 = textureLod(uRelief, o.yz, 0.0).r;
+  float s2 = textureLod(uRelief, o.xw, 0.0).r, s3 = textureLod(uRelief, o.yw, 0.0).r;
+  float sx = s.x / (s.x + s.y), sy = s.z / (s.z + s.w);
+  return mix(mix(s3, s2, sx), mix(s1, s0, sx), sy);
+}
+
 uint ownerOf(uint id) { return id == 0u ? NONE - 1u : provInfo(id).x; }
 
 void main() {
@@ -115,11 +144,13 @@ void main() {
   float grain = fbm(world * 0.35) - 0.5;
   vec3 paper = uPaper + grain * 0.06;
   vec3 col = vec3(0.0);
+  float landW = 0.0;
   uint centreId = idAt(world);
   for (int i = 0; i < 4; i++) {
     uint id = idAt(taps[i]);
     vec3 c = id == 0u ? ocean : mix(paper, landColor(id, world), uPoliticalMix);
     col += c * weights[i];
+    landW += id == 0u ? 0.0 : weights[i];
   }
 
   if (centreId != 0u) {
@@ -137,9 +168,32 @@ void main() {
     float edge = clamp(other / 4.0, 0.0, 1.0);
     vec3 strong = countryColor(me) * 0.72;
     col = mix(col, strong, edge * 0.55);
-    // Gentle inland darkening adds relief without terrain data.
+    // Gentle inland darkening keeps continents from looking flat at world scale.
     float inland = texture(uCoast, world / uMapSize).r;
-    col *= 1.0 - smoothstep(0.5, 1.0, inland) * 0.08;
+    col *= 1.0 - smoothstep(0.5, 1.0, inland) * 0.05;
+  }
+
+  // Terrain relief (Victoria 3 style): a hillshade multiplied under the political colour.
+  // Sampled outside any branch so screen-space derivatives stay defined for the ink contour.
+  float shade = reliefAt(world / uMapSize) - 206.0 / 255.0;
+  // Soft-clip the extremes so deep shadows never go black.
+  shade = shade / (1.0 + abs(shade) * 1.2);
+  float contour = abs(shade + 0.12) / max(fwidth(shade), 1e-4);
+  if (landW > 0.0) {
+    float zoomCss = uZoom / max(uDpr, 1.0);
+    // Subtle at world scale so political colours stay readable, stronger at regional zoom,
+    // easing off again up close where the half-resolution hillshade would look smeared.
+    float k = uReliefK * mix(1.15, 1.9, smoothstep(0.35, 2.0, zoomCss)) * mix(1.0, 0.72, smoothstep(3.0, 8.0, zoomCss));
+    col *= 1.0 + shade * k * landW;
+    // A faint hand-inked outline where slopes turn into deep shadow (mountains only).
+    float line = (1.0 - smoothstep(0.6, 1.6, contour)) * smoothstep(0.7, 1.8, zoomCss);
+    col = mix(col, uInk, line * 0.14 * landW);
+  }
+
+  if (uSepia > 0.0) {
+    float l = dot(col, vec3(0.299, 0.587, 0.114));
+    vec3 sep = vec3(l * 1.08 + 0.04, l * 0.98 + 0.02, l * 0.78);
+    col = mix(col, sep, uSepia);
   }
 
   outColor = vec4(col, 1.0);
@@ -151,7 +205,6 @@ in vec2 aA;
 in vec2 aB;
 in uvec2 aProv;    // provinces on either side (b = 0 for coasts)
 uniform float uOffsetX;
-uniform float uDpr;
 out float vSide;
 out float vWidth;
 flat out int vKind;

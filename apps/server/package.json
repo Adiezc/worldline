@@ -7,7 +7,9 @@
     "dev": "bun --watch src/index.ts",
     "start": "bun src/index.ts",
     "test": "bun test",
-    "typecheck": "tsc -p ."
+    "typecheck": "tsc -p .",
+    "ai:smoke": "bun scripts/ai-smoke.ts",
+    "balance": "bun scripts/balance.ts"
   },
   "dependencies": {
     "@worldline/mapdata": "workspace:*",

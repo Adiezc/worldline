@@ -98,6 +98,7 @@ async function assess(state: GameState, deps: EngineDeps, goal: FormationGoal) {
     system: ASSESSOR_SYSTEM,
     user,
     maxTokens: 3000,
+    reasoning: "setting",
     temperature: 0.4,
     mockContext: {
       founder: goal.founder,

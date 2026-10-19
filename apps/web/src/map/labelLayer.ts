@@ -17,12 +17,22 @@ export class LabelLayer {
   /** Per-owner ink: a deep shade of the country's own colour, Paradox style. */
   inks: string[] = [];
   private fade = 1;
+  private colors: string[] = [];
 
   setColors(colors: string[]) {
+    this.colors = colors;
+    const { labelShade: k, labelAlpha: a } = this.theme;
     this.inks = colors.map((hex) => {
-      const c = [1, 3, 5].map((i) => Math.round(parseInt(hex.slice(i, i + 2), 16) * 0.28));
-      return `rgba(${c[0]}, ${c[1]}, ${c[2]}, 0.86)`;
+      const c = [1, 3, 5].map((i) => Math.round(parseInt(hex.slice(i, i + 2), 16) * k));
+      return `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${a})`;
     });
+  }
+
+  /** Swap the era theme (ink depth and font); re-derives the per-country inks. */
+  setTheme(theme: MapTheme) {
+    if (theme.labelFont !== this.theme.labelFont) this.widthCache.clear();
+    this.theme = theme;
+    this.setColors(this.colors);
   }
 
   constructor(readonly canvas: HTMLCanvasElement, private theme: MapTheme) {

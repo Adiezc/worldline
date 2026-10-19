@@ -4,6 +4,7 @@ import { Tooltip } from "./ui/Tooltip.tsx";
 import { Toasts } from "./ui/Toasts.tsx";
 import { MainMenu } from "./ui/menu/MainMenu.tsx";
 import { GameScreen } from "./ui/GameScreen.tsx";
+import { EditorScreen } from "./editor/EditorScreen.tsx";
 import { useMap } from "./store.ts";
 import { useRoute } from "./router.ts";
 
@@ -23,8 +24,10 @@ export function App() {
           </p>
         </div>
       )}
-      {route.name === "menu" ? <MainMenu /> : <GameScreen key={route.id} gameId={route.id} />}
-      <Tooltip />
+      {route.name === "menu" && <MainMenu />}
+      {route.name === "game" && <GameScreen key={route.id} gameId={route.id} />}
+      {route.name === "editor" && <EditorScreen base={route.base} />}
+      {route.name !== "editor" && <Tooltip />}
       <Toasts />
     </div>
   );

@@ -26,7 +26,8 @@ export function openChat(state: GameState, opts: { from: string; with: string[] 
 }
 
 export async function sendChat(
-  state: GameState, deps: EngineDeps, opts: { chatId: string; playerId: string; text: string; proposal?: ProposalDraft },
+  state: GameState, deps: EngineDeps,
+  opts: { chatId: string; playerId: string; text: string; proposal?: ProposalDraft; speaker?: string },
 ): Promise<void> {
   const chat = state.chats.find((c) => c.id === opts.chatId);
   if (!chat) throw new Error("No such chat.");
@@ -39,6 +40,7 @@ export async function sendChat(
   const proposal = opts.proposal ? draftToProposal(state, chat, from, opts.proposal) : undefined;
   const msg: ChatMessage = { id: nextId(state, "m"), from, playerId: opts.playerId, text, at: state.date, proposal };
   const ai = chat.members.filter((m) => !humans.has(m) && countryByTag(state, m)?.alive);
+  if (opts.speaker && !ai.includes(opts.speaker)) throw new Error(`${opts.speaker} is not an AI delegation in this conversation.`);
   if (!ai.length) {
     chat.messages.push(msg);
     chat.lastTurn = state.turn;
@@ -46,11 +48,12 @@ export async function sendChat(
   }
 
   // The AI reply is fetched before anything is committed, so a failed call changes nothing.
-  const speaker = pickSpeaker(state, chat, text, proposal, ai);
+  const speaker = opts.speaker ?? pickSpeaker(state, chat, text, proposal, ai);
+  const present = chat.members.length > 2 ? chat.members.filter((m) => m !== speaker).map((t) => `${nameOf(state, t)} (${t})`) : undefined;
   const out = await callJson(deps, state, {
     kind: "chat",
     schemaName: "ChatOutput",
-    system: chatSystem(nameOf(state, speaker), speaker),
+    system: chatSystem(nameOf(state, speaker), speaker, present),
     user: chatPrompt(state, chat, speaker, from, [...chat.messages, msg]),
     maxTokens: 1500,
     temperature: 0.8,
@@ -153,7 +156,7 @@ function pickSpeaker(state: GameState, chat: Chat, text: string, p: Proposal | u
 function chatPrompt(state: GameState, chat: Chat, speaker: string, from: string, history: ChatMessage[]) {
   const humans = humanTags(state);
   const me = countryByTag(state, speaker)!, them = countryByTag(state, from)!;
-  const focus = new Set([speaker, from]);
+  const focus = new Set(chat.members.length > 2 ? chat.members : [speaker, from]);
   const others = chat.members.filter((m) => m !== speaker);
   const wars = state.wars.filter((w) => [...w.attackers, ...w.defenders].some((t) => focus.has(t)))
     .map((w) => `${w.id} "${w.name}": ${w.attackers.join(", ")} vs ${w.defenders.join(", ")}`);
@@ -168,17 +171,21 @@ function chatPrompt(state: GameState, chat: Chat, speaker: string, from: string,
     }
     return s;
   });
+  const group = chat.members.length > 2;
   return [
     `DATE: ${state.date}`,
     `YOU: ${countryDetail(state, me, humans)}`,
-    `SPEAKING WITH: ${others.map((t) => countryDetail(state, countryByTag(state, t)!, humans)).join("\n")}`,
+    group
+      ? `MULTILATERAL CONFERENCE. Delegations present besides you (${others.length}):\n${others.map((t) => countryDetail(state, countryByTag(state, t)!, humans)).join("\n")}`
+      : `SPEAKING WITH: ${others.map((t) => countryDetail(state, countryByTag(state, t)!, humans)).join("\n")}`,
     `YOUR RELATIONS (-100..100): ${relationList(state, speaker, others)}${shared.length ? `; shared memberships: ${shared.join(" ")}` : ""}`,
     treatiesBlock(state, focus, 15),
     wars.length ? `WARS:\n${wars.join("\n")}` : "",
     sanctions.length ? `SANCTIONS:\n${sanctions.join("\n")}` : "",
     recentEventsBlock(state, { involving: focus, max: 12 }),
     `CONVERSATION (latest last):\n${lines.join("\n")}`,
-    `TASK: Reply as ${me.name} to ${them.name}'s last message.${history.at(-1)?.proposal ? " It contains a PROPOSAL: set acceptsPlayerProposal." : ""}`,
+    `TASK: Reply as ${me.name} to ${them.name}'s last message${group ? ", speaking for your delegation before everyone present; you may address other delegations by name" : ""}.` +
+      `${history.at(-1)?.proposal ? " It contains a PROPOSAL: set acceptsPlayerProposal." : ""}`,
   ].filter(Boolean).join("\n\n");
 }
 

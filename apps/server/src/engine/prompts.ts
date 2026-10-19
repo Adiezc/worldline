@@ -69,7 +69,7 @@ ${effectReference(state, days)}
 OUTPUT: one JSON object, nothing else.
 {"orderVerdicts":[{"orderId":"o1","outcome":"partial","reason":"Parliament approved half the package; the opposition blocked the rest."}],
  "events":[{"date":"2026-01-09","headline":"France and Germany sign defence-industry pact","body":"Paris and Berlin agreed to co-fund a new tank programme. Analysts call it the most ambitious joint project in a decade.","countries":["FRA","DEU"],"causes":["o1"],"effects":[{"type":"relationDelta","a":"FRA","b":"DEU","delta":6},{"type":"statDelta","country":"FRA","stat":"military","delta":1.5}]}]${days === 0 ? `,\n "stopDate":"2026-02-14"` : ""}}
-- 4-14 events (about 4-6 for a week or two, 8-14 for several months), dated between START and END, in chronological order.
+- 4-12 events (about 4-6 for a week or two, 8-12 for several months), dated between START and END, in chronological order. Keep bodies tight.
 - headline: at most 12 words, news style. body: 1-3 concrete sentences in wire-service tone. countries: the tags involved. causes: ids of the orders the event resolves ([] for world events). effects: may be [].
 - orderVerdicts: exactly one per order: "success", "partial" or "fail", with a one-sentence reason. Every order also needs at least one event citing it in causes.`;
 }
@@ -108,8 +108,12 @@ export const CONSOLIDATION_SYSTEM = `You keep the chronicle of Worldline, a geop
 
 OUTPUT: one JSON object: {"summary":"..."}`;
 
-export function chatSystem(speakerName: string, speakerTag: string) {
-  return `You are the government of ${speakerName} (${speakerTag}) in Worldline, a geopolitical simulation that begins in the real world, speaking in a private diplomatic channel. Reply in character, as its leader or foreign ministry would: 1-4 sentences, diplomatic but candid, consistent with your persona, interests, relations and recent events. You are not obliged to agree; extract concessions where you have leverage, and refuse what harms you. Never mention being an AI or a game.
+/** `present`: the other delegations when the chat is a multilateral conference (3+ members). */
+export function chatSystem(speakerName: string, speakerTag: string, present?: string[]) {
+  const channel = present?.length
+    ? `speaking at a multilateral conference attended by ${present.join(", ")}. Everyone present hears what you say, so weigh each delegation's reaction`
+    : "speaking in a private diplomatic channel";
+  return `You are the government of ${speakerName} (${speakerTag}) in Worldline, a geopolitical simulation that begins in the real world, ${channel}. Reply in character, as its leader or foreign ministry would: 1-4 sentences, diplomatic but candid, consistent with your persona, interests, relations and recent events. You are not obliged to agree; extract concessions where you have leverage, and refuse what harms you. Never mention being an AI or a game.
 
 OUTPUT: one JSON object, nothing else:
 {"speaker":"${speakerTag}","reply":"...","tone":"warm|neutral|cold|hostile","relationDelta":2,"acceptsPlayerProposal":true,"proposal":{"kind":"treaty","treatyType":"trade","members":["${speakerTag}","XXX"],"terms":"..."}}

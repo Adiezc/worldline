@@ -31,6 +31,8 @@ export async function runResolver(
   const humans = humanTags(state);
   const calls = state.wars.flatMap((w) => (w.calls ?? []).map((c) => ({ warId: w.id, tag: c.tag, via: c.via })));
   const economy = state.settings.economyMode;
+  // The Director's own-country actions and vote results are already in the log for this turn.
+  const reported = state.events.filter((e) => e.turn === state.turn);
 
   const sections = [
     world.text,
@@ -38,6 +40,9 @@ export async function runResolver(
       ? `ORDERS (from players; give each a verdict):\n${orders.map((o) => `${o.id} [${o.country}] ${o.text}`).join("\n")}`
       : "ORDERS: none this turn.",
     opts.intents.length ? `NPC INTENTS (AI governments' plans this period):\n${opts.intents.map((i) => `- ${i.country}: ${i.summary}`).join("\n")}` : "",
+    reported.length
+      ? `ALREADY REPORTED THIS PERIOD (these happened; do not repeat or re-narrate them, build on them instead):\n${reported.map((e) => `- ${e.date} ${e.headline}`).join("\n")}`
+      : "",
     opts.voteFacts.length ? `VOTE OUTCOMES (facts):\n${opts.voteFacts.map((f) => `- ${f}`).join("\n")}` : "",
     calls.length ? `CALLS TO ARMS to answer this period: ${calls.map((c) => `${c.tag} for ${c.warId} (via ${c.via})`).join(", ")}` : "",
     `TASK: Write what happens from ${state.date} to ${world.end}${days === 0 ? " (or your stopDate)" : ""}. Return the JSON object.`,
@@ -50,6 +55,7 @@ export async function runResolver(
     user: sections.filter(Boolean).join("\n\n"),
     maxTokens: 12000,
     temperature: 0.7,
+    reasoning: "setting",
     mockContext: {
       date: state.date,
       end: world.end,

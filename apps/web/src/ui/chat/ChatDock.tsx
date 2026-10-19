@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { Chat, ChatMessage, GameView, Proposal, ProposalDraft, TreatyType } from "@worldline/shared";
-import { closeChat, openChat, respondProposal, sendChat, setChatBuilder, toggleChatMinimized } from "../../game/actions.ts";
+import { closeChat, openChat, openConference, respondProposal, sendChat, setChatBuilder, toggleChatMinimized } from "../../game/actions.ts";
 import { fmtShortDate } from "../../game/format.ts";
 import { countryMap, TREATY_LABELS } from "../../game/selectors.ts";
 import { useGame, type ChatWindowState } from "../../game/store.ts";
-import { Badge, Button, CountryChip, Field, Spinner, Swatch } from "../common/ui.tsx";
+import { Badge, Button, CountryChip, Field, Modal, Spinner, Swatch } from "../common/ui.tsx";
 import { Icon } from "../common/Icon.tsx";
 
 /** Docked chat windows along the bottom edge, right of the chronicle. */
@@ -31,9 +32,13 @@ function ChatWindow({ chat, win, view }: { chat: Chat; win: ChatWindowState; vie
   const me = view.you.country;
   const others = chat.members.filter((m) => m !== me);
   const byTag = countryMap(view.countries);
-  const title = others.map((t) => byTag.get(t)?.name ?? t).join(", ") || "Chat";
+  const group = others.length >= 2;
+  const title = group ? `Conference · ${others.length + (me ? 1 : 0)} nations` : others.map((t) => byTag.get(t)?.name ?? t).join(", ") || "Chat";
   const typing = useTyping(chat.id);
   const listRef = useRef<HTMLDivElement>(null);
+  const humans = useMemo(() => new Set(view.players.map((p) => p.country).filter(Boolean)), [view.players]);
+  const aiMembers = others.filter((t) => !humans.has(t));
+  const [speaker, setSpeaker] = useState("");
 
   useEffect(() => {
     const el = listRef.current;
@@ -41,10 +46,11 @@ function ChatWindow({ chat, win, view }: { chat: Chat; win: ChatWindowState; vie
   }, [chat.messages.length, win.minimized, typing]);
 
   return (
-    <section className={`hud-panel pointer-events-auto flex w-[300px] flex-col overflow-hidden animate-hud-in ${win.minimized ? "h-10" : "h-[420px] max-h-[calc(100vh-140px)]"}`}>
+    <section className={`hud-panel pointer-events-auto flex ${group ? "w-[330px]" : "w-[300px]"} flex-col overflow-hidden animate-hud-in ${win.minimized ? "h-10" : "h-[440px] max-h-[calc(100vh-140px)]"}`}>
       <header className="flex h-10 shrink-0 cursor-pointer items-center gap-2 border-b border-panel-edge/50 px-3" onClick={() => toggleChatMinimized(chat.id)}>
         <div className="flex -space-x-1">
-          {others.slice(0, 3).map((t) => (
+          {group && <Icon name="users" size={14} className="mr-1.5 text-gold" />}
+          {others.slice(0, group ? 5 : 3).map((t) => (
             <Swatch key={t} color={byTag.get(t)?.color} size={13} />
           ))}
         </div>
@@ -63,6 +69,32 @@ function ChatWindow({ chat, win, view }: { chat: Chat; win: ChatWindowState; vie
           <Icon name="close" size={13} />
         </button>
       </header>
+      {!win.minimized && group && (
+        <div className="flex shrink-0 items-start gap-2 border-b border-panel-edge/40 bg-black/15 px-3 py-1.5">
+          <div className="flex min-w-0 flex-1 flex-wrap gap-x-2 gap-y-0.5">
+            {chat.members.map((t) => (
+              <span key={t} className="flex items-center gap-1 text-[10.5px] text-parchment/70" title={humans.has(t) ? "Player" : "AI nation"}>
+                <Swatch color={byTag.get(t)?.color} size={8} />
+                <span className="max-w-[90px] truncate">{t === me ? "You" : byTag.get(t)?.name ?? t}</span>
+                {humans.has(t) && t !== me && <Icon name="user" size={9} className="text-gold/70" />}
+              </span>
+            ))}
+          </div>
+          {me && aiMembers.length > 0 && (
+            <label className="flex shrink-0 items-center gap-1" title="Which AI delegation answers your next message">
+              <span className="text-[9.5px] tracking-wider text-parchment/40 uppercase">Speaker</span>
+              <select className="hud-input h-6 w-[92px] py-0 pr-5 pl-1.5 text-[11px]" value={speaker} onChange={(e) => setSpeaker(e.target.value)}>
+                <option value="">Auto</option>
+                {aiMembers.map((t) => (
+                  <option key={t} value={t}>
+                    {byTag.get(t)?.name ?? t}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
+      )}
       {!win.minimized && (
         <>
           <div ref={listRef} className="hud-scroll min-h-0 flex-1 space-y-2.5 px-3 py-2.5">
@@ -78,7 +110,7 @@ function ChatWindow({ chat, win, view }: { chat: Chat; win: ChatWindowState; vie
               </div>
             )}
           </div>
-          <Composer chat={chat} win={win} view={view} />
+          <Composer chat={chat} win={win} view={view} speaker={aiMembers.includes(speaker) ? speaker : undefined} />
         </>
       )}
     </section>
@@ -167,12 +199,15 @@ function ProposalCard({ p, chatId, view }: { p: Proposal; chatId: string; view: 
   );
 }
 
-function Composer({ chat, win, view }: { chat: Chat; win: ChatWindowState; view: GameView }) {
+function Composer({ chat, win, view, speaker }: { chat: Chat; win: ChatWindowState; view: GameView; speaker?: string }) {
   const me = view.you.country;
   const [text, setText] = useState("");
   const [kind, setKind] = useState<Proposal["kind"]>("treaty");
   const [treatyType, setTreatyType] = useState<TreatyType>("trade");
   const [members, setMembers] = useState<string[]>(chat.members);
+  // A conference's proposal names every delegation by default.
+  const memberKey = chat.members.join(",");
+  useEffect(() => setMembers(memberKey.split(",")), [memberKey]);
   const [terms, setTerms] = useState("");
   const byTag = countryMap(view.countries);
 
@@ -181,7 +216,7 @@ function Composer({ chat, win, view }: { chat: Chat; win: ChatWindowState; view:
   const submit = () => {
     const proposal: ProposalDraft | undefined = win.builder && terms.trim() ? { kind, treatyType: kind === "treaty" ? treatyType : undefined, members, terms: terms.trim() } : undefined;
     if (!text.trim() && !proposal) return;
-    sendChat(chat.id, text.trim(), proposal);
+    sendChat(chat.id, text.trim(), proposal, speaker);
     setText("");
     if (proposal) {
       setTerms("");
@@ -236,7 +271,7 @@ function Composer({ chat, win, view }: { chat: Chat; win: ChatWindowState; view:
             </div>
           </div>
           <Field label="Terms">
-            <textarea className="hud-input min-h-14 resize-none text-[12px]" value={terms} onChange={(e) => setTerms(e.target.value)} placeholder="Both parties agree to…" />
+            <textarea className="hud-input min-h-14 resize-none text-[12px]" value={terms} onChange={(e) => setTerms(e.target.value)} placeholder={chat.members.length > 2 ? "All parties agree to…" : "Both parties agree to…"} />
           </Field>
         </div>
       )}
@@ -283,14 +318,30 @@ export function ChatList({ onClose }: { onClose: () => void }) {
   const me = view.you.country;
   const byTag = countryMap(view.countries);
   const chats = [...view.chats].sort((a, b) => b.lastTurn - a.lastTurn);
+  const [conference, setConference] = useState(false);
   return (
-    <div className="hud-panel pointer-events-auto absolute top-[60px] left-[60px] z-30 w-[260px] p-2 animate-hud-in">
+    <div className="hud-panel pointer-events-auto absolute top-[60px] left-[60px] z-30 w-[270px] p-2 animate-hud-in">
       <div className="flex items-center justify-between px-1.5 pb-1.5">
         <span className="hud-label">Diplomatic channels</span>
         <button onClick={onClose} className="text-parchment/40 hover:text-parchment">
           <Icon name="close" size={12} />
         </button>
       </div>
+      {me && (
+        <Button size="sm" variant="secondary" icon="users" className="mb-1.5 w-full" onClick={() => setConference(true)}>
+          New conference
+        </Button>
+      )}
+      {conference && (
+        <ConferenceDialog
+          onClose={() => setConference(false)}
+          onConvene={(tags) => {
+            openConference(tags);
+            setConference(false);
+            onClose();
+          }}
+        />
+      )}
       {chats.length === 0 && <p className="px-1.5 py-2 text-[11.5px] text-parchment/45 italic">No conversations yet. Select a country and choose “Open diplomacy”.</p>}
       <ul className="hud-scroll max-h-80">
         {chats.map((c) => {
@@ -306,7 +357,14 @@ export function ChatList({ onClose }: { onClose: () => void }) {
                   onClose();
                 }}
               >
-                <Swatch color={byTag.get(others[0])?.color} size={11} />
+                {others.length > 1 ? (
+                  <span className="relative h-[13px] w-[15px] shrink-0">
+                    <Swatch color={byTag.get(others[0])?.color} size={10} className="absolute top-0 left-0" />
+                    <Swatch color={byTag.get(others[1])?.color} size={10} className="absolute right-0 bottom-0" />
+                  </span>
+                ) : (
+                  <Swatch color={byTag.get(others[0])?.color} size={11} />
+                )}
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-[12.5px] text-parchment">{others.map((t) => byTag.get(t)?.name ?? t).join(", ")}</div>
                   {last && <div className="truncate text-[10.5px] text-parchment/45">{last.text || "Proposal"}</div>}
@@ -318,5 +376,72 @@ export function ChatList({ onClose }: { onClose: () => void }) {
         })}
       </ul>
     </div>
+  );
+}
+
+/** Pick two or more delegations for a multilateral conference. */
+function ConferenceDialog({ onClose, onConvene }: { onClose: () => void; onConvene: (tags: string[]) => void }) {
+  const view = useGame((s) => s.view)!;
+  const me = view.you.country;
+  const [query, setQuery] = useState("");
+  const [picked, setPicked] = useState<string[]>([]);
+  const byTag = countryMap(view.countries);
+  const humans = new Set(view.players.map((p) => p.country).filter(Boolean));
+  const q = query.trim().toLowerCase();
+  const options = view.countries
+    .filter((c) => c.alive !== false && c.tag !== me)
+    .filter((c) => !q || c.name.toLowerCase().includes(q) || c.tag.toLowerCase().includes(q))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const toggle = (tag: string) => setPicked((p) => (p.includes(tag) ? p.filter((t) => t !== tag) : [...p, tag]));
+
+  return createPortal(
+    <Modal onClose={onClose} className="flex w-[min(440px,calc(100%-2rem))] flex-col">
+      <header className="border-b border-panel-edge/50 px-5 pt-4 pb-3">
+        <h2 className="font-display text-[16px] tracking-[0.12em] text-gold-bright">Convene a conference</h2>
+        <p className="mt-1 text-[12px] text-parchment/55">Invite two or more nations to one table. AI delegations answer in turn; you can ask a specific one to speak.</p>
+      </header>
+      <div className="flex min-h-0 flex-col gap-2 px-5 py-3">
+        <div className="relative">
+          <Icon name="search" size={13} className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-parchment/40" />
+          <input autoFocus className="hud-input pl-8" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search nations…" />
+        </div>
+        <div className="flex min-h-7 flex-wrap gap-1">
+          {picked.length === 0 && <span className="text-[11.5px] text-parchment/40 italic">No delegations invited yet.</span>}
+          {picked.map((t) => (
+            <button key={t} onClick={() => toggle(t)} className="flex items-center gap-1 rounded-sm border border-gold/60 bg-gold/15 px-1.5 py-0.5 text-[11px] text-parchment hover:border-fail/60" title="Remove">
+              <Swatch color={byTag.get(t)?.color} size={8} />
+              {byTag.get(t)?.name ?? t}
+              <Icon name="close" size={9} className="text-parchment/50" />
+            </button>
+          ))}
+        </div>
+        <ul className="hud-scroll -mx-1 h-[280px] rounded border border-panel-edge/40 bg-black/20 p-1">
+          {options.map((c) => {
+            const on = picked.includes(c.tag);
+            return (
+              <li key={c.tag}>
+                <button onClick={() => toggle(c.tag)} className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-[12.5px] ${on ? "bg-gold/12 text-parchment" : "text-parchment/75 hover:bg-white/5"}`}>
+                  <span className={`grid h-3.5 w-3.5 shrink-0 place-items-center rounded-sm border ${on ? "border-gold bg-gold/40" : "border-panel-edge"}`}>{on && <Icon name="check" size={10} />}</span>
+                  <Swatch color={c.color} size={10} />
+                  <span className="min-w-0 flex-1 truncate">{c.name}</span>
+                  {humans.has(c.tag) && <Badge tone="grey">Player</Badge>}
+                </button>
+              </li>
+            );
+          })}
+          {options.length === 0 && <li className="px-2 py-3 text-[11.5px] text-parchment/40 italic">No nation matches.</li>}
+        </ul>
+      </div>
+      <footer className="flex items-center justify-end gap-2 border-t border-panel-edge/50 px-5 py-3">
+        <span className="mr-auto text-[11px] text-parchment/45">{picked.length < 2 ? "Pick at least two nations" : `${picked.length + 1} delegations including yours`}</span>
+        <Button variant="ghost" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button variant="primary" icon="users" disabled={picked.length < 2} onClick={() => onConvene(picked)}>
+          Convene
+        </Button>
+      </footer>
+    </Modal>,
+    document.body,
   );
 }

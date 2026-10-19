@@ -7,13 +7,16 @@ import {
   DEFAULT_SETTINGS, countryByTag, type ClientMessage, type GameSettings, type GameState, type GameView,
   type MapIndex, type ScenarioSeed, type ServerMessage,
 } from "@worldline/shared";
-import { engine } from "./engine/index.ts";
+import { engine, turnEvents } from "./engine/index.ts";
 import type { AiProvider, EngineDeps } from "./engine/api.ts";
-import { loadGame, saveGame, saveSnapshot } from "./db.ts";
+import {
+  deleteSnapshotsAfter, linkedPlayer, linkUserGame, listSnapshots, loadGame, loadSnapshot, saveGame, saveSnapshot, snapshotEventCount,
+} from "./db.ts";
 
 export interface SocketData {
   gameId?: string;
   playerId?: string;
+  userId?: string;
 }
 type Socket = ServerWebSocket<SocketData>;
 
@@ -30,6 +33,8 @@ export class Room {
   sockets = new Set<Socket>();
   resolving = false;
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Event-log length of the last turn's pre-turn snapshot (undefined = not looked up yet). */
+  private snapEvents: { turn: number; count: number | null } | undefined;
 
   constructor(public state: GameState, private deps: RoomDeps) {}
 
@@ -64,8 +69,27 @@ export class Room {
       you: { playerId, country: tag, isHost: !!me?.isHost },
       formables: seed.formables,
       calendar: seed.calendar.filter((e) => e.date >= s.date).slice(0, 24),
+      theme: seed.theme ?? "modern",
+      snapshots: me?.isHost ? listSnapshots(s.id) : [],
+      intervenable: me?.isHost ? this.intervenable() : [],
       ai: { provider: this.deps.ai.name, usedToday: quota.usedToday, dailyLimit: quota.dailyLimit },
     };
+  }
+
+  /** Events of the last resolved turn the host may stop time at; empty once anything new has happened. */
+  intervenable(): string[] {
+    const s = this.state;
+    const last = s.turn - 1;
+    if (s.phase !== "orders" || last < 1 || Object.values(s.orders).some((o) => o.length)) return [];
+    const count = this.snapshotEvents(last);
+    if (count === null) return [];
+    if (s.events.slice(count).some((e) => e.turn > last)) return [];
+    return turnEvents(s, count, last).map((e) => e.id);
+  }
+
+  private snapshotEvents(turn: number) {
+    if (this.snapEvents?.turn !== turn) this.snapEvents = { turn, count: snapshotEventCount(this.state.id, turn) };
+    return this.snapEvents.count;
   }
 
   send(ws: Socket, msg: ServerMessage) {
@@ -98,9 +122,12 @@ export class Room {
   // ---------------------------------------------------------------------------------------
   // Connections
 
-  join(ws: Socket, msg: Extract<ClientMessage, { t: "join" }>) {
+  /** `user`: the signed-in account, whose earlier player in this game is resumed on any device. */
+  join(ws: Socket, msg: Extract<ClientMessage, { t: "join" }>, user?: { id: string } | null) {
     const s = this.state;
-    let player = msg.playerId ? s.players.find((p) => p.id === msg.playerId) : undefined;
+    const linked = user ? linkedPlayer(user.id, s.id) : null;
+    let player = linked ? s.players.find((p) => p.id === linked) : undefined;
+    player ??= msg.playerId ? s.players.find((p) => p.id === msg.playerId) : undefined;
     if (!player) {
       player = {
         id: crypto.randomUUID(),
@@ -118,6 +145,8 @@ export class Room {
     if (!s.players.some((p) => p.isHost)) player.isHost = true;
     ws.data.gameId = s.id;
     ws.data.playerId = player.id;
+    ws.data.userId = user?.id;
+    if (user) linkUserGame(user.id, s.id, player.id);
     this.sockets.add(ws);
     this.send(ws, { t: "welcome", playerId: player.id, view: this.view(player.id) });
     this.changed();
@@ -140,6 +169,7 @@ export class Room {
   private static MUTATING = new Set<ClientMessage["t"]>([
     "claim", "settings", "start", "orders", "jump", "chat.open", "chat.send", "proposal.respond",
     "org.propose", "org.vote", "formation.assess", "formation.recheck", "formation.consent", "formation.proclaim", "formation.abandon",
+    "rewind", "intervene",
   ]);
   private lock: Promise<unknown> = Promise.resolve();
 
@@ -261,10 +291,14 @@ export class Room {
         const chat = s.chats.find((c) => c.id === msg.chatId);
         if (!chat?.members.includes(myTag)) return fail("You are not in that conversation.");
         const humans = new Set(s.players.map((p) => p.country).filter(Boolean));
-        const aiMember = chat.members.find((m) => m !== myTag && !humans.has(m));
+        const speaker = msg.speaker || undefined;
+        if (speaker && (!chat.members.includes(speaker) || humans.has(speaker) || speaker === myTag)) {
+          return fail("Only an AI delegation in this conversation can be asked to answer.");
+        }
+        const aiMember = speaker ?? chat.members.find((m) => m !== myTag && !humans.has(m));
         if (aiMember) this.broadcastTo(chat.members, { t: "chat.typing", chatId: chat.id, from: aiMember });
         try {
-          await engine.sendChat(s, deps, { chatId: msg.chatId, playerId: me.id, text: msg.text.slice(0, 2000), proposal: msg.proposal });
+          await engine.sendChat(s, deps, { chatId: msg.chatId, playerId: me.id, text: String(msg.text ?? "").slice(0, 2000), proposal: msg.proposal, speaker });
         } catch (e) {
           fail(`The envoy could not get through: ${errorText(e)}`);
         }
@@ -338,7 +372,57 @@ export class Room {
         if (f?.founder === myTag) engine.abandonFormation(s, { formationId: msg.formationId });
         return this.changed();
       }
+
+      case "rewind": {
+        if (!me.isHost) return fail("Only the host can rewind time.");
+        if (s.phase !== "orders") return fail("Time can only be rewound between turns.");
+        const turn = Math.floor(Number(msg.turn));
+        const snap = Number.isFinite(turn) ? loadSnapshot(s.id, turn) : null;
+        if (!snap) return fail("There is no saved turn to rewind to.");
+        this.rewind(snap);
+        this.broadcast({ t: "toast", level: "info", text: `Rewound to ${snap.date} (turn ${turn})` });
+        return this.changed();
+      }
+
+      case "intervene": {
+        if (!me.isHost) return fail("Only the host can stop time.");
+        if (!this.intervenable().includes(msg.eventId)) return fail("Time can no longer be stopped at that event.");
+        const snap = loadSnapshot(s.id, s.turn - 1);
+        if (!snap) return fail("The last turn's snapshot is missing.");
+        const r = engine.intervene(s, deps, { snapshot: snap, eventId: msg.eventId });
+        deleteSnapshotsAfter(s.id, snap.turn);
+        this.armTimer();
+        saveGame(s);
+        const chosen = r.events.at(-1);
+        this.broadcast({
+          t: "toast", level: "info",
+          text: `Time stopped on ${r.date}${chosen ? ` at "${chosen.headline}"` : ""}; ${r.cut} later event${r.cut === 1 ? "" : "s"} undone.`,
+        });
+        return this.changed();
+      }
     }
+  }
+
+  /** Replace the state with a snapshot, keeping who plays what and the current settings. */
+  private rewind(snap: GameState) {
+    const s = this.state;
+    const next = snap;
+    next.players = s.players.map((p) => ({
+      ...p, ready: false, country: p.country && countryByTag(next, p.country)?.alive ? p.country : null,
+    }));
+    next.settings = s.settings;
+    next.usage = s.usage;
+    next.phase = "orders";
+    next.orders = {};
+    next.jumpVotes = {};
+    // Ids stay unique across branches, so clients never confuse old and new events.
+    next.seq = Math.max(next.seq, s.seq);
+    delete next.turnDeadline;
+    this.state = next;
+    this.snapEvents = undefined;
+    deleteSnapshotsAfter(next.id, next.turn);
+    this.armTimer();
+    saveGame(next);
   }
 
   private broadcastTo(tags: string[], msg: ServerMessage) {
@@ -381,6 +465,7 @@ export class Room {
     this.pushViews();
     try {
       saveSnapshot(s);
+      this.snapEvents = undefined;
       const result = await engine.runTurn(s, this.engineDeps());
       s.phase = "orders";
       this.armTimer();
@@ -416,6 +501,11 @@ export class RoomManager {
     setInterval(() => {
       for (const r of this.rooms.values()) r.tick();
     }, 1000);
+  }
+
+  /** A loaded room, without touching the database. */
+  peek(id: string): Room | null {
+    return this.rooms.get(id) ?? null;
   }
 
   create(name: string, scenarioId = "modern-2026") {

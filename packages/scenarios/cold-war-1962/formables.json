@@ -1,0 +1,17 @@
+[
+  {"name": "Reunified Germany", "concept": "The two German states reunited under one government, ending the division of Europe's heartland.", "countries": ["DEU", "DDR"]},
+  {"name": "United Korea", "concept": "Peaceful or forced reunification of the Korean peninsula under one government.", "countries": ["KOR", "PRK"]},
+  {"name": "Reunified Vietnam", "concept": "One Vietnam from the Chinese border to the Mekong delta, as the 1954 Geneva accords once promised through elections.", "countries": ["VNM", "RVN"]},
+  {"name": "Maphilindo", "concept": "A confederation of the Malay peoples of Malaya, the Philippines and Indonesia (Macapagal's proposal).", "countries": ["MYS", "PHL", "IDN"]},
+  {"name": "Federation of Malaysia", "concept": "Malaya federated with Singapore, North Borneo (Sabah) and Sarawak, as planned in London for 1963.", "countries": ["MYS", "GBR"]},
+  {"name": "Expanded United Arab Republic", "concept": "Nasser's union revived and enlarged: Egypt, Syria and the new Yemeni republic under one flag.", "countries": ["EGY", "SYR", "YAR"]},
+  {"name": "Pan-Arab Union", "concept": "A single Arab state from the Atlantic to the Gulf, the dream of Nasserists and Ba'athists alike.", "countries": ["EGY", "SYR", "IRQ", "JOR", "LBN", "SAU", "YAR", "KWT", "LBY", "SDN", "TUN", "DZA", "MAR"]},
+  {"name": "Arab Federation", "concept": "The Hashemite union of Iraq and Jordan (1958), restored as a counterweight to Nasser.", "countries": ["IRQ", "JOR"]},
+  {"name": "Union of African States", "concept": "The Ghana-Guinea-Mali union turned into a real federation, the nucleus of Nkrumah's United States of Africa.", "countries": ["GHA", "GIN", "MLI"]},
+  {"name": "Greater Somalia", "concept": "All Somali-inhabited lands united: Somalia plus the Ogaden (Ethiopia), Kenya's Northern Frontier District and French Somaliland.", "countries": ["SOM", "ETH", "GBR", "FRA"]},
+  {"name": "West Indies Federation", "concept": "Revival of the British Caribbean federation dissolved in May 1962, with Jamaica, Trinidad and the smaller islands.", "countries": ["JAM", "TTO", "GBR"]},
+  {"name": "Central African Federation", "concept": "The Federation of Rhodesia and Nyasaland preserved and recast, or extended, as a multiracial dominion.", "countries": ["RNY", "GBR"]},
+  {"name": "East African Federation", "concept": "Tanganyika, Kenya, Uganda and Zanzibar federated, as Nyerere proposed (he offered to delay independence for it).", "countries": ["TZA", "GBR"]},
+  {"name": "Balkan Federation", "concept": "Tito's old plan of a socialist federation of Yugoslavia, Bulgaria and Albania.", "countries": ["YUG", "BGR", "ALB"]},
+  {"name": "Nordic Union", "concept": "A Scandinavian defence and economic union, as discussed in 1948-49.", "countries": ["SWE", "NOR", "DNK", "FIN", "ISL"]}
+]

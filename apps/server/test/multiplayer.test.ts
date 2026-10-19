@@ -1,70 +1,25 @@
 // End-to-end: real server process, two WebSocket players, mock AI, in-memory database.
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { join } from "node:path";
-import type { ClientMessage, GameView, ServerMessage, TurnResult } from "@worldline/shared";
+import type { TurnResult } from "@worldline/shared";
+import { Client as BaseClient, startServer } from "./fixtures/server.ts";
 
 const PORT = 3900 + Math.floor(Math.random() * 90);
-const BASE = `http://localhost:${PORT}`;
 let proc: ReturnType<typeof Bun.spawn>;
 
 beforeAll(async () => {
-  const env: Record<string, string> = { ...process.env, PORT: String(PORT), WORLDLINE_DB: ":memory:" } as Record<string, string>;
-  delete env.OPENROUTER_API_KEY; // always the mock provider in tests
-  proc = Bun.spawn(["bun", join(import.meta.dir, "..", "src", "index.ts")], { env, stdout: "ignore", stderr: "inherit" });
-  for (let i = 0; i < 50; i++) {
-    try {
-      if ((await fetch(`${BASE}/api/health`)).ok) return;
-    } catch {}
-    await Bun.sleep(100);
-  }
-  throw new Error("server did not start");
+  proc = await startServer(PORT);
 });
 
 afterAll(() => proc?.kill());
 
-class Client {
-  ws!: WebSocket;
-  view!: GameView;
-  playerId = "";
-  inbox: ServerMessage[] = [];
-  private waiters: { pred: (m: ServerMessage) => boolean; resolve: (m: ServerMessage) => void }[] = [];
-
-  async connect(gameId: string, name: string, playerId?: string) {
-    this.ws = new WebSocket(`ws://localhost:${PORT}/ws`);
-    await new Promise((r) => (this.ws.onopen = r));
-    this.ws.onmessage = (e) => {
-      const msg = JSON.parse(String(e.data)) as ServerMessage;
-      if (msg.t === "welcome") { this.view = msg.view; this.playerId = msg.playerId; }
-      if (msg.t === "view") this.view = msg.view;
-      this.inbox.push(msg);
-      this.waiters = this.waiters.filter((w) => (w.pred(msg) ? (w.resolve(msg), false) : true));
-    };
-    const welcome = this.wait((m) => m.t === "welcome");
-    this.send({ t: "join", gameId, name, playerId });
-    await welcome;
-    return this;
-  }
-
-  send(msg: ClientMessage) {
-    this.ws.send(JSON.stringify(msg));
-  }
-
-  wait(pred: (m: ServerMessage) => boolean, ms = 8000) {
-    return new Promise<ServerMessage>((resolve, reject) => {
-      const t = setTimeout(() => reject(new Error("timed out waiting for message")), ms);
-      this.waiters.push({ pred, resolve: (m) => { clearTimeout(t); resolve(m); } });
-    });
-  }
-
-  /** Wait until a pushed view satisfies the predicate. */
-  async until(pred: (v: GameView) => boolean) {
-    if (this.view && pred(this.view)) return this.view;
-    return (await this.wait((m) => (m.t === "view" || m.t === "welcome") && pred(m.view)) as { view: GameView }).view;
+class Client extends BaseClient {
+  constructor() {
+    super(PORT);
   }
 }
 
 test("two players play a turn together", async () => {
-  const created = (await (await fetch(`${BASE}/api/games`, { method: "POST", body: JSON.stringify({ name: "E2E" }) })).json()) as { gameId: string };
+  const created = (await (await fetch(`http://localhost:${PORT}/api/games`, { method: "POST", body: JSON.stringify({ name: "E2E" }) })).json()) as { gameId: string };
   expect(created.gameId).toBeTruthy();
 
   const alice = await new Client().connect(created.gameId, "Alice");

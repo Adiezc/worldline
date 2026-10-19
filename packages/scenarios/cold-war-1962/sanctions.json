@@ -1,0 +1,8 @@
+[
+  { "id": "s_cub_us", "target": "CUB", "by": ["USA"], "source": "US embargo on Cuba: export ban of October 1960 extended to a near-total trade embargo by Proclamation 3447 (7 February 1962)", "since": "1962-02-07" },
+  { "id": "s_chn_us", "target": "CHN", "by": ["USA"], "source": "US total embargo on the People's Republic of China under the Trading with the Enemy Act (since the Korean War)", "since": "1950-12-17" },
+  { "id": "s_prk_us", "target": "PRK", "by": ["USA"], "source": "US total embargo on North Korea (since the Korean War)", "since": "1950-06-28" },
+  { "id": "s_vnm_us", "target": "VNM", "by": ["USA"], "source": "US embargo on North Vietnam (Foreign Assets Control Regulations)", "since": "1954-07-21" },
+  { "id": "s_sov_cocom", "target": "SOV", "by": ["USA", "GBR", "FRA", "DEU", "ITA", "BEL", "NLD", "LUX", "DNK", "NOR", "PRT", "GRC", "TUR", "CAN", "JPN"], "source": "CoCom strategic export controls on the Soviet bloc (arms, nuclear and dual-use technology)", "since": "1950-01-01" },
+  { "id": "s_isr_arab", "target": "ISR", "by": ["EGY", "IRQ", "JOR", "LBN", "SAU", "SYR", "YAR", "LBY", "SDN", "MAR", "TUN", "KWT", "DZA"], "source": "Arab League boycott of Israel, administered by the Central Boycott Office in Damascus", "since": "1951-01-01" }
+]

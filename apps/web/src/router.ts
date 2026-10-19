@@ -1,14 +1,19 @@
-// Minimal history router: "/" = main menu, "/game/:id" = game.
+// Minimal history router: "/" = main menu, "/game/:id" = game, "/editor[/:baseScenarioId]" = editor.
 import { useSyncExternalStore } from "react";
 
-export type Route = { name: "menu" } | { name: "game"; id: string };
+export type Route = { name: "menu" } | { name: "game"; id: string } | { name: "editor"; base: string | null };
 
 const EVENT = "worldline:navigate";
 
 function parse(path: string): Route {
   const m = /^\/game\/([^/?#]+)/.exec(path);
-  return m ? { name: "game", id: decodeURIComponent(m[1]) } : { name: "menu" };
+  if (m) return { name: "game", id: decodeURIComponent(m[1]) };
+  const e = /^\/editor(?:\/([^/?#]+))?\/?$/.exec(path);
+  if (e) return { name: "editor", base: e[1] ? decodeURIComponent(e[1]) : null };
+  return { name: "menu" };
 }
+
+export const editorPath = (base?: string | null) => (base ? `/editor/${encodeURIComponent(base)}` : "/editor");
 
 export function navigate(path: string, replace = false) {
   if (path === location.pathname) return;

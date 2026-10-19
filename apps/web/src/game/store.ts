@@ -42,7 +42,8 @@ export interface ChatWindowState {
   builder: boolean;
 }
 
-export type LeftTab = "orders" | "advisor" | "orgs" | "formation";
+export type LeftTab = "orders" | "advisor" | "orgs" | "formation" | "history";
+export type FeedTab = "player" | "world" | "annals";
 
 export interface GameStore {
   gameId: string | null;
@@ -62,7 +63,9 @@ export interface GameStore {
   resultOpen: boolean;
   /** While true the map keeps showing pre-turn ownership (results modal / playback). */
   mapHold: boolean;
-  playback: { events: GameEvent[]; index: number } | null;
+  playback: { events: GameEvent[]; index: number; paused?: boolean } | null;
+  /** Host asked to rewind / intervene; the next view (and `turn`) carry the rewritten past. */
+  timeTravel: { kind: "rewind" | "intervene"; at: number } | null;
 
   requests: Record<string, AiRequest>;
   replies: Record<string, AiReply>;
@@ -84,7 +87,7 @@ export interface GameStore {
   leftTab: LeftTab | null;
   countryOpen: boolean;
   feedOpen: boolean;
-  feedTab: "player" | "world";
+  feedTab: FeedTab;
   chats: ChatWindowState[];
   pendingChat: { members: string[]; builder: boolean } | null;
   /** `count` = messages in the chat when typing began; a newer reply from `from` clears it. */
@@ -104,6 +107,7 @@ const initial: GameStore = {
   resultOpen: false,
   mapHold: false,
   playback: null,
+  timeTravel: null,
   requests: {},
   replies: {},
   advisorLog: [],
@@ -145,14 +149,35 @@ export function applyView(view: GameView) {
   useGame.setState((s) => {
     const prev = s.view;
     const patch: Partial<GameStore> = { view };
-    const turnChanged = !!prev && prev.turn !== view.turn;
+    // Rewind / intervention: the turn number or the date went backwards. Nothing to play back;
+    // drop any held map so MapSync redraws the restored ownership and labels.
+    const wentBack = !!prev && (view.turn < prev.turn || view.date < prev.date);
+    const turnChanged = !!prev && prev.turn !== view.turn && !wentBack;
+    if (wentBack) {
+      Object.assign(patch, {
+        preTurn: null,
+        viewAdvanced: false,
+        turnBase: null,
+        resultOpen: false,
+        mapHold: false,
+        playback: null,
+        progress: null,
+        orders: view.orders.map((o) => ({ id: o.id, text: o.text })),
+        ordersDirty: false,
+      } satisfies Partial<GameStore>);
+      // A rewind makes the last results meaningless; an intervention keeps them (trimmed by a `turn`).
+      if (s.timeTravel?.kind !== "intervene") {
+        patch.lastResult = null;
+        patch.timeTravel = null;
+      }
+    }
     if (turnChanged) {
       patch.preTurn = { turn: prev.turn, owners: prev.owners, controllers: prev.controllers };
       patch.viewAdvanced = true;
       patch.prevOrders = Object.fromEntries(s.orders.map((o) => [o.id, o.text]));
     }
     // Orders: adopt the server's list unless we have local edits waiting to sync.
-    if (!prev || turnChanged || !s.ordersDirty) {
+    if (!wentBack && (!prev || turnChanged || !s.ordersDirty)) {
       patch.orders = view.orders.map((o) => ({ id: o.id, text: o.text }));
       if (turnChanged) patch.ordersDirty = false;
     }

@@ -31,6 +31,7 @@ export class MapRenderer {
   private paletteTex!: WebGLTexture;
   private idTex!: WebGLTexture;
   private coastTex!: WebGLTexture;
+  private reliefTex!: WebGLTexture;
   private uniforms = new Map<WebGLProgram, Map<string, WebGLUniformLocation | null>>();
   hover = 0;
   selected = 0;
@@ -43,7 +44,13 @@ export class MapRenderer {
     this.gl = gl;
   }
 
-  init(opts: { ids: Uint16Array; width: number; height: number; coast: Uint8Array; coastW: number; coastH: number; borders: BordersData; provinceCount: number }) {
+  init(opts: {
+    ids: Uint16Array; width: number; height: number;
+    coast: Uint8Array; coastW: number; coastH: number;
+    /** 8-bit hillshade (flat = 206); omitted → flat terrain. */
+    relief?: { data: Uint8Array; width: number; height: number } | null;
+    borders: BordersData; provinceCount: number;
+  }) {
     const gl = this.gl;
     this.mapW = opts.width;
     this.mapH = opts.height;
@@ -57,6 +64,11 @@ export class MapRenderer {
     gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
     this.idTex = texture(gl, gl.R16UI, opts.width, opts.height, gl.RED_INTEGER, gl.UNSIGNED_SHORT, opts.ids, gl.NEAREST);
     this.coastTex = texture(gl, gl.R8, opts.coastW, opts.coastH, gl.RED, gl.UNSIGNED_BYTE, opts.coast, gl.LINEAR);
+    const relief = opts.relief ?? { data: new Uint8Array([206]), width: 1, height: 1 };
+    this.reliefTex = texture(gl, gl.R8, relief.width, relief.height, gl.RED, gl.UNSIGNED_BYTE, relief.data, gl.LINEAR);
+    // Mipmaps let the relief average out when zoomed out, so far views stay calm.
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    gl.generateMipmap(gl.TEXTURE_2D);
 
     this.provRows = Math.ceil((opts.provinceCount + 1) / PROV_TEX_W);
     this.provData = new Uint16Array(PROV_TEX_W * this.provRows * 2).fill(NONE);
@@ -169,6 +181,7 @@ export class MapRenderer {
     this.bindCommon(this.fillProg, dpr);
     this.bindTex(this.fillProg, "uIds", this.idTex, 2);
     this.bindTex(this.fillProg, "uCoast", this.coastTex, 3);
+    this.bindTex(this.fillProg, "uRelief", this.reliefTex, 4);
     const u = (n: string) => this.loc(this.fillProg, n);
     gl.uniform1ui(u("uHover"), this.hover);
     gl.uniform1ui(u("uSelected"), this.selected);
@@ -176,6 +189,9 @@ export class MapRenderer {
     gl.uniform3fv(u("uPaper"), t.paper);
     gl.uniform3fv(u("uOceanDeep"), t.oceanDeep);
     gl.uniform1f(u("uPoliticalMix"), t.politicalMix);
+    gl.uniform1f(u("uSepia"), t.sepia);
+    gl.uniform1f(u("uReliefK"), t.relief);
+    gl.uniform3fv(u("uInk"), t.ink);
     gl.bindVertexArray(this.fillVao);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
@@ -184,7 +200,6 @@ export class MapRenderer {
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     gl.useProgram(this.lineProg);
     this.bindCommon(this.lineProg, dpr);
-    gl.uniform1f(this.loc(this.lineProg, "uDpr"), dpr);
     gl.bindVertexArray(this.lineVao);
     const halfW = vw / 2 / (this.camera.zoom * dpr);
     for (const off of [-this.mapW, 0, this.mapW]) {
@@ -202,6 +217,7 @@ export class MapRenderer {
     gl.uniform2f(this.loc(prog, "uViewport"), this.canvas.width, this.canvas.height);
     gl.uniform2f(this.loc(prog, "uMapSize"), this.mapW, this.mapH);
     gl.uniform1i(this.loc(prog, "uMode"), 0);
+    gl.uniform1f(this.loc(prog, "uDpr"), dpr);
     this.bindTex(prog, "uProv", this.provTex, 0);
     this.bindTex(prog, "uPalette", this.paletteTex, 1);
   }

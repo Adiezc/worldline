@@ -11,9 +11,13 @@ export default defineConfig({
   publicDir: resolve(import.meta.dirname, "../../packages/mapdata/public"),
   server: {
     port: 5173,
+    // Tunnel links (VS Code port forwarding, Cloudflare quick tunnels, ngrok) are served on
+    // their own hostnames; the tunnel terminates TLS, so the page's wss://…/ws reaches the
+    // proxy below as a plain WebSocket upgrade.
+    allowedHosts: [".devtunnels.ms", ".trycloudflare.com", ".ngrok-free.app", ".ngrok.app"],
     proxy: {
       "/api": { target: `http://${SERVER}`, changeOrigin: true },
-      "/ws": { target: `ws://${SERVER}`, ws: true, changeOrigin: true },
+      "/ws": { target: `ws://${SERVER}`, ws: true, changeOrigin: true, secure: false },
     },
   },
   worker: { format: "es" },

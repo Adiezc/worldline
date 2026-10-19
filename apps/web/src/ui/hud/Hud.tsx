@@ -10,6 +10,7 @@ import { OrdersPanel } from "../panels/OrdersPanel.tsx";
 import { AdvisorPanel } from "../panels/AdvisorPanel.tsx";
 import { OrgPanel } from "../panels/OrgPanel.tsx";
 import { FormationPanel } from "../panels/FormationPanel.tsx";
+import { HistoryPanel } from "../panels/HistoryPanel.tsx";
 import { CountryPanel } from "../panels/CountryPanel.tsx";
 import { EventFeed } from "../panels/EventFeed.tsx";
 import { ChatDock, ChatList } from "../chat/ChatDock.tsx";
@@ -36,6 +37,8 @@ export function Hud() {
     return s.view.chats.filter((c) => c.messages.some((m) => m.proposal?.status === "open" && m.proposal.awaiting.includes(me))).length;
   });
   const [chatList, setChatList] = useState(false);
+  const isHost = useGame((s) => !!s.view?.you.isHost);
+  const snapshotCount = useGame((s) => s.view?.snapshots?.length ?? 0);
 
   return (
     <div className="pointer-events-none absolute inset-0 z-10">
@@ -55,6 +58,7 @@ export function Hud() {
         <IconButton icon="quill" label="Advisor" active={tab === "advisor"} onClick={() => toggleLeftTab("advisor")} />
         <IconButton icon="columns" label="Organisations" active={tab === "orgs"} onClick={() => toggleLeftTab("orgs")} badge={pendingVotes} />
         <IconButton icon="crown" label="Form a nation" active={tab === "formation"} onClick={() => toggleLeftTab("formation")} badge={pendingConsents} />
+        {isHost && <IconButton icon="history" label={`History${snapshotCount ? ` (${snapshotCount} saved turns)` : ""} — rewind`} active={tab === "history"} onClick={() => toggleLeftTab("history")} />}
         <div className="gilt-rule my-1 w-7" />
         <IconButton icon="chat" label="Diplomatic channels" active={chatList} onClick={() => setChatList(!chatList)} badge={awaitingReplies} />
         <IconButton icon="flag" label="Your nation" onClick={() => selectCountry(null, { focus: true })} />
@@ -67,6 +71,7 @@ export function Hud() {
           {tab === "advisor" && <AdvisorPanel onClose={() => setLeftTab(null)} />}
           {tab === "orgs" && <OrgPanel onClose={() => setLeftTab(null)} />}
           {tab === "formation" && <FormationPanel onClose={() => setLeftTab(null)} />}
+          {tab === "history" && <HistoryPanel onClose={() => setLeftTab(null)} />}
         </div>
       )}
 

@@ -1,0 +1,337 @@
+{
+  "USA": {
+    "persona": "A young, activist administration committed to 'flexible response': contain communism everywhere, out-race the Soviets in missiles and space, and win the Third World with aid and the Alliance for Progress. Scarred by the Bay of Pigs and the Vienna summit, Kennedy cannot afford to look weak before the November midterms.",
+    "goals": [
+      "Remove Castro's regime, or at least any Soviet offensive capability from Cuba",
+      "Keep West Berlin free and NATO united behind American leadership",
+      "Stop the communist advance in Laos and South Vietnam without a major land war",
+      "Win the space race by landing a man on the Moon before the decade is out"
+    ]
+  },
+  "SOV": {
+    "persona": "Khrushchev's Soviet Union boasts it will 'bury' capitalism and match America missile for missile, but its long-range arsenal is far smaller than Washington's. An impulsive, risk-taking leader looks for a dramatic stroke to fix the strategic imbalance, protect Cuba and force the West out of Berlin, while the quarrel with Mao splits the communist world.",
+    "goals": [
+      "Redress the strategic missile gap with the United States",
+      "Defend revolutionary Cuba against an American invasion",
+      "Force a German peace treaty and end Western rights in West Berlin",
+      "Keep leadership of world communism against Chinese challenge"
+    ]
+  },
+  "CHN": {
+    "persona": "Mao's China is emerging from the famine of the Great Leap Forward, isolated from both superpowers. It denounces Soviet 'revisionism' and American 'imperialism' alike, claims Taiwan, and is losing patience with India's forward policy along the Himalayan border.",
+    "goals": [
+      "Rebuild the economy after the Great Leap Forward",
+      "Halt India's forward posts in Aksai Chin and the North-East Frontier",
+      "Build an atomic bomb despite the withdrawal of Soviet help",
+      "Lead the revolutionary Third World against both superpowers"
+    ]
+  },
+  "GBR": {
+    "persona": "A declining imperial power managing a dignified retreat from Empire while clinging to its 'special relationship' with Washington and its independent deterrent. Macmillan has bet on joining the Common Market, but the economy is sluggish and Skybolt's future is in doubt.",
+    "goals": [
+      "Win entry to the European Economic Community on acceptable terms",
+      "Keep an independent nuclear deterrent with American help",
+      "Manage decolonisation in Africa, Malaysia and South Arabia without chaos",
+      "Preserve the special relationship with the United States"
+    ]
+  },
+  "FRA": {
+    "persona": "De Gaulle has just ended the Algerian war and survived assassination attempts. Now he seeks French 'grandeur': an independent nuclear force, a Europe of nations led from Paris, reconciliation with Germany, and freedom from American hegemony.",
+    "goals": [
+      "Build the force de frappe independently of the United States",
+      "Win the referendum on direct election of the President",
+      "Lead a Europe of nations and keep Britain out of the Common Market unless on French terms",
+      "Keep francophone Africa in France's orbit through aid and defence accords"
+    ]
+  },
+  "DEU": {
+    "persona": "Adenauer's Federal Republic is the economic miracle of Europe, anchored in NATO and the EEC. It refuses to recognise East Germany (Hallstein doctrine), depends on the US to protect West Berlin, and is building a special partnership with de Gaulle's France.",
+    "goals": [
+      "Protect West Berlin and the West's access rights",
+      "Seal the Franco-German reconciliation with a formal treaty",
+      "Isolate East Germany diplomatically through the Hallstein doctrine",
+      "Keep the American security guarantee credible"
+    ]
+  },
+  "DDR": {
+    "persona": "Ulbricht's state has stopped its population haemorrhage by building the Berlin Wall in August 1961. It craves international recognition and a separate peace treaty that would give it control over the access routes to West Berlin.",
+    "goals": [
+      "Win diplomatic recognition beyond the socialist bloc",
+      "Push Moscow to sign a separate peace treaty and end Western rights in Berlin",
+      "Stabilise the economy now that the border is sealed"
+    ]
+  },
+  "CUB": {
+    "persona": "Castro's revolution, now openly Marxist-Leninist, expects an American invasion after the Bay of Pigs and Operation Mongoose sabotage. It has thrown itself into Moscow's arms for weapons and oil, and seeks to export revolution across Latin America.",
+    "goals": [
+      "Deter or defeat a US invasion with Soviet military support",
+      "Survive the US embargo and exclusion from the OAS",
+      "Support revolutionary movements in Latin America"
+    ]
+  },
+  "IND": {
+    "persona": "Nehru's India leads the non-aligned world and practises planned development. It is confident that China will not fight over the Himalayan border and keeps pushing forward posts, while Kashmir remains a festering dispute with Pakistan.",
+    "goals": [
+      "Assert Indian claims on the Sino-Indian border through the forward policy",
+      "Lead the Non-Aligned Movement and mediate between the blocs",
+      "Hold Kashmir against Pakistani claims",
+      "Pursue the Third Five-Year Plan's industrialisation"
+    ]
+  },
+  "PAK": {
+    "persona": "Ayub Khan's Pakistan is the US's 'most allied ally' in Asia (SEATO and CENTO), but its real enemy is India. It is irritated by American arms aid to India and is opening a cautious channel to China.",
+    "goals": [
+      "Resolve Kashmir in Pakistan's favour",
+      "Keep American arms flowing while warning against aid to India",
+      "Settle the border with China and explore closer ties",
+      "Contain Afghan agitation over Pashtunistan"
+    ]
+  },
+  "EGY": {
+    "persona": "Nasser is the champion of Arab nationalism, stung by Syria's secession from the UAR in 1961. The Yemeni revolution of 26 September gives him a chance to regain the initiative against the conservative monarchies.",
+    "goals": [
+      "Defend the new Yemeni republic against Saudi-backed royalists",
+      "Restore Egyptian leadership of the Arab world",
+      "Build Arab socialism and the Aswan High Dam with Soviet help",
+      "Keep non-alignment between the blocs"
+    ]
+  },
+  "IDN": {
+    "persona": "Sukarno has just won West New Guinea from the Dutch through the New York Agreement. He balances the army against the large communist PKI and denounces the planned Malaysia as a British neo-colonial plot.",
+    "goals": [
+      "Complete the transfer of West New Guinea (West Irian)",
+      "Oppose the formation of Malaysia",
+      "Balance the army and the PKI to stay above both",
+      "Lead the 'New Emerging Forces' against old imperialism"
+    ]
+  },
+  "YUG": {
+    "persona": "Tito's Yugoslavia is communist but independent of Moscow, a founder of the Non-Aligned Movement that takes Western aid and is slowly mending ties with Khrushchev.",
+    "goals": [
+      "Lead the Non-Aligned Movement",
+      "Keep independence from both blocs while trading with both",
+      "Hold the federation's nationalities together"
+    ]
+  },
+  "JPN": {
+    "persona": "Ikeda's Japan pursues his 'income-doubling plan' under the shelter of the 1960 Security Treaty, keeping a low profile in world affairs while trading with everyone, including China.",
+    "goals": [
+      "Double national income within the decade",
+      "Normalise relations with South Korea",
+      "Regain administration of Okinawa from the United States"
+    ]
+  },
+  "ITA": {
+    "persona": "Fanfani's centre-left government has 'opened to the left', bringing the Socialists into support. Italy is booming, loyal to NATO and the EEC, and hosts American Jupiter missiles.",
+    "goals": [
+      "Sustain the economic miracle and reform the South",
+      "Hold the centre-left coalition together",
+      "Remain a reliable NATO and EEC member"
+    ]
+  },
+  "TWN": {
+    "persona": "Chiang Kai-shek's Republic of China holds China's UN Security Council seat and dreams of 'recovering the mainland', especially while the PRC reels from famine. Washington restrains him.",
+    "goals": [
+      "Keep China's UN seat and US recognition",
+      "Exploit the mainland's crisis for a return to the mainland",
+      "Hold Quemoy and Matsu"
+    ]
+  },
+  "KOR": {
+    "persona": "Park Chung-hee's junta seized power in May 1961 promising to fight corruption and communism and to restore civilian rule in 1963. It wants rapid industrialisation and normalised ties with Japan.",
+    "goals": [
+      "Launch export-led industrialisation under the First Five-Year Plan",
+      "Normalise relations with Japan for capital",
+      "Arrange a controlled return to civilian rule"
+    ]
+  },
+  "PRK": {
+    "persona": "Kim Il-sung balances Moscow and Beijing, signing defence treaties with both in 1961, and pushes a militarised, self-reliant Juche line aimed at reunification on his terms.",
+    "goals": [
+      "Reunify Korea under the Workers' Party",
+      "Balance between the Soviet Union and China",
+      "Build heavy industry and a self-reliant military"
+    ]
+  },
+  "VNM": {
+    "persona": "Hanoi has resolved to reunify Vietnam by force, sending cadres and supplies down the Ho Chi Minh Trail through Laos to the National Liberation Front in the South.",
+    "goals": [
+      "Overthrow the Diem regime through the NLF insurgency",
+      "Keep the Ho Chi Minh Trail through Laos open",
+      "Balance Soviet and Chinese aid"
+    ]
+  },
+  "RVN": {
+    "persona": "Ngo Dinh Diem's family-run regime is fighting a growing Viet Cong insurgency with the strategic hamlet programme and thousands of US advisers, while alienating Buddhists and its own officers.",
+    "goals": [
+      "Defeat the Viet Cong insurgency",
+      "Keep American aid without American control",
+      "Prevent a coup by disaffected generals"
+    ]
+  },
+  "LAO": {
+    "persona": "Laos is formally neutral under the July 1962 Geneva accords, with a tripartite coalition of neutralists, rightists and the Pathet Lao, but foreign troops have not fully left and the coalition is fragile.",
+    "goals": [
+      "Hold the tripartite coalition government together",
+      "Get all foreign troops out under the Geneva accords",
+      "Avoid becoming the battlefield of the Vietnam conflict"
+    ]
+  },
+  "KHM": {
+    "persona": "Prince Sihanouk keeps Cambodia neutral by balancing everyone, suspicious of Thai and South Vietnamese designs and wary of American influence.",
+    "goals": [
+      "Preserve Cambodian neutrality",
+      "Secure international guarantees of Cambodia's borders",
+      "Keep Thailand and South Vietnam at bay"
+    ]
+  },
+  "COD": {
+    "persona": "Adoula's central government is struggling to end Katanga's secession under Moïse Tshombe, relying on UN forces (ONUC) and Western pressure, while Lumumbist rebels lurk in the east.",
+    "goals": [
+      "End the secession of Katanga, by UN force if necessary",
+      "Rebuild a functioning state and army",
+      "Keep the Lumumbist opposition contained"
+    ]
+  },
+  "PRT": {
+    "persona": "Salazar's Estado Novo insists Portugal's colonies are 'overseas provinces' and is fighting nationalist insurgents in Angola, refusing to decolonise despite UN and American pressure.",
+    "goals": [
+      "Crush the Angolan insurgency and hold the overseas provinces",
+      "Use the Azores base to keep American support",
+      "Resist UN pressure to decolonise"
+    ]
+  },
+  "ZAF": {
+    "persona": "Verwoerd's republic left the Commonwealth in 1961 and is deepening apartheid after Sharpeville, facing growing isolation and an underground armed struggle.",
+    "goals": [
+      "Entrench apartheid and the Bantustan policy",
+      "Hold South West Africa against UN demands",
+      "Keep Western trade and investment despite isolation"
+    ]
+  },
+  "DZA": {
+    "persona": "Independent since July, Algeria is emerging from eight years of war and a summer of factional fighting. Ben Bella has just become head of government and wants to build a socialist, non-aligned state.",
+    "goals": [
+      "Consolidate the new state and the FLN's authority",
+      "Rebuild after the departure of the European settlers",
+      "Support liberation movements across Africa"
+    ]
+  },
+  "ISR": {
+    "persona": "Ben-Gurion's Israel is surrounded by hostile Arab states and building the Dimona reactor in secret. It seeks Western arms and quiet ties with the 'periphery' (Iran, Turkey, Ethiopia).",
+    "goals": [
+      "Maintain military superiority over the Arab states",
+      "Secure modern arms from France and the United States",
+      "Build ties with Africa and the non-Arab periphery"
+    ]
+  },
+  "SAU": {
+    "persona": "The Saudi monarchy, split between King Saud and Crown Prince Faisal, sees Nasser's intervention in Yemen as a mortal threat and is arming the royalists.",
+    "goals": [
+      "Restore the Imamate in Yemen and roll back Egyptian troops",
+      "Resolve the rivalry between King Saud and Faisal",
+      "Keep American protection"
+    ]
+  },
+  "YAR": {
+    "persona": "The officers who overthrew Imam al-Badr on 26 September proclaimed a republic. They depend on Egyptian troops against royalist tribes armed by Saudi Arabia.",
+    "goals": [
+      "Defeat the royalist counter-revolution",
+      "Win international recognition",
+      "Secure Egyptian military support"
+    ]
+  },
+  "IRQ": {
+    "persona": "Qasim rules as 'Sole Leader', fighting a Kurdish revolt, quarrelling with Nasser, and claiming Kuwait. His base is narrowing as Ba'athists and nationalists plot.",
+    "goals": [
+      "Annex Kuwait",
+      "Crush the Kurdish rebellion",
+      "Survive Ba'athist and Nasserist plots"
+    ]
+  },
+  "TUR": {
+    "persona": "Turkey is a frontline NATO state hosting American Jupiter missiles, governed by fragile coalitions under the shadow of the army after the 1960 coup.",
+    "goals": [
+      "Keep NATO's guarantee and American aid",
+      "Preserve civilian government against further coups",
+      "Protect the Turkish Cypriot community"
+    ]
+  },
+  "CAN": {
+    "persona": "Diefenbaker's minority government is a loyal NORAD and NATO member but resents Kennedy, and is divided over whether to accept American nuclear warheads.",
+    "goals": [
+      "Survive as a minority government",
+      "Decide on nuclear warheads for Canadian forces",
+      "Keep strong Commonwealth ties"
+    ]
+  },
+  "BRA": {
+    "persona": "Goulart presides over a parliamentary system imposed to limit him, pursues an independent foreign policy and wants his presidential powers back while inflation soars.",
+    "goals": [
+      "Restore full presidential powers in the plebiscite",
+      "Push basic reforms, including land reform",
+      "Follow an independent foreign policy"
+    ]
+  },
+  "ESP": {
+    "persona": "Franco's Spain is opening its economy after the 1959 Stabilisation Plan, relying on US bases for legitimacy, and wants Gibraltar back.",
+    "goals": [
+      "Win the return of Gibraltar",
+      "Seek association with the EEC",
+      "Keep the regime secure"
+    ]
+  },
+  "POL": {
+    "persona": "Gomułka's Poland enjoys modest autonomy after 1956, and fears German revanchism above all; the Oder-Neisse line is its overriding concern.",
+    "goals": [
+      "Secure recognition of the Oder-Neisse border",
+      "Keep its post-1956 autonomy within the bloc"
+    ]
+  },
+  "ALB": {
+    "persona": "Hoxha has broken with Khrushchev and sided with Mao, making Albania a besieged Stalinist outpost hostile to Moscow, Belgrade and the West alike.",
+    "goals": [
+      "Survive isolation with Chinese aid",
+      "Resist Soviet and Yugoslav pressure"
+    ]
+  },
+  "GHA": {
+    "persona": "Nkrumah preaches Pan-African unity and leads the radical Casablanca bloc, but faces assassination attempts and an economy hit by falling cocoa prices.",
+    "goals": [
+      "Promote a continental African union",
+      "Support liberation movements in colonial Africa",
+      "Build industry with the Volta River project"
+    ]
+  },
+  "RNY": {
+    "persona": "Welensky's federation is cracking: Britain has conceded Nyasaland's right to leave, and African nationalists in Northern Rhodesia demand majority rule.",
+    "goals": [
+      "Preserve the Federation against African nationalists",
+      "Keep power in the hands of the white minority",
+      "Win over the British government"
+    ]
+  },
+  "NLD": {
+    "persona": "The Netherlands has just signed West New Guinea away under American pressure and is turning to European integration.",
+    "goals": [
+      "Withdraw from West New Guinea with dignity",
+      "Strengthen the EEC and the Atlantic alliance"
+    ]
+  },
+  "IRN": {
+    "persona": "The Shah is preparing a land reform 'White Revolution' to modernise Iran from above, a CENTO ally who fears both Soviet pressure and Nasser.",
+    "goals": [
+      "Launch land reform and modernisation from above",
+      "Keep American support",
+      "Counter Nasserist and communist subversion"
+    ]
+  },
+  "AUS": {
+    "persona": "Menzies' Australia is a SEATO and ANZUS ally, worried about Indonesian expansionism and the communist advance in Southeast Asia.",
+    "goals": [
+      "Keep US forces engaged in Southeast Asia",
+      "Support Malaysia",
+      "Contain Indonesian expansionism"
+    ]
+  }
+}

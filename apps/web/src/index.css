@@ -79,3 +79,20 @@ body { font-family: var(--font-sans); color: #efe6d2; }
 .animate-hud-in { animation: hud-in 180ms ease-out both; }
 @keyframes hud-pulse { 0%, 100% { opacity: 0.45; } 50% { opacity: 1; } }
 .animate-hud-pulse { animation: hud-pulse 1.4s ease-in-out infinite; }
+
+/* Scenario editor: the map is a canvas to paint on. */
+body.editor-mode canvas { cursor: crosshair; }
+
+/* Era accents (body[data-era] is set from the active theme). Cold War: brassier gold, sepia
+   panels and warmer paper, like a period atlas. */
+body[data-era="coldwar"] {
+  --color-gold: #c29a52;
+  --color-gold-bright: #dcbb78;
+  --color-parchment: #e6d6b2;
+  --color-panel-edge: #6d5534;
+}
+body[data-era="coldwar"] .hud-panel {
+  background: linear-gradient(180deg, rgb(36 31 23 / 0.95), rgb(27 23 17 / 0.93));
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.5), inset 0 0 0 1px rgb(194 154 82 / 0.1), inset 0 0 60px rgb(120 90 40 / 0.06);
+}
+body[data-era="coldwar"] .gilt-rule { background: linear-gradient(90deg, transparent, rgb(194 154 82 / 0.6), transparent); }

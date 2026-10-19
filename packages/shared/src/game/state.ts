@@ -288,7 +288,8 @@ export const DEFAULT_SETTINGS: GameSettings = {
   jumpDays: 30,
   turnTimer: 0,
   modelChain: ["nvidia/nemotron-3.5-super-vl:free", "nvidia/nemotron-3-super-120b-a12b:free"],
-  reasoningEffort: "low",
+  // Free models are slow; thinking roughly doubles turn time. Hosts can opt in from the lobby.
+  reasoningEffort: "none",
   economyMode: false,
   jumpVoting: false,
 };

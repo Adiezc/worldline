@@ -2,6 +2,7 @@
 import type { ClientMessage, ServerMessage } from "@worldline/shared";
 import { GameSocket } from "../net/socket.ts";
 import { storage } from "../net/storage.ts";
+import { auth } from "../net/auth.ts";
 import { applyView, resetGame, toast, useGame } from "./store.ts";
 
 let socket: GameSocket | null = null;
@@ -17,6 +18,7 @@ export function connectGame(gameId: string) {
       gameId,
       playerId: useGame.getState().playerId ?? storage.playerId(gameId),
       name: storage.name() || "Anonymous",
+      token: auth.token() ?? undefined,
     }),
     onMessage: handleMessage,
     onStatus: (status, detail) => useGame.setState({ status, statusDetail: detail }),
@@ -81,9 +83,15 @@ function handleMessage(msg: ServerMessage) {
       break;
     }
     case "progress":
-      useGame.setState({ progress: msg.stage === "done" ? null : { stage: msg.stage, detail: msg.detail } });
+      useGame.setState({ progress: msg.stage === "done" ? null : { stage: msg.stage, detail: msg.detail }, timeTravel: null });
       break;
     case "turn":
+      // After an intervention the server may resend the kept part of the turn: keep it for
+      // reference but don't reopen the results or hold the map.
+      if (s.timeTravel && Date.now() - s.timeTravel.at < 20_000) {
+        useGame.setState({ lastResult: msg.result, timeTravel: null, resultOpen: false, mapHold: false, playback: null, turnBase: null, viewAdvanced: false, progress: null });
+        break;
+      }
       useGame.setState({
         lastResult: msg.result,
         turnBase: s.viewAdvanced && s.preTurn ? { owners: s.preTurn.owners, controllers: s.preTurn.controllers } : null,
@@ -108,6 +116,8 @@ function handleMessage(msg: ServerMessage) {
       break;
     case "error":
       toast(msg.message, "error");
+      // A refused rewind/intervention must not leave the History buttons locked.
+      if (s.timeTravel) useGame.setState({ timeTravel: null });
       break;
   }
 }

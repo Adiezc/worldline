@@ -40,8 +40,9 @@ export function simTick(state: GameState, days: number) {
     const target = 58 - k.warExhaustion * 0.35 - occShare * 30 - sanctions * 4;
     k.stability = r2(clamp(k.stability + (target - k.stability) * Math.min(1, 0.05 * months), 0, 100));
 
-    // War exhaustion builds while fighting (faster when occupied) and fades in peace.
-    if (wars.length) k.warExhaustion = r2(clamp(k.warExhaustion + (1.5 + occShare * 12) * months, 0, 100));
+    // War exhaustion builds while fighting (faster when occupied) and fades in peace. Growth slows
+    // as it rises, so a long war grinds towards 100 over years instead of pinning there.
+    if (wars.length) k.warExhaustion = r2(clamp(k.warExhaustion + (1.5 + occShare * 12) * months * (1 - k.warExhaustion / 100), 0, 100));
     else k.warExhaustion = r2(clamp(k.warExhaustion - 5 * months, 0, 100));
 
     // Militaries wear down in long wars.

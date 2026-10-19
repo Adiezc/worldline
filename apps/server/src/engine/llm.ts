@@ -18,6 +18,7 @@ export async function callJson<S extends Schema>(deps: EngineDeps, state: GameSt
   let result = parseWith(first.text, schema);
   if (result.ok) return result.value as Out<S>;
   state.usage.failures++;
+  deps.onValidation?.({ kind: req.kind, outcome: "invalid", error: result.error });
 
   const repair: AiRequest = {
     ...full,
@@ -27,8 +28,12 @@ export async function callJson<S extends Schema>(deps: EngineDeps, state: GameSt
   };
   const second = await complete(deps, state, repair);
   result = parseWith(second.text, schema);
-  if (result.ok) return result.value as Out<S>;
+  if (result.ok) {
+    deps.onValidation?.({ kind: req.kind, outcome: "repaired", error: "" });
+    return result.value as Out<S>;
+  }
   state.usage.failures++;
+  deps.onValidation?.({ kind: req.kind, outcome: "failed", error: result.error });
   throw new Error(`AI ${req.kind} returned unusable output twice (${result.error})`);
 }
 
@@ -47,7 +52,9 @@ async function complete(deps: EngineDeps, state: GameState, req: AiRequest): Pro
   try {
     const res = await deps.ai.complete(req, {
       modelChain: state.settings.modelChain,
-      reasoningEffort: state.settings.reasoningEffort,
+      // Thinking is slow on free models; only the calls that adjudicate (resolver, nation
+      // assessments) use the host's effort, everything conversational runs without it.
+      reasoningEffort: req.reasoning === "setting" ? state.settings.reasoningEffort : "none",
     });
     state.usage.requests++;
     state.usage.promptTokens += res.usage.promptTokens || 0;

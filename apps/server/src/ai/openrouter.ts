@@ -3,12 +3,13 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import type { AiProvider, AiRequest, AiResponse } from "../engine/api.ts";
+import type { AiCallInfo, AiProvider, AiRequest, AiResponse } from "../engine/api.ts";
 
 const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
 const PER_MINUTE = 20;
 const MAX_RETRIES = 2;
 const DEFAULT_USAGE_FILE = join(import.meta.dir, "..", "..", "data", "usage.json");
+const LOG_SIZE = 200;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const today = () => new Date().toISOString().slice(0, 10);
@@ -82,9 +83,13 @@ export class OpenRouterProvider implements AiProvider {
   readonly name = "openrouter" as const;
   private daily: DailyCounter;
   private limiter = new MinuteLimiter();
+  /** Most recent calls (newest last), for diagnostics such as scripts/ai-smoke.ts. */
+  readonly log: AiCallInfo[] = [];
+  private onCall?: (info: AiCallInfo) => void;
 
-  constructor(private apiKey: string, opts: { dailyLimit?: number; usageFile?: string } = {}) {
+  constructor(private apiKey: string, opts: { dailyLimit?: number; usageFile?: string; onCall?: (info: AiCallInfo) => void } = {}) {
     this.daily = new DailyCounter(opts.usageFile ?? DEFAULT_USAGE_FILE, opts.dailyLimit ?? 50);
+    this.onCall = opts.onCall;
   }
 
   quota() {
@@ -92,6 +97,26 @@ export class OpenRouterProvider implements AiProvider {
   }
 
   async complete(req: AiRequest, settings: { modelChain: string[]; reasoningEffort: string }): Promise<AiResponse> {
+    const started = performance.now();
+    const tries = { n: 0 };
+    const record = (info: Omit<AiCallInfo, "kind" | "latencyMs" | "attempts">) => {
+      const full: AiCallInfo = { kind: req.kind, latencyMs: Math.round(performance.now() - started), attempts: tries.n, ...info };
+      this.log.push(full);
+      if (this.log.length > LOG_SIZE) this.log.splice(0, this.log.length - LOG_SIZE);
+      this.onCall?.(full);
+    };
+    try {
+      const res = await this.request(req, settings, tries);
+      record({ model: res.usage.model, promptTokens: res.usage.promptTokens, completionTokens: res.usage.completionTokens, ok: true });
+      return res;
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err);
+      record({ model: settings.modelChain[0] ?? "", promptTokens: 0, completionTokens: 0, ok: false, error });
+      throw err;
+    }
+  }
+
+  private async request(req: AiRequest, settings: { modelChain: string[]; reasoningEffort: string }, tries: { n: number }): Promise<AiResponse> {
     const chain = settings.modelChain.filter(Boolean);
     if (!chain.length) throw new Error("No model configured.");
     let useSchema = req.jsonSchema !== undefined;
@@ -99,6 +124,7 @@ export class OpenRouterProvider implements AiProvider {
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       this.daily.take();
+      tries.n++;
       await this.limiter.acquire();
       let res: Response;
       try {
@@ -111,7 +137,7 @@ export class OpenRouterProvider implements AiProvider {
             "X-Title": "Worldline",
           },
           body: JSON.stringify(this.body(req, chain, settings.reasoningEffort, useSchema)),
-          signal: AbortSignal.timeout(240_000),
+          signal: AbortSignal.timeout(TIMEOUT_MS[req.kind] ?? 120_000),
         });
       } catch (err) {
         lastError = `network error: ${err instanceof Error ? err.message : String(err)}`;
@@ -167,15 +193,22 @@ export class OpenRouterProvider implements AiProvider {
         { role: "system", content: req.system },
         { role: "user", content: req.user },
       ],
-      max_tokens: req.maxTokens ?? 2000,
+      // With reasoning on, max_tokens covers the thinking too, so leave headroom for it.
+      max_tokens: (req.maxTokens ?? 2000) + (REASONING_HEADROOM[effort] ?? 0),
       temperature: req.temperature ?? 0.7,
-      reasoning: effort && effort !== "none" ? { effort } : undefined,
+      // Some models (e.g. Nemotron) reason by default, so "none" must be sent explicitly.
+      reasoning: !effort || effort === "none" ? { enabled: false } : { effort, exclude: true },
       response_format: useSchema
         ? { type: "json_schema", json_schema: { name: req.schemaName ?? "output", strict: false, schema: req.jsonSchema } }
         : undefined,
     };
   }
 }
+
+/** Free models generate slowly; the two big turn calls write thousands of tokens. */
+const TIMEOUT_MS: Partial<Record<AiRequest["kind"], number>> = { resolver: 480_000, director: 300_000, assessor: 240_000, votes: 180_000 };
+
+const REASONING_HEADROOM: Record<string, number> = { low: 4000, medium: 8000, high: 16000 };
 
 const backoff = (attempt: number) => 2000 * 3 ** attempt;
 

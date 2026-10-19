@@ -1,5 +1,6 @@
 // HUD building blocks: panels, buttons, bars, chips.
 import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Icon, type IconName } from "./Icon.tsx";
 import { useGame } from "../../game/store.ts";
 import { countryMap } from "../../game/selectors.ts";
@@ -198,3 +199,41 @@ export function Modal({ children, onClose, className = "" }: { children: ReactNo
 
 export const outcomeTone = (o: "success" | "partial" | "fail") => (o === "success" ? "green" : o === "partial" ? "amber" : "red") as "green" | "amber" | "red";
 export const outcomeColor = (o: "success" | "partial" | "fail") => (o === "success" ? "#6fbf73" : o === "partial" ? "#d9a441" : "#d0574d");
+
+/** Two-button confirmation in the HUD style (used for irreversible host actions). */
+export function ConfirmDialog({
+  title,
+  children,
+  confirmLabel = "Confirm",
+  tone = "primary",
+  icon,
+  onConfirm,
+  onCancel,
+}: {
+  title: string;
+  children: ReactNode;
+  confirmLabel?: string;
+  tone?: "primary" | "danger";
+  icon?: IconName;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  // Portalled: HUD panels use backdrop-filter, which would trap a fixed overlay inside them.
+  return createPortal(
+    <Modal onClose={onCancel} className="w-[min(420px,calc(100%-2rem))]">
+      <div className="px-5 pt-4 pb-3">
+        <h2 className="font-display text-[16px] tracking-[0.12em] text-gold-bright">{title}</h2>
+        <div className="mt-2 text-[13px] leading-relaxed text-parchment/75">{children}</div>
+      </div>
+      <footer className="flex justify-end gap-2 border-t border-panel-edge/50 px-5 py-3">
+        <Button variant="ghost" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button variant={tone} icon={icon} onClick={onConfirm} autoFocus>
+          {confirmLabel}
+        </Button>
+      </footer>
+    </Modal>,
+    document.body,
+  );
+}

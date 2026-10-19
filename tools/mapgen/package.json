@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "bun run src/build.ts && bun run src/scenario-modern.ts && bun run src/scenario-seed.ts",
+    "build": "bun run src/build.ts && bun run src/relief.ts && bun run src/scenario-modern.ts && bun run src/scenario-seed.ts && bun run src/scenario-coldwar.ts",
     "typecheck": "tsc -p ."
   },
   "dependencies": {
@@ -21,6 +21,7 @@
     "@types/topojson-client": "^3.1.5",
     "@types/topojson-server": "^3.0.4",
     "@types/topojson-simplify": "^3.0.3",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "utif2": "^4.1.0"
   }
 }

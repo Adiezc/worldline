@@ -6,7 +6,8 @@ import { OpenRouterProvider } from "./openrouter.ts";
 
 export function createProvider(): AiProvider {
   const key = process.env.OPENROUTER_API_KEY?.trim();
-  if (key) {
+  // WORLDLINE_AI=mock forces the offline mock even when a key is in .env (tests, demos).
+  if (key && process.env.WORLDLINE_AI !== "mock") {
     const limit = Number(process.env.OPENROUTER_DAILY_LIMIT);
     const dailyLimit = Number.isFinite(limit) && limit > 0 ? limit : 50;
     console.log(`[ai] using OpenRouter (daily limit ${dailyLimit} requests)`);

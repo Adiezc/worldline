@@ -10,7 +10,7 @@ import {
 } from "@worldline/shared";
 import { MockProvider } from "../src/ai/mock.ts";
 import type { AiProvider, AiRequest, EngineDeps } from "../src/engine/api.ts";
-import { engine, extractJson } from "../src/engine/index.ts";
+import { engine, extractJson, INTERRUPTED } from "../src/engine/index.ts";
 import { buildFixtureSeed, ROOT } from "./fixtures/seed.ts";
 
 const meta = (await Bun.file(join(ROOT, "packages", "mapdata", "public", "map", "provinces.json")).json()) as MapMeta;
@@ -245,6 +245,67 @@ for (const [label, seed] of seeds) {
       const ideas = await engine.brainstorm(state, deps, { country: "UKR" });
       expect(ideas.length).toBeGreaterThanOrEqual(4);
       expect(ideas.length).toBeLessThanOrEqual(6);
+    });
+
+    test("intervene stops the last turn at its 2nd event", async () => {
+      const state = newGame(seed, [["p1", "UKR"]]);
+      state.orders = { p1: [
+        { id: "o1", playerId: "p1", country: "UKR", text: "Reinforce air defences around Kyiv." },
+        { id: "o2", playerId: "p1", country: "UKR", text: "Seek new EU financing for reconstruction." },
+      ] };
+      // What the room saves when it starts resolving a turn.
+      const snapshot = structuredClone(state);
+      const deps = depsFor(seed);
+      const res = await engine.runTurn(state, deps);
+      expect(res.events.length).toBeGreaterThan(3);
+      const [first, second] = res.events;
+      const cut = res.events.slice(2);
+
+      const out = engine.intervene(state, deps, { snapshot, eventId: second.id });
+      expect(out.cut).toBe(cut.length);
+      expect(state.date).toBe(second.date);
+      expect(state.turn).toBe(2);
+      expect(state.phase).toBe("orders");
+      // Later events are gone; the kept ones keep their ids and effects.
+      expect(state.events.map((e) => e.id)).toEqual([...snapshot.events.map((e) => e.id), first.id, second.id]);
+      expect(state.events.slice(-2).map((e) => e.effects)).toEqual([first.effects, second.effects]);
+      // Map = snapshot + the kept events' diffs.
+      const owners = [...snapshot.owners], controllers = [...snapshot.controllers];
+      for (const e of [first, second]) for (const d of e.mapDiff ?? []) {
+        owners[d.province] = d.owner;
+        controllers[d.province] = d.controller;
+      }
+      expect(state.owners).toEqual(owners);
+      expect(state.controllers).toEqual(controllers);
+      // Orders whose events were cut are downgraded.
+      const cutOrders = new Set(cut.flatMap((e) => e.causes));
+      for (const v of state.lastVerdicts) {
+        if (cutOrders.has(v.orderId)) expect(v).toMatchObject({ outcome: "partial", reason: INTERRUPTED });
+      }
+      expect(state.lastVerdicts.length).toBe(2);
+      expectSaneStats(state);
+      // The world goes on from there.
+      const next = await engine.runTurn(state, deps);
+      expect(next.fromDate).toBe(second.date);
+    });
+
+    test("intervene just before a front advance undoes the occupation", async () => {
+      // Run turns until the mock pushes the front, then stop time one event earlier.
+      const state = newGame(seed, [["p1", "FRA"]]);
+      const deps = depsFor(seed);
+      for (let i = 0; i < 12; i++) {
+        const snapshot = structuredClone(state);
+        const res = await engine.runTurn(state, deps);
+        const at = res.events.findIndex((e) => e.mapDiff?.length);
+        if (at < 1) continue;
+        const advance = res.events[at];
+        for (const d of advance.mapDiff!) expect(state.controllers[d.province]).toBe(d.controller);
+        engine.intervene(state, deps, { snapshot, eventId: res.events[at - 1].id });
+        for (const d of advance.mapDiff!) expect(state.controllers[d.province]).toBe(snapshot.controllers[d.province]);
+        expect(state.events.at(-1)!.id).toBe(res.events[at - 1].id);
+        return;
+      }
+      throw new Error("the mock never advanced a front");
     });
 
     test("a failing provider leaves the game untouched", async () => {

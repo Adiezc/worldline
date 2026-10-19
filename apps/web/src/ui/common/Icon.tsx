@@ -29,6 +29,23 @@ const PATHS = {
   refresh: "M20 11a8 8 0 10-2.3 5.7M20 4v7h-7",
   clock: "M12 3a9 9 0 100 18 9 9 0 000-18zM12 7v5l3 2",
   map: "M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2V6zM9 4v14M15 6v14",
+  history: "M3 12a9 9 0 103-6.7M3 4v5h5M12 8v4l3 2",
+  users: "M9 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM2.5 20c.8-3.5 3.3-5.5 6.5-5.5s5.7 2 6.5 5.5M16 4.3a3.5 3.5 0 010 6.4M18 14.8c1.8.7 3 2.4 3.5 5.2",
+  ballot: "M4 20h16M6 20V10h12v10M9 10V4h6v6M10.5 7h3",
+  calendar: "M4 6h16v14H4zM4 10h16M8 3v5M16 3v5",
+  brush: "M14 4l6 6-8 8-6-6 8-8zM6 12l-2 2c-1 1-1 3 0 4l2 2c1 1 3 1 4 0l2-2",
+  eraser: "M8 20h12M4 15l9-9 6 6-9 9H8l-4-4zM9 10l6 6",
+  bucket: "M5 11l7-7 7 7-7 7-7-7zM5 11h14M20 15c0 1.5-1 2.5-1 3.5a1 1 0 002 0c0-1-1-2-1-3.5z",
+  eyedropper: "M15 4l5 5-2 2-5-5 2-2zM13 6l-8 8v4h4l8-8M5 18l-1 2",
+  undo: "M9 14L4 9l5-5M4 9h10a6 6 0 010 12h-3",
+  redo: "M15 14l5-5-5-5M20 9H10a6 6 0 000 12h3",
+  download: "M12 4v11M7 10l5 5 5-5M5 20h14",
+  save: "M5 4h11l3 3v13H5zM8 4v5h7V4M8 20v-6h8v6",
+  search: "M11 4a7 7 0 100 14 7 7 0 000-14zM20 20l-4-4",
+  logout: "M14 4h5v16h-5M10 8l-4 4 4 4M6 12h9",
+  pause: "M8 5v14M16 5v14",
+  rewind: "M11 6l-7 6 7 6V6zM20 6l-7 6 7 6V6z",
+  info: "M12 3a9 9 0 100 18 9 9 0 000-18zM12 11v6M12 7.5v.5",
 } as const;
 
 export type IconName = keyof typeof PATHS;

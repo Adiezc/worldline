@@ -4,9 +4,9 @@ import type { BordersData, MapMeta, ScenarioStart } from "@worldline/shared";
 import start from "@worldline/scenarios/modern-2026/start.json";
 import { MapRenderer, type Camera } from "./renderer.ts";
 import { LabelLayer } from "./labelLayer.ts";
-import { theme } from "./theme.ts";
+import { getTheme, theme } from "./theme.ts";
 import type { WorkerRequest, WorkerResponse } from "./map.worker.ts";
-import { emitMapClick, publishMap, type FocusOptions, type FocusTarget, type MapController } from "./controller.ts";
+import { emitMapClick, getPaintHandler, publishMap, type FocusOptions, type FocusTarget, type MapController } from "./controller.ts";
 import { useMap } from "../store.ts";
 
 const MAX_ZOOM = 10;
@@ -36,6 +36,8 @@ export function MapView() {
     let tween: Tween | null = null;
     // Ownership as currently drawn (province id → owner index).
     let owners: Int32Array = new Int32Array(0);
+    // Editor highlight (owner index) overriding the selection-based one.
+    let highlightOwner: number | null = null;
     const worker = new Worker(new URL("./map.worker.ts", import.meta.url), { type: "module" });
     const send = (m: WorkerRequest) => worker.postMessage(m);
     const scenario = start as ScenarioStart;
@@ -85,7 +87,7 @@ export function MapView() {
       const st = useMap.getState();
       renderer.hover = st.hoverId;
       renderer.selected = st.selectedId;
-      const so = st.selectedId ? owners[st.selectedId] : -1;
+      const so = highlightOwner ?? (st.selectedId ? owners[st.selectedId] : -1);
       renderer.selectedOwner = so >= 0 ? so : 0xffff;
       renderer.render();
       labels.draw(renderer.camera, renderer.mapW);
@@ -108,6 +110,18 @@ export function MapView() {
     const metaP = fetch("/map/provinces.json").then((r) => r.json() as Promise<MapMeta>);
     const bordersP = fetch("/map/borders.json").then((r) => r.json() as Promise<BordersData>);
     const coastP = fetch("/map/coast.png").then((r) => r.arrayBuffer()).then((b) => decode(b));
+    // Terrain hillshade; the map still works (flat) if it is missing or malformed.
+    const reliefP = fetch("/map/relief.png")
+      .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`relief.png: ${r.status}`))))
+      .then((b) => {
+        const img = decode(b);
+        if (img.channels !== 1 || img.depth !== 8) throw new Error("relief.png must be 8-bit grayscale");
+        return { data: img.data as Uint8Array, width: img.width, height: img.height };
+      })
+      .catch((e) => {
+        console.warn("Terrain relief unavailable:", e);
+        return null;
+      });
     send({ type: "load", url: "/map/provinces.png" });
 
     // --- Imperative controller -------------------------------------------------------------
@@ -180,6 +194,9 @@ export function MapView() {
         dirty = true;
       },
       setLabelStyle: (names, colors) => {
+        // Another scenario's country list: hide the old curves until the worker sends new ones,
+        // so names never flash over the wrong countries.
+        if (names.length !== labels.names.length) labels.labels = [];
         labels.names = names;
         labels.setColors(colors);
         dirty = true;
@@ -189,15 +206,27 @@ export function MapView() {
       },
       focusOn,
       owners: () => owners,
+      setTheme: (id) => {
+        const t = getTheme(id);
+        if (renderer.theme === t) return;
+        renderer.theme = t;
+        labels.setTheme(t);
+        dirty = true;
+      },
+      setHighlightOwner: (o) => {
+        highlightOwner = o;
+        dirty = true;
+      },
     };
 
     async function onLoaded(data: Uint16Array, width: number, height: number) {
-      const [m, borders, coast] = await Promise.all([metaP, bordersP, coastP, document.fonts.load(`700 24px ${theme.labelFont}`)]);
+      const [m, borders, coast, relief] = await Promise.all([metaP, bordersP, coastP, reliefP, document.fonts.load(`700 24px ${theme.labelFont}`)]);
       if (disposed) return;
       try {
         renderer.init({
           ids: data, width, height,
           coast: coast.data as Uint8Array, coastW: coast.width, coastH: coast.height,
+          relief,
           borders, provinceCount: m.provinces.length,
         });
       } catch (e) {
@@ -215,7 +244,8 @@ export function MapView() {
       Object.assign(renderer.camera, { cx: 4400, cy: 1250, zoom: Math.max(minZoom(), 0.42) });
       resize();
       publishMap(controller);
-      useMap.setState({ status: "ready", meta: m, scenario });
+      // The menu may already have picked another scenario to preview; MapSync applies it.
+      useMap.setState((st) => ({ status: "ready", meta: m, scenario: st.scenario ?? scenario }));
     }
 
     // --- Input: drag to pan, wheel to zoom at the cursor, click to select.
@@ -230,11 +260,41 @@ export function MapView() {
       return ids[y * renderer.mapW + wx];
     };
     let drag: { x: number; y: number; moved: boolean } | null = null;
+    // Editor painting: a left-button stroke, sampled every few px so fast drags leave no gaps.
+    let stroke: { x: number; y: number; last: number } | null = null;
+    let spaceDown = false;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== "Space") return;
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable)) return;
+      spaceDown = e.type === "keydown";
+    };
     const onDown = (e: PointerEvent) => {
-      drag = { x: e.clientX, y: e.clientY, moved: false };
+      const brush = getPaintHandler();
       glCanvas.setPointerCapture(e.pointerId);
+      if (brush && e.button === 0 && !spaceDown) {
+        const id = pick(e.clientX, e.clientY);
+        stroke = { x: e.clientX, y: e.clientY, last: id };
+        brush.start(id);
+        return;
+      }
+      drag = { x: e.clientX, y: e.clientY, moved: false };
     };
     const onMove = (e: PointerEvent) => {
+      const brush = getPaintHandler();
+      if (stroke && brush) {
+        const dx = e.clientX - stroke.x, dy = e.clientY - stroke.y;
+        const steps = Math.max(1, Math.ceil(Math.hypot(dx, dy) / 4));
+        for (let i = 1; i <= steps; i++) {
+          const id = pick(stroke.x + (dx * i) / steps, stroke.y + (dy * i) / steps);
+          if (id !== stroke.last) {
+            stroke.last = id;
+            brush.move(id);
+          }
+        }
+        stroke.x = e.clientX;
+        stroke.y = e.clientY;
+      }
       if (drag) {
         const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
         if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true;
@@ -254,7 +314,12 @@ export function MapView() {
       if (id !== useMap.getState().hoverId) useMap.getState().setHover(id);
     };
     const onUp = (e: PointerEvent) => {
-      if (drag && !drag.moved) {
+      if (stroke) {
+        stroke = null;
+        getPaintHandler()?.end();
+        return;
+      }
+      if (drag && !drag.moved && e.button === 0 && !getPaintHandler()) {
         const id = pick(e.clientX, e.clientY);
         useMap.getState().setSelected(id);
         emitMapClick(id);
@@ -276,6 +341,20 @@ export function MapView() {
       dirty = true;
     };
     const onLeave = () => useMap.getState().setHover(0);
+    const onContext = (e: MouseEvent) => {
+      if (getPaintHandler()) e.preventDefault();
+    };
+    const onCancel = () => {
+      if (stroke) {
+        stroke = null;
+        getPaintHandler()?.end();
+      }
+      drag = null;
+    };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("keyup", onKey);
+    glCanvas.addEventListener("contextmenu", onContext);
+    glCanvas.addEventListener("pointercancel", onCancel);
     glCanvas.addEventListener("pointerdown", onDown);
     glCanvas.addEventListener("pointermove", onMove);
     glCanvas.addEventListener("pointerup", onUp);
@@ -295,6 +374,10 @@ export function MapView() {
       glCanvas.removeEventListener("pointerup", onUp);
       glCanvas.removeEventListener("pointerleave", onLeave);
       glCanvas.removeEventListener("wheel", onWheel);
+      glCanvas.removeEventListener("contextmenu", onContext);
+      glCanvas.removeEventListener("pointercancel", onCancel);
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keyup", onKey);
     };
   }, []);
 

@@ -1,0 +1,139 @@
+[
+  {
+    "id": "un", "abbrev": "UN", "name": "United Nations", "kind": "global",
+    "members": [
+      "AFG", "ALB", "ARG", "AUS", "AUT", "BDI", "BEL", "BEN", "BFA", "BGR", "BOL", "BRA", "CAF", "CAN", "CHL", "CIV", "CMR", "COD", "COG", "COL",
+      "CRI", "CSK", "CUB", "CYP", "DNK", "DOM", "ECU", "EGY", "ESP", "ETH", "FIN", "FRA", "GAB", "GBR", "GHA", "GIN", "GRC", "GTM", "HND", "HTI",
+      "HUN", "IDN", "IND", "IRL", "IRN", "IRQ", "ISL", "ISR", "ITA", "JAM", "JOR", "JPN", "KHM", "LAO", "LBN", "LBR", "LBY", "LKA", "LUX", "MAR",
+      "MDG", "MEX", "MLI", "MMR", "MNG", "MRT", "MYS", "NER", "NGA", "NIC", "NLD", "NOR", "NPL", "NZL", "PAK", "PAN", "PER", "PHL", "POL", "PRT",
+      "PRY", "ROU", "RWA", "SAU", "SDN", "SEN", "SLE", "SLV", "SOM", "SOV", "SWE", "SYR", "TCD", "TGO", "THA", "TTO", "TUN", "TUR", "TWN", "TZA",
+      "URY", "USA", "VEN", "YAR", "YUG", "ZAF"
+    ],
+    "observers": ["CHE", "DEU", "KOR", "RVN", "MCO"],
+    "candidates": [
+      { "tag": "DZA", "since": "1962-07-03", "note": "Independent since July; Security Council has recommended admission, General Assembly vote due 8 October 1962" },
+      { "tag": "KWT", "since": "1961-06-30", "note": "Application vetoed by the Soviet Union in 1961 at Iraq's request" },
+      { "tag": "CHN", "since": "1949-11-18", "note": "Chinese representation question: the seat is held by the Republic of China; annual resolutions to seat the PRC are defeated" }
+    ],
+    "suspended": [],
+    "bodies": [
+      { "id": "ga", "name": "General Assembly", "seats": [], "rule": "simpleMajority", "handles": ["condemn", "custom", "tradePolicy", "suspendMember", "expelMember"] },
+      { "id": "sc", "name": "Security Council", "seats": ["USA", "SOV", "GBR", "FRA", "TWN", "CHL", "GHA", "IRL", "ROU", "EGY", "VEN"], "veto": ["USA", "SOV", "GBR", "FRA", "TWN"], "rule": "vetoMajority", "handles": ["sanction", "peacekeeping", "authorizeForce", "admitMember"] }
+    ],
+    "powers": ["sanction", "condemn", "peacekeeping", "admitMember", "suspendMember", "expelMember", "tradePolicy", "authorizeForce", "custom"],
+    "effects": {}, "cohesion": 30, "founded": "1945-10-24"
+  },
+  {
+    "id": "nato", "abbrev": "NATO", "name": "North Atlantic Treaty Organization", "kind": "military",
+    "members": ["BEL", "CAN", "DNK", "FRA", "DEU", "GRC", "ISL", "ITA", "LUX", "NLD", "NOR", "PRT", "TUR", "GBR", "USA"],
+    "observers": [], "candidates": [], "suspended": [],
+    "bodies": [{ "id": "nac", "name": "North Atlantic Council", "seats": [], "rule": "consensus" }],
+    "powers": ["condemn", "admitMember", "authorizeForce", "custom"],
+    "effects": { "mutualDefense": true }, "cohesion": 70, "founded": "1949-04-04"
+  },
+  {
+    "id": "warsaw", "abbrev": "Warsaw Pact", "name": "Warsaw Treaty Organization", "kind": "military",
+    "members": ["SOV", "POL", "CSK", "DDR", "HUN", "ROU", "BGR", "ALB"],
+    "observers": [], "candidates": [],
+    "suspended": ["ALB"],
+    "bodies": [{ "id": "pcc", "name": "Political Consultative Committee", "seats": [], "rule": "consensus" }],
+    "powers": ["condemn", "admitMember", "suspendMember", "authorizeForce", "custom"],
+    "effects": { "mutualDefense": true }, "cohesion": 75, "founded": "1955-05-14"
+  },
+  {
+    "id": "eec", "abbrev": "EEC", "name": "European Economic Community", "kind": "economic",
+    "members": ["BEL", "FRA", "DEU", "ITA", "LUX", "NLD"],
+    "observers": ["GRC"],
+    "candidates": [
+      { "tag": "GBR", "since": "1961-08-09", "note": "Accession negotiations under way in Brussels (Edward Heath); Commonwealth and farm terms unresolved" },
+      { "tag": "DNK", "since": "1961-08-10", "note": "Applied alongside Britain" },
+      { "tag": "IRL", "since": "1961-07-31", "note": "Applied alongside Britain" },
+      { "tag": "NOR", "since": "1962-04-30", "note": "Applied alongside Britain" },
+      { "tag": "TUR", "since": "1959-07-31", "note": "Association agreement under negotiation" }
+    ],
+    "suspended": [],
+    "bodies": [
+      { "id": "council", "name": "Council of Ministers", "seats": [], "rule": "qualifiedMajority", "handles": ["tradePolicy", "custom"] },
+      { "id": "council-unanimity", "name": "Council of Ministers (unanimity)", "seats": [], "rule": "consensus", "handles": ["admitMember", "suspendMember", "sanction", "condemn"] }
+    ],
+    "powers": ["tradePolicy", "custom", "admitMember", "suspendMember", "sanction", "condemn"],
+    "effects": { "tradeBloc": true }, "cohesion": 62, "founded": "1958-01-01"
+  },
+  {
+    "id": "efta", "abbrev": "EFTA", "name": "European Free Trade Association", "kind": "economic",
+    "members": ["AUT", "DNK", "NOR", "PRT", "SWE", "CHE", "GBR"],
+    "observers": ["FIN"], "candidates": [], "suspended": [],
+    "bodies": [{ "id": "council", "name": "EFTA Council", "seats": [], "rule": "consensus" }],
+    "powers": ["tradePolicy", "admitMember", "custom"],
+    "effects": { "tradeBloc": true }, "cohesion": 45, "founded": "1960-05-03"
+  },
+  {
+    "id": "comecon", "abbrev": "COMECON", "name": "Council for Mutual Economic Assistance", "kind": "economic",
+    "members": ["SOV", "POL", "CSK", "DDR", "HUN", "ROU", "BGR", "MNG", "ALB"],
+    "observers": [], "candidates": [],
+    "suspended": ["ALB"],
+    "bodies": [{ "id": "session", "name": "Council Session", "seats": [], "rule": "consensus" }],
+    "powers": ["tradePolicy", "admitMember", "suspendMember", "custom"],
+    "effects": { "tradeBloc": true }, "cohesion": 55, "founded": "1949-01-25"
+  },
+  {
+    "id": "seato", "abbrev": "SEATO", "name": "Southeast Asia Treaty Organization", "kind": "military",
+    "members": ["USA", "GBR", "FRA", "AUS", "NZL", "PAK", "PHL", "THA"],
+    "observers": [], "candidates": [], "suspended": [],
+    "bodies": [{ "id": "council", "name": "SEATO Council", "seats": [], "rule": "consensus" }],
+    "powers": ["condemn", "authorizeForce", "admitMember", "custom"],
+    "effects": {}, "cohesion": 35, "founded": "1955-02-19"
+  },
+  {
+    "id": "cento", "abbrev": "CENTO", "name": "Central Treaty Organization", "kind": "military",
+    "members": ["GBR", "TUR", "IRN", "PAK"],
+    "observers": ["USA"], "candidates": [], "suspended": [],
+    "bodies": [{ "id": "council", "name": "Ministerial Council", "seats": [], "rule": "consensus" }],
+    "powers": ["condemn", "admitMember", "custom"],
+    "effects": {}, "cohesion": 35, "founded": "1959-08-21"
+  },
+  {
+    "id": "oas", "abbrev": "OAS", "name": "Organization of American States", "kind": "regional",
+    "members": ["ARG", "BOL", "BRA", "CHL", "COL", "CRI", "CUB", "DOM", "ECU", "SLV", "GTM", "HTI", "HND", "MEX", "NIC", "PAN", "PRY", "PER", "USA", "URY", "VEN"],
+    "observers": [], "candidates": [],
+    "suspended": ["CUB"],
+    "bodies": [
+      { "id": "council", "name": "Council of the OAS", "seats": [], "rule": "simpleMajority", "handles": ["condemn", "custom"] },
+      { "id": "consultation", "name": "Meeting of Consultation of Foreign Ministers", "seats": [], "rule": "twoThirds", "handles": ["sanction", "suspendMember", "admitMember", "authorizeForce"] }
+    ],
+    "powers": ["condemn", "sanction", "suspendMember", "admitMember", "authorizeForce", "custom"],
+    "effects": {}, "cohesion": 45, "founded": "1948-04-30"
+  },
+  {
+    "id": "arab-league", "abbrev": "Arab League", "name": "League of Arab States", "kind": "regional",
+    "members": ["EGY", "IRQ", "JOR", "LBN", "SAU", "SYR", "YAR", "LBY", "SDN", "MAR", "TUN", "KWT", "DZA"],
+    "observers": [], "candidates": [], "suspended": [],
+    "bodies": [{ "id": "council", "name": "Council of the League", "seats": [], "rule": "consensus" }],
+    "powers": ["condemn", "sanction", "suspendMember", "admitMember", "custom"],
+    "effects": {}, "cohesion": 25, "founded": "1945-03-22"
+  },
+  {
+    "id": "nam", "abbrev": "NAM", "name": "Non-Aligned Movement", "kind": "forum",
+    "members": ["AFG", "DZA", "MMR", "KHM", "LKA", "COD", "CUB", "CYP", "ETH", "GHA", "GIN", "IND", "IDN", "IRQ", "LBN", "MLI", "MAR", "NPL", "SAU", "SOM", "SDN", "TUN", "EGY", "YAR", "YUG"],
+    "observers": ["BOL", "BRA", "ECU"], "candidates": [], "suspended": [],
+    "bodies": [{ "id": "summit", "name": "Conference of Heads of State", "seats": [], "rule": "consensus" }],
+    "powers": ["condemn", "admitMember", "custom"],
+    "effects": { "forum": true }, "cohesion": 40, "founded": "1961-09-01"
+  },
+  {
+    "id": "commonwealth", "abbrev": "Commonwealth", "name": "Commonwealth of Nations", "kind": "forum",
+    "members": ["GBR", "CAN", "AUS", "NZL", "IND", "PAK", "LKA", "GHA", "MYS", "NGA", "CYP", "SLE", "TZA", "JAM", "TTO"],
+    "observers": ["RNY"], "candidates": [], "suspended": [],
+    "bodies": [{ "id": "conference", "name": "Commonwealth Prime Ministers' Conference", "seats": [], "rule": "consensus" }],
+    "powers": ["condemn", "suspendMember", "admitMember", "custom"],
+    "effects": { "forum": true }, "cohesion": 45, "founded": "1949-04-26"
+  },
+  {
+    "id": "opec", "abbrev": "OPEC", "name": "Organization of the Petroleum Exporting Countries", "kind": "economic",
+    "members": ["IRN", "IRQ", "KWT", "SAU", "VEN", "LBY", "IDN"],
+    "observers": [], "candidates": [], "suspended": [],
+    "bodies": [{ "id": "conference", "name": "OPEC Conference", "seats": [], "rule": "consensus" }],
+    "powers": ["custom", "tradePolicy", "admitMember"],
+    "effects": {}, "cohesion": 40, "founded": "1960-09-14"
+  }
+]

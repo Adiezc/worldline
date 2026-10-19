@@ -126,8 +126,29 @@ export const toggleChatMinimized = (chatId: string) =>
 export const setChatBuilder = (chatId: string, builder: boolean) =>
   useGame.setState((s) => ({ chats: s.chats.map((w) => (w.chatId === chatId ? { ...w, builder } : w)) }));
 
-export const sendChat = (chatId: string, text: string, proposal?: ProposalDraft) =>
-  send({ t: "chat.send", chatId, text, proposal });
+/** Open (or create) a conference with several countries at once. */
+export function openConference(tags: string[]) {
+  const s = useGame.getState();
+  const me = s.view?.you.country;
+  if (!s.view || !me) return;
+  const others = [...new Set(tags.filter((t) => t !== me))];
+  if (others.length < 1) return;
+  const members = [me, ...others];
+  const chat = s.view.chats.find((c) => sameMembers(c.members, members));
+  if (chat) {
+    useGame.setState({ chats: openWindow(s.chats, chat.id) });
+  } else {
+    const pending = { members, builder: false };
+    useGame.setState({ pendingChat: pending });
+    send({ t: "chat.open", with: others });
+    // Don't leave "Opening channels…" up forever if the server declines.
+    window.setTimeout(() => useGame.setState((st) => (st.pendingChat === pending ? { pendingChat: null } : {})), 15_000);
+  }
+}
+
+/** `speaker` asks one AI member of a conference to answer (default: the server picks). */
+export const sendChat = (chatId: string, text: string, proposal?: ProposalDraft, speaker?: string) =>
+  send({ t: "chat.send", chatId, text, proposal, speaker: speaker || undefined });
 export const respondProposal = (chatId: string, proposalId: string, accept: boolean) =>
   send({ t: "proposal.respond", chatId, proposalId, accept });
 
@@ -171,6 +192,23 @@ export function startPlayback() {
 }
 
 export const skipPlayback = () => useGame.setState({ playback: null, mapHold: false });
+export const pausePlayback = (paused: boolean) =>
+  useGame.setState((s) => (s.playback ? { playback: { ...s.playback, paused } } : {}));
+
+// --- Time travel (host) ----------------------------------------------------------------------
+
+/** Restore the game to the start of an earlier turn; later turns are discarded. */
+export function rewindTo(turn: number) {
+  flushOrders();
+  useGame.setState({ timeTravel: { kind: "rewind", at: Date.now() }, resultOpen: false, playback: null, mapHold: false });
+  send({ t: "rewind", turn });
+}
+
+/** Stop the last turn at this event: later events are discarded and orders reopen from its date. */
+export function interveneAt(eventId: string) {
+  useGame.setState({ timeTravel: { kind: "intervene", at: Date.now() }, resultOpen: false, playback: null, mapHold: false });
+  send({ t: "intervene", eventId });
+}
 
 /** Name lookup used across panels. */
 export function countryName(tag: string) {

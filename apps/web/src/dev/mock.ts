@@ -1,8 +1,9 @@
 // Dev-only: drive the HUD without a server. In the browser console:
-//   __worldline.mock("orders")   // or "lobby" / "resolving"
+//   __worldline.mock("orders")   // or "lobby" / "resolving"; second arg "coldwar" for the era theme
 //   __worldline.mockTurn()       // fire a fake turn result with map changes
+//   __worldline.mockRewind()     // pretend the host rewound to turn 2
 // Loaded from main.tsx only when import.meta.env.DEV.
-import type { Country, GameView, ScenarioStart, TurnResult } from "@worldline/shared";
+import type { Country, EraTheme, GameView, ScenarioStart, TurnResult } from "@worldline/shared";
 import { DEFAULT_SETTINGS } from "@worldline/shared";
 import start from "@worldline/scenarios/modern-2026/start.json";
 import { applyView, useGame } from "../game/store.ts";
@@ -14,7 +15,7 @@ function rand(seed: number) {
   return x - Math.floor(x);
 }
 
-function mockView(phase: GameView["phase"] = "orders"): GameView {
+function mockView(phase: GameView["phase"] = "orders", theme: EraTheme = "modern"): GameView {
   const countries: Country[] = scenario.countries.map((c, i) => ({
     ...c,
     government: "Republic",
@@ -72,7 +73,10 @@ function mockView(phase: GameView["phase"] = "orders"): GameView {
       { id: "e2", turn: 2, date: "2026-02-11", headline: "Typhoon season begins early in the Philippines", body: "Thousands evacuated.", countries: ["PHL"], causes: [], effects: [], scope: "world" },
     ],
     eventCount: 2,
-    memory: [],
+    memory: [
+      { upToTurn: 1, text: "January 2026 opened with Bulgaria joining the euro and fresh talks over a Ukrainian ceasefire. Washington and Beijing traded tariff threats while the Gulf stayed tense." },
+      { upToTurn: 2, text: "France and Germany agreed to pool air-defence procurement in Paris. The EU extended its sanctions on Russia, and typhoons struck the Philippines unusually early." },
+    ],
     chats: [{ id: "c1", members: ["FRA", "DEU"], lastTurn: 3, messages: [
       { id: "m1", from: "DEU", text: "Chancellor's office here. We welcome your proposal in principle.", at: "2026-02-20" },
       { id: "m2", from: "DEU", text: "", at: "2026-02-21", proposal: { id: "p1", kind: "treaty", treatyType: "defensive", members: ["FRA", "DEU"], terms: "Mutual defence of each other's territory for ten years.", status: "open", awaiting: ["FRA"] } },
@@ -90,14 +94,33 @@ function mockView(phase: GameView["phase"] = "orders"): GameView {
     seq: 0,
     you: { playerId: "me", country: phase === "lobby" ? null : "FRA", isHost: true },
     formables: [{ name: "United States of Europe", concept: "A federal Europe with a common army and treasury.", countries: ["FRA", "DEU", "ITA", "ESP", "BEL", "NLD"] }],
-    calendar: [],
+    calendar: [
+      { date: "2026-03-15", title: "Slovenian parliamentary election", kind: "election", countries: ["SVN"] },
+      { date: "2026-04-12", title: "Hungarian parliamentary election", kind: "election", countries: ["HUN"], note: "Fidesz faces its strongest challenge in years." },
+      { date: "2026-06-14", title: "G7 summit in Évian", kind: "summit", countries: ["FRA", "USA", "DEU", "GBR", "ITA", "JPN", "CAN"] },
+      { date: "2026-07-09", title: "US tariff pause expires", kind: "deadline", countries: ["USA"] },
+      { date: "2026-06-11", title: "FIFA World Cup opens", kind: "event", countries: ["USA", "CAN", "MEX"] },
+    ],
+    theme,
+    snapshots: [
+      { turn: 1, date: "2026-01-01" },
+      { turn: 2, date: "2026-02-01" },
+      { turn: 3, date: "2026-03-01" },
+    ],
+    intervenable: ["e1", "e2"],
     ai: { provider: "mock", usedToday: 140, dailyLimit: 1000 },
-  } as GameView;
+  };
 }
 
-function mock(phase: GameView["phase"] = "orders") {
+function mock(phase: GameView["phase"] = "orders", theme: EraTheme = "modern") {
   useGame.setState({ status: "open", gameId: "demo", playerId: "me" });
-  applyView(mockView(phase));
+  applyView(mockView(phase, theme));
+}
+
+/** As if the host rewound to the start of turn 2: date and turn go backwards. */
+function mockRewind() {
+  const v = useGame.getState().view ?? mockView();
+  applyView({ ...mockView("orders", v.theme), turn: 2, date: "2026-02-01", snapshots: [{ turn: 1, date: "2026-01-01" }, { turn: 2, date: "2026-02-01" }], intervenable: [] });
 }
 
 function mockTurn() {
@@ -122,7 +145,16 @@ function mockTurn() {
   useGame.setState({ lastResult: result, resultOpen: true, mapHold: true, playback: null, turnBase: null, viewAdvanced: false });
   const owners = v.owners.slice();
   belProvs.forEach((p) => (owners[p] = fra));
-  applyView({ ...v, turn: v.turn + 1, date: "2026-04-01", owners, controllers: owners, lastVerdicts: result.verdicts });
+  applyView({
+    ...v,
+    turn: v.turn + 1,
+    date: "2026-04-01",
+    owners,
+    controllers: owners,
+    lastVerdicts: result.verdicts,
+    snapshots: [...v.snapshots, { turn: v.turn + 1, date: "2026-04-01" }],
+    intervenable: result.events.map((e) => e.id),
+  });
 }
 
-(window as unknown as { __worldline: unknown }).__worldline = { mock, mockTurn, useGame };
+(window as unknown as { __worldline: unknown }).__worldline = { mock, mockTurn, mockRewind, useGame };

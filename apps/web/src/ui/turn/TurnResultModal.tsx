@@ -1,13 +1,16 @@
 import { closeResults, startPlayback } from "../../game/actions.ts";
 import { fmtDate, fmtShortDate } from "../../game/format.ts";
 import { useGame } from "../../game/store.ts";
+import type { GameEvent } from "@worldline/shared";
 import { Badge, Button, Modal, SectionTitle, outcomeColor, outcomeTone } from "../common/ui.tsx";
+import { InterveneButton } from "./Intervene.tsx";
 
 export function TurnResultModal() {
   const open = useGame((s) => s.resultOpen);
   const r = useGame((s) => s.lastResult);
   const prevOrders = useGame((s) => s.prevOrders);
   const orders = useGame((s) => s.orders);
+  const canIntervene = useGame((s) => !!s.view?.you.isHost && (s.view.intervenable?.length ?? 0) > 0);
   if (!open || !r) return null;
   const textOf = (id: string) => prevOrders[id] ?? orders.find((o) => o.id === id)?.text;
   const events = [...r.events].sort((a, b) => a.date.localeCompare(b.date));
@@ -31,7 +34,7 @@ export function TurnResultModal() {
               {r.verdicts.map((v) => (
                 <li key={v.orderId} className="rounded border-l-[3px] bg-black/20 py-2 pr-3 pl-3" style={{ borderColor: outcomeColor(v.outcome) }}>
                   <div className="flex items-start gap-2">
-                    <span className="min-w-0 flex-1 text-[13px] leading-snug text-parchment/90">{textOf(v.orderId) ?? "Order"}</span>
+                    <span className="min-w-0 flex-1 text-[13px] leading-snug text-parchment/90">{v.text ?? textOf(v.orderId) ?? "Order"}</span>
                     <Badge tone={outcomeTone(v.outcome)}>{v.outcome === "success" ? "Success" : v.outcome === "partial" ? "Partial" : "Failed"}</Badge>
                   </div>
                   <p className="mt-1 text-[12px] leading-snug text-parchment/55">{v.reason}</p>
@@ -54,6 +57,11 @@ export function TurnResultModal() {
             </ul>
           </>
         )}
+        {canIntervene && events.length > 0 && (
+          <p className="mt-4 rounded border border-gold/30 bg-gold/[0.05] px-3 py-2 text-[11.5px] leading-snug text-parchment/60">
+            As host you can <b className="text-gold-bright">intervene</b> at any event below: time stops there, later events are discarded, and everyone gives new orders from that day.
+          </p>
+        )}
         <Headlines title="Concerning you" events={mine} />
         <Headlines title="Around the world" events={world} />
         {events.length === 0 && <p className="py-4 text-center text-sm text-parchment/50 italic">A quiet stretch of history.</p>}
@@ -72,16 +80,19 @@ export function TurnResultModal() {
   );
 }
 
-function Headlines({ title, events }: { title: string; events: { id: string; date: string; headline: string }[] }) {
+function Headlines({ title, events }: { title: string; events: GameEvent[] }) {
   if (!events.length) return null;
   return (
     <>
       <SectionTitle>{title}</SectionTitle>
-      <ul className="space-y-1">
+      <ul className="space-y-0.5">
         {events.map((e) => (
-          <li key={e.id} className="flex gap-3 text-[12.5px] leading-snug">
-            <span className="w-20 shrink-0 text-[11px] text-gold/70 tabular-nums">{fmtShortDate(e.date)}</span>
-            <span className="text-parchment/85">{e.headline}</span>
+          <li key={e.id} className="group -mx-1.5 flex items-start gap-3 rounded px-1.5 py-0.5 text-[12.5px] leading-snug hover:bg-white/[0.03]">
+            <span className="w-20 shrink-0 pt-px text-[11px] text-gold/70 tabular-nums">{fmtShortDate(e.date)}</span>
+            <span className="min-w-0 flex-1 text-parchment/85">{e.headline}</span>
+            <span className="shrink-0 opacity-60 group-hover:opacity-100">
+              <InterveneButton event={e} />
+            </span>
           </li>
         ))}
       </ul>

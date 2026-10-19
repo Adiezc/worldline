@@ -2,6 +2,7 @@ import { skipPlayback } from "../../game/actions.ts";
 import { fmtDate } from "../../game/format.ts";
 import { useGame } from "../../game/store.ts";
 import { Button, CountryChip } from "../common/ui.tsx";
+import { InterveneButton } from "./Intervene.tsx";
 
 /** Headline card shown while the turn's events replay on the map. */
 export function PlaybackCard() {
@@ -37,7 +38,9 @@ export function PlaybackCard() {
             </>
           )}
         </div>
-        <div className="flex justify-end border-t border-panel-edge/40 px-3 py-1.5">
+        <div className="flex items-center justify-end gap-1 border-t border-panel-edge/40 px-3 py-1.5">
+          {pb.paused && <span className="mr-auto text-[10.5px] tracking-wider text-parchment/40 uppercase">Paused</span>}
+          {started && e && <InterveneButton event={e} inPlayback />}
           <Button size="sm" variant="ghost" icon="skip" onClick={skipPlayback}>
             Skip
           </Button>

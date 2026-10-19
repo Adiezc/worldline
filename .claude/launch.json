@@ -20,6 +20,18 @@
         "dev"
       ],
       "port": 3001
+    },
+    {
+      "name": "server-mock",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "WORLDLINE_AI=mock",
+        "bun",
+        "--cwd",
+        "apps/server",
+        "dev"
+      ],
+      "port": 3001
     }
   ]
 }

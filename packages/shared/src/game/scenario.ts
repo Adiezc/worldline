@@ -14,11 +14,19 @@ export interface Formable {
   countries: string[];
 }
 
+/** Visual theme of an era; the client maps it to map colours, paper and fonts. */
+export type EraTheme = "modern" | "coldwar" | "custom";
+
 /** Everything needed to start a game in a scenario (packages/scenarios/<id>/seed.json). */
 export interface ScenarioSeed {
   id: string;
   name: string;
   date: string;
+  /** One or two sentences for the scenario picker. */
+  description?: string;
+  theme?: EraTheme;
+  /** Set for player-made scenarios saved from the editor. */
+  author?: string;
   /** Same order as start.json, so index = owner index in the map arrays. */
   countries: Country[];
   owners: number[];

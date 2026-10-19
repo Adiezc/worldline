@@ -12,6 +12,7 @@
     "mapgen": "bun run --cwd tools/mapgen build",
     "test": "bun test",
     "typecheck": "bun --filter '*' typecheck",
-    "server": "bun --cwd apps/server dev"
+    "server": "bun --cwd apps/server dev",
+    "ai:smoke": "bun --cwd apps/server ai:smoke"
   }
 }

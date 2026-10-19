@@ -387,6 +387,8 @@ const seed: ScenarioSeed = {
   id: "modern-2026",
   name: "Modern Day",
   date: "2026-01-01",
+  description: "The world as it stands on New Year's Day 2026: a war in Ukraine, a fragile Gaza ceasefire, tariff wars and an AI boom. Write the next chapter.",
+  theme: "modern",
   countries,
   owners: start.owners,
   controllers: start.controllers,
