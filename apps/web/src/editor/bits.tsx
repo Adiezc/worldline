@@ -1,7 +1,7 @@
 // Small editor-only widgets: country chips and a searchable tag multi-picker over the seed.
 import { useMemo, useState } from "react";
 import type { Country } from "@worldline/shared";
-import { Swatch } from "../ui/common/ui.tsx";
+import { Flag } from "../ui/common/Flag.tsx";
 import { Icon } from "../ui/common/Icon.tsx";
 import { useEditor } from "./editorStore.ts";
 
@@ -19,7 +19,7 @@ export function TagChip({ tag, onRemove }: { tag: string; onRemove?: () => void 
   const c = useTagMap().get(tag);
   return (
     <span className="inline-flex max-w-full items-center gap-1 rounded-sm border border-panel-edge/50 bg-black/20 px-1.5 py-px text-[10.5px] text-parchment/80" title={c?.name ?? tag}>
-      <Swatch color={c?.color} size={8} />
+      <Flag country={c ?? { tag }} size={12} title={false} />
       <span className="truncate">{c?.name ?? tag}</span>
       {onRemove && (
         <button type="button" onClick={onRemove} className="text-parchment/40 hover:text-[#f0b2aa]" aria-label={`Remove ${c?.name ?? tag}`}>
@@ -75,7 +75,7 @@ export function TagPicker({ value, onChange, placeholder = "Add a nation…", ex
                     setQ("");
                   }}
                 >
-                  <Swatch color={c.color} size={9} />
+                  <Flag country={c} size={13} />
                   <span className="min-w-0 flex-1 truncate">{c.name}</span>
                   <span className="text-[10px] text-parchment/35">{c.tag}</span>
                 </button>

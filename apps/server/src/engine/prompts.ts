@@ -33,7 +33,7 @@ export function effectReference(state: GameState, days: number) {
 {"type":"setController","provinces":[812,813],"controller":"RUS"}   military occupation. Only for countries AT WAR with the current controller, and only regions bordering territory their side holds (or coastal regions within ~2,000 km of a coast their side holds, by sea). At most ${c.occupy} regions per country per turn; fighting is usually slower.
 {"type":"makePeace","warId":"w1","terms":"ceasefire along current lines"}   occupied land returns to its owner unless the same event transfers it.
 {"type":"transferProvinces","provinces":[812],"from":"UKR","to":"RUS"}   territory changes hands ONLY in the same event as a makePeace for their war or a createTreaty between the two, or as a voluntary cession ordered by a player.
-{"type":"spawnCountry","name":"Republic of X","government":"provisional government","leader":"Name","provinces":[101,102],"tag":"optional"}   secession or independence; at most 2 per turn.
+{"type":"spawnCountry","name":"Republic of X","government":"provisional government","leader":"Name","provinces":[101,102],"tag":"optional","flag":"optional, e.g. gen:vertical:#1f4fa0,#f4f1e8,#c8102e (patterns: vertical, horizontal, bicolor-v, bicolor-h, nordic, canton, diagonal, triband-star)"}   secession or independence; at most 2 per turn.
 {"type":"annexCountry","target":"AAA","by":"BBB"}   needs a vassal treaty, a voluntary union, or a war in which BBB occupies 60% of AAA.
 {"type":"changeLeader","country":"AAA","leader":"Full Name","government":"optional new form of government"}
 {"type":"imposeSanctions","target":"RUS","by":["USA","GBR"]}   {"type":"liftSanctions","target":"RUS","by":["USA"]}
@@ -85,13 +85,14 @@ export function directorSystem(state: GameState) {
 
 OUTPUT: one JSON object, nothing else.
 {"intents":[
-  {"country":"BRA","summary":"Brazil's Congress passes a fiscal framework to cut the deficit.","selfEffects":[{"type":"statDelta","country":"BRA","stat":"gdp","delta":0.3},{"type":"statDelta","country":"BRA","stat":"stability","delta":-1}],"affectsOthers":false},
-  {"country":"TUR","summary":"Turkey offers to host Russia-Ukraine talks in Istanbul.","selfEffects":[],"affectsOthers":true},
-  {"country":"PRT","summary":"Portugal's presidential election is won by Jane Doe.","selfEffects":[{"type":"changeLeader","country":"PRT","leader":"Jane Doe"}],"affectsOthers":false}],
+  {"country":"BRA","date":"2026-01-14","headline":"Brazil passes deficit-cutting fiscal framework","summary":"Brazil's Congress approves a fiscal framework that caps spending growth to cut the deficit.","selfEffects":[{"type":"statDelta","country":"BRA","stat":"gdp","delta":0.3},{"type":"statDelta","country":"BRA","stat":"stability","delta":-1}],"affectsOthers":false},
+  {"country":"TUR","date":"2026-01-20","headline":"Turkey offers to host Russia-Ukraine talks","summary":"Ankara offers Istanbul as the venue for a new round of Russia-Ukraine talks.","selfEffects":[],"affectsOthers":true},
+  {"country":"PRT","date":"2026-01-18","headline":"Jane Doe wins Portugal's presidential election","summary":"Jane Doe wins the presidential vote held on the scheduled date.","selfEffects":[{"type":"changeLeader","country":"PRT","leader":"Jane Doe"}],"affectsOthers":false}],
  "agendaUpdates":[{"country":"TUR","goals":["Broker a ceasefire to raise Turkish prestige","Secure Black Sea shipping"]}],
  "resolutions":[]}
 - One intent per country that does something notable this period; skip countries that simply carry on. Typically 6-15 intents.
-- summary: one sentence naming the country, written like a news line.
+- date: the day it happens, inside the period. Scheduled CALENDAR items happen on their listed date.
+- headline: at most 10 words, news-wire style, naming the country. summary: one sentence of detail.
 - selfEffects may ONLY touch the acting country itself: statDelta (gdp/population in %, others in points; small: gdp ±0.1-1.5, stability ±1-5, military ±1-3), changeLeader, updateAgenda. Anything else is discarded.
 - affectsOthers: true when the plan involves other countries (diplomacy, pressure, aid, deployments, treaties, sanctions, war). The adjudicator plays those out with all their effects, so leave selfEffects empty for them.
 - agendaUpdates: only when circumstances really changed a country's goals (max 4 goals). Usually [].

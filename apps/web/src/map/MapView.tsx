@@ -4,6 +4,7 @@ import type { BordersData, MapMeta, ScenarioStart } from "@worldline/shared";
 import start from "@worldline/scenarios/modern-2026/start.json";
 import { MapRenderer, type Camera } from "./renderer.ts";
 import { LabelLayer } from "./labelLayer.ts";
+import { CounterLayer } from "./counterLayer.ts";
 import { getTheme, theme } from "./theme.ts";
 import type { WorkerRequest, WorkerResponse } from "./map.worker.ts";
 import { emitMapClick, getPaintHandler, publishMap, type FocusOptions, type FocusTarget, type MapController } from "./controller.ts";
@@ -29,13 +30,18 @@ export function MapView() {
     let disposed = false;
     let renderer: MapRenderer;
     const labels = new LabelLayer(labelCanvas, theme);
+    const counters = new CounterLayer(labelCanvas);
     let ids: Uint16Array | null = null;
     let meta: MapMeta | null = null;
     let dirty = true;
+    // Only the 2D overlay changed (counter hover / tooltip).
+    let overlayDirty = false;
+    let lastTick = 0;
     let raf = 0;
     let tween: Tween | null = null;
     // Ownership as currently drawn (province id → owner index).
     let owners: Int32Array = new Int32Array(0);
+    let controllers: Int32Array = new Int32Array(0);
     // Editor highlight (owner index) overriding the selection-based one.
     let highlightOwner: number | null = null;
     const worker = new Worker(new URL("./map.worker.ts", import.meta.url), { type: "module" });
@@ -82,15 +88,26 @@ export function MapView() {
         if (t >= 1) tween = null;
         dirty = true;
       }
-      if (!dirty || !ids) return;
-      dirty = false;
-      const st = useMap.getState();
-      renderer.hover = st.hoverId;
-      renderer.selected = st.selectedId;
-      const so = highlightOwner ?? (st.selectedId ? owners[st.selectedId] : -1);
-      renderer.selectedOwner = so >= 0 ? so : 0xffff;
-      renderer.render();
-      labels.draw(renderer.camera, renderer.mapW);
+      if (!ids) return;
+      // Front dashes march at ~30 fps; the loop stays idle when there are no fronts.
+      const tick = renderer.hasFronts && now - lastTick >= 33;
+      if (tick) {
+        lastTick = now;
+        renderer.time = (now / 1000) % 3600;
+      }
+      if (dirty) {
+        const st = useMap.getState();
+        renderer.hover = st.hoverId;
+        renderer.selected = st.selectedId;
+        const so = highlightOwner ?? (st.selectedId ? owners[st.selectedId] : -1);
+        renderer.selectedOwner = so >= 0 ? so : 0xffff;
+      }
+      if (dirty || tick) renderer.render();
+      if (dirty || overlayDirty) {
+        labels.draw(renderer.camera, renderer.mapW);
+        counters.draw(renderer.camera);
+      }
+      dirty = overlayDirty = false;
     };
 
     const unsub = useMap.subscribe((s, prev) => {
@@ -184,12 +201,14 @@ export function MapView() {
       },
       setOwnership: (o, c) => {
         owners = Int32Array.from(o);
+        controllers = Int32Array.from(c);
         renderer.setOwnership(o, c);
         dirty = true;
       },
       setProvince: (id, owner, ctl = owner) => {
         if (id <= 0 || id >= owners.length) return;
         owners[id] = owner;
+        if (id < controllers.length) controllers[id] = ctl;
         renderer.setProvince(id, owner, ctl);
         dirty = true;
       },
@@ -206,6 +225,17 @@ export function MapView() {
       },
       focusOn,
       owners: () => owners,
+      controllers: () => controllers,
+      setFronts: (f) => {
+        renderer.setFronts(f?.pairs ?? null);
+        counters.set(f?.counters ?? [], renderer.mapW);
+        if (!counters.hover) glCanvas.style.cursor = "";
+        dirty = true;
+      },
+      pickCounter: (clientX, clientY) => {
+        const r = labelCanvas.getBoundingClientRect();
+        return counters.pickCounter(clientX - r.left, clientY - r.top);
+      },
       setTheme: (id) => {
         const t = getTheme(id);
         if (renderer.theme === t) return;
@@ -309,7 +339,15 @@ export function MapView() {
           dirty = true;
         }
       }
-      const id = drag?.moved ? 0 : pick(e.clientX, e.clientY);
+      // Troop counters take the hover (and draw their own tooltip) over the province below.
+      const counter = drag?.moved || stroke ? null : controller.pickCounter(e.clientX, e.clientY);
+      if (counter || counters.hover) {
+        const r = labelCanvas.getBoundingClientRect();
+        counters.hover = counter ? { counter, x: e.clientX - r.left, y: e.clientY - r.top } : null;
+        glCanvas.style.cursor = counter ? "help" : "";
+        overlayDirty = true;
+      }
+      const id = drag?.moved || counter ? 0 : pick(e.clientX, e.clientY);
       useMap.setState({ pointer: { x: e.clientX, y: e.clientY } });
       if (id !== useMap.getState().hoverId) useMap.getState().setHover(id);
     };
@@ -340,7 +378,14 @@ export function MapView() {
       clampCamera(c);
       dirty = true;
     };
-    const onLeave = () => useMap.getState().setHover(0);
+    const onLeave = () => {
+      useMap.getState().setHover(0);
+      if (counters.hover) {
+        counters.hover = null;
+        glCanvas.style.cursor = "";
+        overlayDirty = true;
+      }
+    };
     const onContext = (e: MouseEvent) => {
       if (getPaintHandler()) e.preventDefault();
     };

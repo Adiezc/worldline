@@ -32,6 +32,7 @@ export function TopBar() {
             <Spinner />
             <span className="animate-hud-pulse">{STAGES[progress?.stage ?? "director"]}</span>
             {progress?.detail && <span className="max-w-48 truncate font-sans text-[11px] tracking-normal text-parchment/50">{progress.detail}</span>}
+            <Elapsed />
           </div>
         ) : (
           <>
@@ -109,6 +110,22 @@ function Countdown({ deadline }: { deadline?: number }) {
   return (
     <span className={`flex items-center gap-1.5 rounded border px-2 py-1 font-mono text-[13px] tabular-nums ${urgent ? "animate-hud-pulse border-fail/60 text-[#f0b2aa]" : "border-panel-edge text-parchment/80"}`} title="Time left this turn">
       <Icon name="clock" size={13} /> {fmtCountdown(ms)}
+    </span>
+  );
+}
+
+/** Time since resolution started, so a slow AI turn visibly ticks instead of looking frozen. */
+function Elapsed() {
+  const [start] = useState(() => Date.now());
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => tick((n) => n + 1), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+  const s = Math.floor((Date.now() - start) / 1000);
+  return (
+    <span className="font-sans text-[11px] tracking-normal text-parchment/45 tabular-nums" title="Free AI models can take a few minutes per turn">
+      {Math.floor(s / 60)}:{String(s % 60).padStart(2, "0")}
     </span>
   );
 }

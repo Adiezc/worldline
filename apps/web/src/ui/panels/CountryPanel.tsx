@@ -6,8 +6,10 @@ import { countryMap, focusTag, relationBetween, TREATY_LABELS } from "../../game
 import { useGame } from "../../game/store.ts";
 import { getMap } from "../../map/controller.ts";
 import { useMap } from "../../store.ts";
-import { Badge, Bar, Button, CountryChip, Empty, Panel, SectionTitle, Swatch } from "../common/ui.tsx";
+import { Badge, Bar, Button, CountryChip, Empty, Panel, SectionTitle } from "../common/ui.tsx";
+import { Flag } from "../common/Flag.tsx";
 import { Icon } from "../common/Icon.tsx";
+import { ForcesSection } from "./ForcesSection.tsx";
 
 export function CountryPanel() {
   const open = useGame((s) => s.countryOpen);
@@ -56,7 +58,7 @@ function CountryDetails({ view, c }: { view: GameView; c: Country }) {
     >
       {/* Banner */}
       <div className="-mx-4 mb-3 flex items-center gap-3 px-4 py-3" style={{ background: `linear-gradient(90deg, ${c.color}50, transparent 85%)` }}>
-        <Flag color={c.color} />
+        <Flag country={c} size={48} className="ring-1 ring-gold/40" />
         <div className="flex flex-wrap gap-1">
           {isMe && <Badge>Your nation</Badge>}
           {!isMe && player && <Badge tone="blue">Player · {player.name}</Badge>}
@@ -158,6 +160,8 @@ function CountryDetails({ view, c }: { view: GameView; c: Country }) {
         ))}
       </ul>
 
+      <ForcesSection tag={c.tag} />
+
       <SectionTitle>Treaties</SectionTitle>
       {treaties.length === 0 && <Empty>No treaties.</Empty>}
       <ul className="space-y-1.5">
@@ -239,15 +243,6 @@ function CountryDetails({ view, c }: { view: GameView; c: Country }) {
   );
 }
 
-function Flag({ color }: { color: string }) {
-  return (
-    <span className="relative inline-block h-9 w-12 shrink-0 overflow-hidden rounded-[2px] border border-black/60 shadow-[0_2px_6px_rgb(0_0_0/0.4)]" style={{ background: color }}>
-      <span className="absolute inset-0 bg-[linear-gradient(135deg,rgb(255_255_255/0.25),transparent_45%,rgb(0_0_0/0.25))]" />
-      <span className="absolute inset-0 ring-1 ring-gold/40 ring-inset" />
-    </span>
-  );
-}
-
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded border border-panel-edge/30 bg-black/15 px-2.5 py-1.5">
@@ -280,7 +275,7 @@ function RegionLine({ view, tag }: { view: GameView; tag: string }) {
   if (!p || (owner?.tag !== tag && ctl?.tag !== tag)) return null;
   return (
     <div className="mb-3 flex items-center gap-2 text-[11.5px] text-parchment/60">
-      <Swatch color={owner?.color} size={8} />
+      <Flag country={owner} size={14} />
       <span className="truncate">
         <span className="text-parchment/85">{p.name}</span> · {p.areaKm2.toLocaleString()} km²{p.coastal ? " · coastal" : ""}
         {ctl && owner && ctl !== owner && <span className="text-[#f0b2aa]"> · occupied by {ctl.name}</span>}

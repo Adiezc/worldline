@@ -33,7 +33,7 @@ const printCall = (c: AiCallInfo) =>
     `in ${pad(c.promptTokens, 6)} out ${pad(c.completionTokens, 6)}${c.attempts > 1 ? ` (${c.attempts} attempts)` : ""}` +
     (c.error ? `\n         ${c.error}` : ""),
   );
-const ai = new OpenRouterProvider(key, { dailyLimit: Number.isFinite(limit) && limit > 0 ? limit : 50, onCall: printCall });
+const ai = new OpenRouterProvider(key, { dailyLimit: Number.isFinite(limit) && limit > 0 ? limit : 0, onCall: printCall });
 
 const validation: string[] = [];
 const deps: EngineDeps = {
@@ -60,7 +60,7 @@ state.orders = {
 
 console.log(`Worldline AI smoke test: ${seed.name}, ${seed.date}, playing France`);
 console.log(`Models: ${state.settings.modelChain.join(" → ")} · reasoning ${state.settings.reasoningEffort}`);
-console.log(`Quota: ${ai.quota().usedToday}/${ai.quota().dailyLimit} requests used today\n`);
+console.log(`Requests today: ${ai.quota().usedToday}${ai.quota().dailyLimit ? ` / ${ai.quota().dailyLimit}` : ""}\n`);
 
 const failures: string[] = [];
 async function step(name: string, fn: () => Promise<void>) {
@@ -125,7 +125,7 @@ console.log("== summary");
 console.log(`  ${calls.length} calls (${calls.filter((c) => !c.ok).length} failed), ${tokens.p} prompt + ${tokens.c} completion tokens`);
 console.log(`  models: ${[...new Set(calls.filter((c) => c.ok).map((c) => c.model))].join(", ") || "none"}`);
 console.log(`  validation: ${validation.length ? validation.join("; ") : "all outputs valid on the first try"}`);
-console.log(`  quota now ${ai.quota().usedToday}/${ai.quota().dailyLimit}`);
+console.log(`  requests today: ${ai.quota().usedToday}${ai.quota().dailyLimit ? ` / ${ai.quota().dailyLimit}` : ""}`);
 if (failures.length) {
   console.log(`  FAILED steps: ${failures.join(", ")}`);
   process.exit(1);

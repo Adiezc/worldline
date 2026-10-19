@@ -32,6 +32,33 @@
         "dev"
       ],
       "port": 3001
+    },
+    {
+      "name": "test-server",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "WORLDLINE_AI=mock",
+        "PORT=3002",
+        "WORLDLINE_DB=/private/tmp/claude-501/-Users-gazarrillo-Documents-Programs-grand-strategy/22fa5413-4682-49b9-a57d-9fd219381012/scratchpad/test.sqlite",
+        "bun",
+        "--cwd",
+        "apps/server",
+        "src/index.ts"
+      ],
+      "port": 3002
+    },
+    {
+      "name": "test-web",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "WORLDLINE_SERVER=localhost:3002",
+        "WEB_PORT=5174",
+        "bun",
+        "--cwd",
+        "apps/web",
+        "dev"
+      ],
+      "port": 5174
     }
   ]
 }

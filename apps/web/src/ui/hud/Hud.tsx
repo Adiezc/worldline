@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { totalUnread } from "../../game/chatNotify.ts";
 import { useGame } from "../../game/store.ts";
 import { selectCountry, setLeftTab, toggleLeftTab } from "../../game/actions.ts";
 import { navigate } from "../../router.ts";
@@ -36,6 +37,7 @@ export function Hud() {
     if (!me || !s.view) return 0;
     return s.view.chats.filter((c) => c.messages.some((m) => m.proposal?.status === "open" && m.proposal.awaiting.includes(me))).length;
   });
+  const unreadChats = useGame((s) => totalUnread(s.unread));
   const [chatList, setChatList] = useState(false);
   const isHost = useGame((s) => !!s.view?.you.isHost);
   const snapshotCount = useGame((s) => s.view?.snapshots?.length ?? 0);
@@ -60,7 +62,7 @@ export function Hud() {
         <IconButton icon="crown" label="Form a nation" active={tab === "formation"} onClick={() => toggleLeftTab("formation")} badge={pendingConsents} />
         {isHost && <IconButton icon="history" label={`History${snapshotCount ? ` (${snapshotCount} saved turns)` : ""} — rewind`} active={tab === "history"} onClick={() => toggleLeftTab("history")} />}
         <div className="gilt-rule my-1 w-7" />
-        <IconButton icon="chat" label="Diplomatic channels" active={chatList} onClick={() => setChatList(!chatList)} badge={awaitingReplies} />
+        <IconButton icon="chat" label="Diplomatic channels" active={chatList} onClick={() => setChatList(!chatList)} badge={awaitingReplies + unreadChats} />
         <IconButton icon="flag" label="Your nation" onClick={() => selectCountry(null, { focus: true })} />
       </div>
       {chatList && <ChatList onClose={() => setChatList(false)} />}

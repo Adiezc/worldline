@@ -28,6 +28,9 @@ export interface Toast {
   id: number;
   level: "info" | "warn" | "error" | "success";
   text: string;
+  /** Diplomatic message toasts open this chat when clicked and show the sender's flag. */
+  chatId?: string;
+  from?: string;
 }
 
 export interface DraftOrder {
@@ -92,6 +95,19 @@ export interface GameStore {
   pendingChat: { members: string[]; builder: boolean } | null;
   /** `count` = messages in the chat when typing began; a newer reply from `from` clears it. */
   typing: Record<string, { from: string; until: number; count: number }>;
+  /** Front lines and troop counters on the map (persisted in localStorage). */
+  showFronts: boolean;
+  /** Unread diplomatic messages per chat id. */
+  unread: Record<string, number>;
+}
+
+const FRONTS_KEY = "worldline:fronts";
+function storedShowFronts() {
+  try {
+    return localStorage.getItem(FRONTS_KEY) !== "0";
+  } catch {
+    return true;
+  }
 }
 
 const initial: GameStore = {
@@ -129,9 +145,22 @@ const initial: GameStore = {
   chats: [],
   pendingChat: null,
   typing: {},
+  unread: {},
+  showFronts: storedShowFronts(),
 };
 
 export const useGame = create<GameStore>(() => ({ ...initial }));
+
+export function setShowFronts(show: boolean) {
+  // Survives resetGame, which restores `initial`.
+  initial.showFronts = show;
+  useGame.setState({ showFronts: show });
+  try {
+    localStorage.setItem(FRONTS_KEY, show ? "1" : "0");
+  } catch {
+    // Storage unavailable (private mode): the choice lasts for this session.
+  }
+}
 
 export const resetGame = (gameId: string | null) => useGame.setState({ ...initial, gameId }, true);
 

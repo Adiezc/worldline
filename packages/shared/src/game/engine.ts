@@ -8,6 +8,7 @@ import {
   type Difficulty, type Effect, type GameEvent, type GameState, type StatKey,
 } from "./state.ts";
 import { pickColor } from "./colors.ts";
+import { cleanGenFlag, deriveFlag } from "./flags.ts";
 
 /** ~400 map px ≈ 2,000 km at the equator. */
 const NAVAL_RANGE = 400;
@@ -305,14 +306,14 @@ export function applyEvent(state: GameState, map: MapIndex, event: GameEvent, ct
         if (blockedHuman) { reject(`${blockedHuman.tag} is player-controlled and stable enough to prevent secession`); break; }
         const tag = uniqueTag(state, effect.tag ?? effect.name);
         const idx = spawnCountry(state, map, {
-          tag, name: effect.name, government: effect.government, leader: effect.leader, provinces: valid, color: effect.color,
+          tag, name: effect.name, government: effect.government, leader: effect.leader, provinces: valid, color: effect.color, flag: effect.flag,
         });
         for (const id of valid) touch(id);
         void idx;
         spawnedHere.add(tag);
         ctx.spawned++;
         // Record the tag actually assigned so later events (and the AI's memory) can refer to it.
-        applied.push({ ...effect, tag, provinces: valid, color: state.countries[idx].color });
+        applied.push({ ...effect, tag, provinces: valid, color: state.countries[idx].color, flag: state.countries[idx].flag });
         break;
       }
       case "annexCountry": {
@@ -521,7 +522,7 @@ export function pickBody(org: GameState["organizations"][number], type: GameStat
 export function spawnCountry(
   state: GameState,
   map: MapIndex,
-  o: { tag: string; name: string; government: string; leader: string; provinces: number[]; color?: string },
+  o: { tag: string; name: string; government: string; leader: string; provinces: number[]; color?: string; flag?: string },
 ) {
   const parents = new Map<number, number>();
   for (const id of o.provinces) parents.set(state.owners[id], (parents.get(state.owners[id]) ?? 0) + map.area[id]);
@@ -536,11 +537,16 @@ export function spawnCountry(
     parent.population = round(parent.population * (1 - share));
   }
   const idx = state.countries.length;
+  const color = o.color ?? pickColor(state, map, o.provinces);
+  // The flag echoes the main parent's colours unless a valid generated flag was supplied.
+  const mainParent = [...parents].sort((a, b) => b[1] - a[1])[0]?.[0];
+  const flag = cleanGenFlag(o.flag) ?? deriveFlag(color, o.tag, state.countries[mainParent ?? -1]?.color);
   state.countries.push({
-    tag: o.tag, name: o.name, color: o.color ?? pickColor(state, map, o.provinces), government: o.government, leader: o.leader,
+    tag: o.tag, name: o.name, color, government: o.government, leader: o.leader,
     gdp: round(gdp), population: round(pop), stability: 40, military: 8, warExhaustion: 0,
     agenda: { persona: `Newly independent ${o.name}, seeking recognition and security.`, goals: ["Secure international recognition", "Consolidate the new state"] },
     alive: true,
+    flag,
   });
   for (const id of o.provinces) {
     state.owners[id] = idx;

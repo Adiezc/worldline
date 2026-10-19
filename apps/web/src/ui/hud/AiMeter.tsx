@@ -9,7 +9,7 @@ export function AiMeter() {
   return (
     <div
       className="hud-panel pointer-events-auto absolute top-3 right-3 flex h-9 items-center gap-2.5 px-3"
-      title={`${ai.usedToday} of ${ai.dailyLimit} AI requests used today`}
+      title={ai.dailyLimit > 0 ? `${ai.usedToday} of ${ai.dailyLimit} AI requests used today` : `${ai.usedToday} AI requests today`}
     >
       <span className={`h-2 w-2 rounded-full ${status === "open" ? "bg-success" : "animate-hud-pulse bg-partial"}`} title={status === "open" ? "Connected" : "Reconnecting"} />
       <span
@@ -24,7 +24,7 @@ export function AiMeter() {
           <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color }} />
         </div>
         <div className="mt-0.5 text-[9.5px] text-parchment/50 tabular-nums">
-          {ai.usedToday.toLocaleString()} / {ai.dailyLimit.toLocaleString()} today
+          {ai.usedToday.toLocaleString()}{ai.dailyLimit > 0 ? ` / ${ai.dailyLimit.toLocaleString()}` : " requests"} today
         </div>
       </div>
     </div>

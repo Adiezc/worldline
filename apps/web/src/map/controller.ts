@@ -1,5 +1,8 @@
 // Imperative handle onto the live map, published by MapView once the renderer is ready.
 import type { EraTheme } from "@worldline/shared";
+import type { FrontCounter, FrontsOverlay } from "./counterLayer.ts";
+
+export type { FrontCounter, FrontsOverlay };
 
 export type FocusTarget =
   | number // province id
@@ -27,6 +30,12 @@ export interface MapController {
   focusOn(target: FocusTarget, opts?: FocusOptions): void;
   /** Owner index per province as currently drawn. */
   owners(): ArrayLike<number>;
+  /** Controller index per province as currently drawn. */
+  controllers(): ArrayLike<number>;
+  /** Animated front lines plus troop counters (null hides them). */
+  setFronts(fronts: FrontsOverlay | null): void;
+  /** Troop counter under a client (viewport) position, if any. */
+  pickCounter(clientX: number, clientY: number): FrontCounter | null;
   /** Era look: paper, sea, sepia and label ink. */
   setTheme(theme: EraTheme): void;
   /** Softly highlight every province of this owner index (null = follow the selection). */

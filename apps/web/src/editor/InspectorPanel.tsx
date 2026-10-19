@@ -2,7 +2,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { Country, TreatyType } from "@worldline/shared";
-import { Badge, Button, Field, Modal, SectionTitle, Swatch, Toggle } from "../ui/common/ui.tsx";
+import { Badge, Button, Field, Modal, SectionTitle, Toggle } from "../ui/common/ui.tsx";
+import { Flag } from "../ui/common/Flag.tsx";
 import { Icon } from "../ui/common/Icon.tsx";
 import { getMap } from "../map/controller.ts";
 import { ORG_KIND_LABELS, TREATY_LABELS } from "../game/selectors.ts";
@@ -11,6 +12,7 @@ import {
   updateCountry, useEditor,
 } from "./editorStore.ts";
 import { TagChip, TagPicker } from "./bits.tsx";
+import { FlagField } from "./FlagField.tsx";
 
 type Tab = "nation" | "world";
 
@@ -89,7 +91,7 @@ function CountryForm({ idx }: { idx: number }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-3 rounded border border-panel-edge/50 p-2.5" style={{ background: `linear-gradient(90deg, ${c.color}40, transparent)` }}>
-        <Swatch color={c.color} size={26} />
+        <Flag country={c} size={48} className="ring-1 ring-gold/40" />
         <div className="min-w-0 flex-1">
           <div className="truncate font-display text-[15px] text-parchment">{c.name || "Unnamed"}</div>
           <div className="text-[11px] text-parchment/55">
@@ -135,6 +137,10 @@ function CountryForm({ idx }: { idx: number }) {
           />
         </div>
       </Field>
+      <div>
+        <span className="hud-label mb-1 block">Flag</span>
+        <FlagField key={idx} country={c} onChange={(flag) => set({ flag })} />
+      </div>
       <div className="grid grid-cols-2 gap-2">
         <Field label="Government">
           <input className="hud-input" value={c.government} onChange={(e) => set({ government: e.target.value })} />

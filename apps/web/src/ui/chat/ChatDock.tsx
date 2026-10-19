@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { markRead, requestNotificationPermission } from "../../game/chatNotify.ts";
 import { createPortal } from "react-dom";
 import type { Chat, ChatMessage, GameView, Proposal, ProposalDraft, TreatyType } from "@worldline/shared";
 import { closeChat, openChat, openConference, respondProposal, sendChat, setChatBuilder, toggleChatMinimized } from "../../game/actions.ts";
 import { fmtShortDate } from "../../game/format.ts";
 import { countryMap, TREATY_LABELS } from "../../game/selectors.ts";
 import { useGame, type ChatWindowState } from "../../game/store.ts";
-import { Badge, Button, CountryChip, Field, Modal, Spinner, Swatch } from "../common/ui.tsx";
+import { Badge, Button, CountryChip, Field, Modal, Spinner } from "../common/ui.tsx";
+import { Flag } from "../common/Flag.tsx";
 import { Icon } from "../common/Icon.tsx";
 
 /** Docked chat windows along the bottom edge, right of the chronicle. */
@@ -36,6 +38,10 @@ function ChatWindow({ chat, win, view }: { chat: Chat; win: ChatWindowState; vie
   const title = group ? `Conference · ${others.length + (me ? 1 : 0)} nations` : others.map((t) => byTag.get(t)?.name ?? t).join(", ") || "Chat";
   const typing = useTyping(chat.id);
   const listRef = useRef<HTMLDivElement>(null);
+  // A visible window means the messages are read.
+  useEffect(() => {
+    if (!win.minimized) markRead(chat.id);
+  }, [win.minimized, chat.id, chat.messages.length]);
   const humans = useMemo(() => new Set(view.players.map((p) => p.country).filter(Boolean)), [view.players]);
   const aiMembers = others.filter((t) => !humans.has(t));
   const [speaker, setSpeaker] = useState("");
@@ -48,10 +54,10 @@ function ChatWindow({ chat, win, view }: { chat: Chat; win: ChatWindowState; vie
   return (
     <section className={`hud-panel pointer-events-auto flex ${group ? "w-[330px]" : "w-[300px]"} flex-col overflow-hidden animate-hud-in ${win.minimized ? "h-10" : "h-[440px] max-h-[calc(100vh-140px)]"}`}>
       <header className="flex h-10 shrink-0 cursor-pointer items-center gap-2 border-b border-panel-edge/50 px-3" onClick={() => toggleChatMinimized(chat.id)}>
-        <div className="flex -space-x-1">
-          {group && <Icon name="users" size={14} className="mr-1.5 text-gold" />}
+        <div className="flex items-center -space-x-1.5">
+          {group && <Icon name="users" size={14} className="mr-2.5 text-gold" />}
           {others.slice(0, group ? 5 : 3).map((t) => (
-            <Swatch key={t} color={byTag.get(t)?.color} size={13} />
+            <Flag key={t} country={byTag.get(t) ?? { tag: t }} size={group ? 18 : 22} />
           ))}
         </div>
         <span className="min-w-0 flex-1 truncate font-display text-[13px] text-parchment">{title}</span>
@@ -74,7 +80,7 @@ function ChatWindow({ chat, win, view }: { chat: Chat; win: ChatWindowState; vie
           <div className="flex min-w-0 flex-1 flex-wrap gap-x-2 gap-y-0.5">
             {chat.members.map((t) => (
               <span key={t} className="flex items-center gap-1 text-[10.5px] text-parchment/70" title={humans.has(t) ? "Player" : "AI nation"}>
-                <Swatch color={byTag.get(t)?.color} size={8} />
+                <Flag country={byTag.get(t) ?? { tag: t }} size={12} />
                 <span className="max-w-[90px] truncate">{t === me ? "You" : byTag.get(t)?.name ?? t}</span>
                 {humans.has(t) && t !== me && <Icon name="user" size={9} className="text-gold/70" />}
               </span>
@@ -104,7 +110,7 @@ function ChatWindow({ chat, win, view }: { chat: Chat; win: ChatWindowState; vie
             ))}
             {typing && (
               <div className="flex items-center gap-1.5 text-[11px] text-parchment/50 italic">
-                <Swatch color={byTag.get(typing)?.color} size={8} />
+                <Flag country={byTag.get(typing) ?? { tag: typing }} size={12} />
                 {byTag.get(typing)?.name ?? typing} is typing
                 <span className="animate-hud-pulse">…</span>
               </div>
@@ -141,7 +147,7 @@ function Message({ m, chatId, view, mine }: { m: ChatMessage; chatId: string; vi
   const c = countryMap(view.countries).get(m.from);
   return (
     <div className={`flex gap-2 ${mine ? "flex-row-reverse" : ""}`}>
-      <Swatch color={c?.color} size={10} className="mt-1" />
+      <Flag country={c ?? { tag: m.from }} size={18} className="mt-0.5" />
       <div className={`min-w-0 max-w-[85%] ${mine ? "items-end text-right" : ""} flex flex-col`}>
         <div className="flex items-baseline gap-1.5 text-[10.5px] text-parchment/45">
           <span className="font-semibold text-parchment/70">{c?.name ?? m.from}</span>
@@ -263,7 +269,7 @@ function Composer({ chat, win, view, speaker }: { chat: Chat; win: ChatWindowSta
                     onClick={() => setMembers(on ? members.filter((x) => x !== t) : [...members, t])}
                     className={`flex items-center gap-1 rounded-sm border px-1.5 py-0.5 text-[11px] ${on ? "border-gold/70 bg-gold/15 text-parchment" : "border-panel-edge/50 text-parchment/45"}`}
                   >
-                    <Swatch color={byTag.get(t)?.color} size={8} />
+                    <Flag country={byTag.get(t) ?? { tag: t }} size={12} />
                     {byTag.get(t)?.name ?? t}
                   </button>
                 );
@@ -319,6 +325,8 @@ export function ChatList({ onClose }: { onClose: () => void }) {
   const byTag = countryMap(view.countries);
   const chats = [...view.chats].sort((a, b) => b.lastTurn - a.lastTurn);
   const [conference, setConference] = useState(false);
+  const unread = useGame((s) => s.unread);
+  useEffect(requestNotificationPermission, []);
   return (
     <div className="hud-panel pointer-events-auto absolute top-[60px] left-[60px] z-30 w-[270px] p-2 animate-hud-in">
       <div className="flex items-center justify-between px-1.5 pb-1.5">
@@ -358,18 +366,21 @@ export function ChatList({ onClose }: { onClose: () => void }) {
                 }}
               >
                 {others.length > 1 ? (
-                  <span className="relative h-[13px] w-[15px] shrink-0">
-                    <Swatch color={byTag.get(others[0])?.color} size={10} className="absolute top-0 left-0" />
-                    <Swatch color={byTag.get(others[1])?.color} size={10} className="absolute right-0 bottom-0" />
+                  <span className="relative h-[16px] w-[20px] shrink-0">
+                    <Flag country={byTag.get(others[0]) ?? { tag: others[0] }} size={14} className="absolute top-0 left-0" />
+                    <Flag country={byTag.get(others[1]) ?? { tag: others[1] }} size={14} className="absolute right-0 bottom-0" />
                   </span>
                 ) : (
-                  <Swatch color={byTag.get(others[0])?.color} size={11} />
+                  <Flag country={byTag.get(others[0]) ?? { tag: others[0] }} size={16} />
                 )}
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-[12.5px] text-parchment">{others.map((t) => byTag.get(t)?.name ?? t).join(", ")}</div>
                   {last && <div className="truncate text-[10.5px] text-parchment/45">{last.text || "Proposal"}</div>}
                 </div>
                 {open && <Badge tone="amber">Reply</Badge>}
+                {!!unread[c.id] && (
+                  <span className="grid h-4 min-w-4 place-items-center rounded-full bg-fail px-1 text-[10px] font-semibold text-white">{unread[c.id]}</span>
+                )}
               </button>
             </li>
           );
@@ -409,7 +420,7 @@ function ConferenceDialog({ onClose, onConvene }: { onClose: () => void; onConve
           {picked.length === 0 && <span className="text-[11.5px] text-parchment/40 italic">No delegations invited yet.</span>}
           {picked.map((t) => (
             <button key={t} onClick={() => toggle(t)} className="flex items-center gap-1 rounded-sm border border-gold/60 bg-gold/15 px-1.5 py-0.5 text-[11px] text-parchment hover:border-fail/60" title="Remove">
-              <Swatch color={byTag.get(t)?.color} size={8} />
+              <Flag country={byTag.get(t) ?? { tag: t }} size={12} />
               {byTag.get(t)?.name ?? t}
               <Icon name="close" size={9} className="text-parchment/50" />
             </button>
@@ -422,7 +433,7 @@ function ConferenceDialog({ onClose, onConvene }: { onClose: () => void; onConve
               <li key={c.tag}>
                 <button onClick={() => toggle(c.tag)} className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-[12.5px] ${on ? "bg-gold/12 text-parchment" : "text-parchment/75 hover:bg-white/5"}`}>
                   <span className={`grid h-3.5 w-3.5 shrink-0 place-items-center rounded-sm border ${on ? "border-gold bg-gold/40" : "border-panel-edge"}`}>{on && <Icon name="check" size={10} />}</span>
-                  <Swatch color={c.color} size={10} />
+                  <Flag country={c} size={14} />
                   <span className="min-w-0 flex-1 truncate">{c.name}</span>
                   {humans.has(c.tag) && <Badge tone="grey">Player</Badge>}
                 </button>

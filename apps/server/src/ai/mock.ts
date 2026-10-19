@@ -246,7 +246,7 @@ export class MockProvider implements AiProvider {
   private used = 0;
 
   quota() {
-    return { usedToday: this.used, dailyLimit: 999_999 };
+    return { usedToday: this.used, dailyLimit: 0 };
   }
 
   async complete(req: AiRequest): Promise<AiResponse> {

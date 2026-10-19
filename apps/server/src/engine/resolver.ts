@@ -71,7 +71,7 @@ export async function runResolver(
       intents: opts.intents,
       economy,
     },
-  }, ResolverOutputSchema);
+  }, nonEmptyTurn(orders.length, days));
 
   // Open-ended jumps stop at the model's stopDate (at least one day, at most the window end).
   let end = world.end;
@@ -126,4 +126,12 @@ export async function runResolver(
     if (o) Object.assign(v, { country: o.country, text: o.text });
   }
   return { verdicts, events, end };
+}
+
+/** A turn with no news is a failed generation (seen with some fast models), not a quiet month. */
+function nonEmptyTurn(orderCount: number, days: number) {
+  const min = Math.max(orderCount, days === 0 || days >= 7 ? 3 : 1);
+  return ResolverOutputSchema.refine((o) => o.events.length >= min, {
+    message: `expected at least ${min} events covering the period and every order`,
+  });
 }

@@ -434,7 +434,7 @@ function HealthFooter({ health }: { health: Health }) {
           </span>
           <span className="h-3 w-px bg-panel-edge" />
           <span>
-            {health.data.usedToday.toLocaleString()} / {health.data.dailyLimit.toLocaleString()} requests today
+            {health.data.usedToday.toLocaleString()}{health.data.dailyLimit > 0 ? ` / ${health.data.dailyLimit.toLocaleString()}` : ""} requests today
           </span>
         </>
       )}

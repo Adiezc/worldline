@@ -10,5 +10,7 @@ export * from "./game/votes.ts";
 export * from "./game/salience.ts";
 export * from "./game/formation.ts";
 export * from "./game/colors.ts";
+export * from "./game/flags.ts";
+export * from "./game/fronts.ts";
 export * from "./game/schemas.ts";
 export * from "./protocol.ts";

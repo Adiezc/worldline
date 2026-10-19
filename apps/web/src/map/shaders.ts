@@ -253,3 +253,61 @@ void main() {
   outColor = vec4(c.rgb, c.a * a);
   outColor.rgb *= outColor.a; // premultiplied
 }`;
+
+// Front lines: a thick dark-red band with a dark rim, a soft halo and slowly marching dashes.
+export const frontVert = common + /* glsl */ `
+in vec2 aCorner;
+in vec2 aA;
+in vec2 aB;
+in float aDist;    // map px along the arc at the segment start
+uniform float uOffsetX;
+out float vSide;   // device px from the centre line
+out float vAlong;  // device px along the arc
+out float vWidth;
+out float vHalo;
+
+void main() {
+  float zoomCss = uZoom / uDpr;
+  float w = mix(3.0, 7.5, smoothstep(0.25, 3.0, zoomCss)) * uDpr;
+  float halo = 2.5 * uDpr;
+  vec2 a = (aA + vec2(uOffsetX, 0.0) - uCenter) * uZoom;
+  vec2 b = (aB + vec2(uOffsetX, 0.0) - uCenter) * uZoom;
+  vec2 dir = b - a;
+  float len = length(dir);
+  dir = len > 0.0 ? dir / len : vec2(1.0, 0.0);
+  vec2 n = vec2(-dir.y, dir.x);
+  float half_ = w * 0.5 + halo + 1.0;
+  float ext = (aCorner.x * 2.0 - 1.0) * w * 0.5;
+  vec2 p = mix(a, b, aCorner.x) + n * aCorner.y * half_ + dir * ext;
+  gl_Position = vec4(p.x / (uViewport.x * 0.5), -p.y / (uViewport.y * 0.5), 0.0, 1.0);
+  vSide = aCorner.y * half_;
+  vAlong = aDist * uZoom + aCorner.x * len + ext;
+  vWidth = w;
+  vHalo = halo;
+}`;
+
+export const frontFrag = /* glsl */ `#version 300 es
+precision highp float;
+uniform float uTime;  // seconds
+uniform float uDpr;
+in float vSide;
+in float vAlong;
+in float vWidth;
+in float vHalo;
+out vec4 outColor;
+void main() {
+  float d = abs(vSide);
+  float h = vWidth * 0.5;
+  float body = clamp(h + 0.5 - d, 0.0, 1.0);
+  // Rim darkens the outer third; the centre carries the moving dashes.
+  float rim = smoothstep(h * 0.45, h * 0.8, d);
+  float period = max(vWidth * 3.2, 14.0 * uDpr);
+  float u = fract((vAlong - uTime * 9.0 * uDpr) / period);
+  float dash = smoothstep(0.0, 0.1, u) * (1.0 - smoothstep(0.5, 0.6, u)) * (1.0 - smoothstep(h * 0.25, h * 0.55, d));
+  vec3 c = mix(vec3(0.56, 0.07, 0.06), vec3(0.2, 0.03, 0.03), rim);
+  c = mix(c, vec3(0.86, 0.26, 0.16), dash * 0.75);
+  float halo = (1.0 - smoothstep(h, h + vHalo, d)) * 0.35;
+  float a = max(body * 0.96, halo);
+  vec3 col = mix(vec3(0.08, 0.02, 0.02), c, body);
+  outColor = vec4(col * a, a); // premultiplied
+}`;

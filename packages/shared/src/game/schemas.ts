@@ -1,6 +1,7 @@
 // Zod schemas for everything the LLM returns. They double as the JSON schema we send to
 // OpenRouter (`response_format`) and as the parser that guards the rules engine.
 import { z } from "zod";
+import { cleanGenFlag } from "./flags.ts";
 
 const tag = z.string().min(2).max(8);
 /** Lists the model tends to overfill are trimmed rather than rejected (a rejection costs a repair call). */
@@ -27,6 +28,8 @@ export const EffectSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("spawnCountry"), tag: tag.optional(), name: z.string(), government: z.string(), leader: z.string(),
     provinces: ids.min(1), color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+    // Optional generated flag ("gen:<pattern>:<c1>,<c2>[,<c3>]"); anything else is dropped, not rejected.
+    flag: z.string().optional().transform((f) => cleanGenFlag(f)),
   }),
   z.object({ type: z.literal("annexCountry"), target: tag, by: tag }),
   z.object({ type: z.literal("changeLeader"), country: tag, leader: z.string(), government: z.string().optional() }),
@@ -67,6 +70,10 @@ export const DirectorOutputSchema = z.object({
   intents: z.array(z.object({
     country: tag,
     summary: z.string(),
+    /** Short news headline; the summary becomes the body. */
+    headline: z.string().optional(),
+    /** Day it happens (scheduled calendar items use their real date). */
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     /** Effects confined to the acting country (applied directly). */
     selfEffects: z.array(EffectSchema).default([]),
     /** True when the intent acts on other countries and must be adjudicated by the resolver. */

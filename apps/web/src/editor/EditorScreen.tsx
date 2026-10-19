@@ -6,7 +6,8 @@ import { getMap, setPaintHandler } from "../map/controller.ts";
 import { useMap, provinceName } from "../store.ts";
 import { DEFAULT_SCENARIO, listScenarios } from "../net/scenarios.ts";
 import { editorPath, navigate } from "../router.ts";
-import { Button, ConfirmDialog, Spinner, Swatch } from "../ui/common/ui.tsx";
+import { Button, ConfirmDialog, Spinner } from "../ui/common/ui.tsx";
+import { Flag } from "../ui/common/Flag.tsx";
 import { Icon, type IconName } from "../ui/common/Icon.tsx";
 import {
   applyTool, beginStroke, endStroke, exportJson, loadBase, redo, redrawAll, resetEditor, setTool, undo, useEditor, type Tool,
@@ -222,7 +223,7 @@ function EditorTopBar({ baseId }: { baseId: string }) {
         <div className="flex h-8 min-w-0 max-w-[170px] items-center gap-1.5 rounded border border-panel-edge/50 bg-black/25 px-2" title="Brush: the selected nation">
           {brush ? (
             <>
-              <Swatch color={brush.color} size={12} />
+              <Flag country={brush} size={16} />
               <span className="truncate text-[12px] text-parchment/85">{brush.name}</span>
             </>
           ) : (
@@ -300,7 +301,7 @@ function HoverBar() {
           <>
             <span className="max-w-[200px] truncate font-display text-[13px] text-parchment">{provinceName(hoverId)}</span>
             <span className="flex min-w-0 items-center gap-1.5 text-parchment/65">
-              {owner ? <Swatch color={owner.color} size={10} /> : <span className="h-2.5 w-2.5 rounded-sm border border-parchment/30" />}
+              {owner ? <Flag country={owner} size={14} /> : <span className="h-[10.5px] w-[14px] rounded-[2px] border border-parchment/30" />}
               <span className="truncate">{owner?.name ?? "Unowned"}</span>
             </span>
             {ctl && <span className="truncate text-[11px] text-red-300/85">occupied by {ctl.name}</span>}

@@ -85,9 +85,12 @@ export async function runDirector(
     }
     const effects = (intent.selfEffects as Effect[]).filter((e) => selfOnly(e, intent.country));
     if (!effects.length) return;
+    // Use the planner's date when it falls inside the period (e.g. a scheduled election), else spread.
+    const date = intent.date && intent.date >= state.date && intent.date <= evEnd ? intent.date : spreadDate(state.date, evEnd, i, valid.length);
     const ev = makeEvent(state, {
-      date: spreadDate(state.date, evEnd, i, valid.length),
-      headline: headlineOf(intent.summary),
+      date,
+      headline: headlineOf(intent.headline?.trim() || intent.summary),
+      body: intent.headline?.trim() ? intent.summary : undefined,
       countries: [intent.country],
       effects,
       scope: "world",

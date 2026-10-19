@@ -1,5 +1,5 @@
 import { BORDER_QUANT, type BordersData } from "@worldline/shared";
-import { fillFrag, fillVert, lineFrag, lineVert } from "./shaders.ts";
+import { fillFrag, fillVert, frontFrag, frontVert, lineFrag, lineVert } from "./shaders.ts";
 import { theme, type MapTheme } from "./theme.ts";
 
 export interface Camera {
@@ -25,6 +25,15 @@ export class MapRenderer {
   private fillVao!: WebGLVertexArrayObject;
   private lineVao!: WebGLVertexArrayObject;
   private lineCount = 0;
+  private frontProg!: WebGLProgram;
+  private frontVao!: WebGLVertexArrayObject;
+  private frontBuf!: WebGLBuffer;
+  private frontCount = 0;
+  private borders: BordersData = { arcs: [] };
+  /** Border arc indices by province pair (min * 65536 + max), built on first use. */
+  private arcsByPair: Map<number, number[]> | null = null;
+  /** Seconds; drives the front-line dash animation. */
+  time = 0;
   private provTex!: WebGLTexture;
   private provData!: Uint16Array;
   private provRows = 0;
@@ -59,6 +68,7 @@ export class MapRenderer {
 
     this.fillProg = program(gl, fillVert, fillFrag);
     this.lineProg = program(gl, lineVert, lineFrag);
+    this.frontProg = program(gl, frontVert, frontFrag);
     this.fillVao = gl.createVertexArray()!;
 
     gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
@@ -75,7 +85,76 @@ export class MapRenderer {
     this.provTex = texture(gl, gl.RG16UI, PROV_TEX_W, this.provRows, gl.RG_INTEGER, gl.UNSIGNED_SHORT, this.provData, gl.NEAREST);
     this.paletteTex = texture(gl, gl.RGBA8, PALETTE_W, 1, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(PALETTE_W * 4), gl.NEAREST);
 
+    this.borders = opts.borders;
+    this.arcsByPair = null;
     this.buildLines(opts.borders);
+    this.buildFrontVao();
+  }
+
+  /** True while front lines are drawn (the view then animates). */
+  get hasFronts() {
+    return this.frontCount > 0;
+  }
+
+  private buildFrontVao() {
+    const gl = this.gl, prog = this.frontProg;
+    const vao = gl.createVertexArray()!;
+    gl.bindVertexArray(vao);
+    const corner = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, corner);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, -1, 0, 1, 1, -1, 1, 1]), gl.STATIC_DRAW);
+    const locCorner = gl.getAttribLocation(prog, "aCorner");
+    gl.enableVertexAttribArray(locCorner);
+    gl.vertexAttribPointer(locCorner, 2, gl.FLOAT, false, 0, 0);
+    this.frontBuf = gl.createBuffer()!;
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.frontBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, 0, gl.DYNAMIC_DRAW);
+    // Per segment: A.xy, B.xy, distance along the arc at A.
+    for (const [name, size, offset] of [["aA", 2, 0], ["aB", 2, 8], ["aDist", 1, 16]] as const) {
+      const loc = gl.getAttribLocation(prog, name);
+      gl.enableVertexAttribArray(loc);
+      gl.vertexAttribPointer(loc, size, gl.FLOAT, false, 20, offset);
+      gl.vertexAttribDivisor(loc, 1);
+    }
+    gl.bindVertexArray(null);
+    this.frontVao = vao;
+  }
+
+  /** Front lines along the border arcs between these province pairs (null/empty = none). */
+  setFronts(pairs: ArrayLike<readonly [number, number]> | null) {
+    const gl = this.gl;
+    if (!this.arcsByPair) {
+      this.arcsByPair = new Map();
+      this.borders.arcs.forEach((arc, i) => {
+        if (!arc.b) return;
+        const key = Math.min(arc.a, arc.b) * 65536 + Math.max(arc.a, arc.b);
+        const list = this.arcsByPair!.get(key);
+        if (list) list.push(i);
+        else this.arcsByPair!.set(key, [i]);
+      });
+    }
+    const arcs = new Set<number>();
+    for (let i = 0; pairs && i < pairs.length; i++) {
+      const [a, b] = pairs[i];
+      for (const k of this.arcsByPair.get(Math.min(a, b) * 65536 + Math.max(a, b)) ?? []) arcs.add(k);
+    }
+    let segs = 0;
+    for (const k of arcs) segs += this.borders.arcs[k].pts.length / 2 - 1;
+    const data = new Float32Array(segs * 5);
+    let o = 0;
+    for (const k of arcs) {
+      const p = this.borders.arcs[k].pts;
+      let dist = 0;
+      for (let i = 0; i + 3 < p.length; i += 2) {
+        const ax = p[i] / BORDER_QUANT, ay = p[i + 1] / BORDER_QUANT, bx = p[i + 2] / BORDER_QUANT, by = p[i + 3] / BORDER_QUANT;
+        data.set([ax, ay, bx, by, dist], o);
+        o += 5;
+        dist += Math.hypot(bx - ax, by - ay);
+      }
+    }
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.frontBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, data, gl.DYNAMIC_DRAW);
+    this.frontCount = segs;
   }
 
   /** Instanced quads: one instance per border segment, tagged with the provinces on each side. */
@@ -206,6 +285,19 @@ export class MapRenderer {
       if (this.camera.cx + halfW < off || this.camera.cx - halfW > off + this.mapW) continue;
       gl.uniform1f(this.loc(this.lineProg, "uOffsetX"), off);
       gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this.lineCount);
+    }
+
+    // Front lines above the borders.
+    if (this.frontCount > 0) {
+      gl.useProgram(this.frontProg);
+      this.bindCommon(this.frontProg, dpr);
+      gl.uniform1f(this.loc(this.frontProg, "uTime"), this.time);
+      gl.bindVertexArray(this.frontVao);
+      for (const off of [-this.mapW, 0, this.mapW]) {
+        if (this.camera.cx + halfW < off || this.camera.cx - halfW > off + this.mapW) continue;
+        gl.uniform1f(this.loc(this.frontProg, "uOffsetX"), off);
+        gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this.frontCount);
+      }
     }
     gl.bindVertexArray(null);
   }

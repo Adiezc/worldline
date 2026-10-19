@@ -24,6 +24,7 @@ export const SERVER_PORT = 3001;
 export interface HealthResponse {
   ok: true;
   ai: "openrouter" | "mock";
+  /** Local daily cap; 0 = none (OpenRouter's own limits still apply). */
   dailyLimit: number;
   usedToday: number;
 }
@@ -123,6 +124,8 @@ export interface FormationRequest {
   /** Optional explicit regions; defaults to all regions of founder + countries. */
   provinces?: number[];
   color: string;
+  /** Optional generated flag for the new nation: "gen:<pattern>:<c1>,<c2>[,<c3>]". */
+  flag?: string;
   government: string;
 }
 

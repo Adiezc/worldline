@@ -1,10 +1,15 @@
 import { useMemo, useState } from "react";
-import type { Formable, FormationGoal, GameView } from "@worldline/shared";
+import { deriveFlag, type Formable, type FormationGoal, type GameView } from "@worldline/shared";
 import { abandonFormation, assessFormation, consentFormation, proclaimFormation, recheckFormation } from "../../game/actions.ts";
 import { countryMap } from "../../game/selectors.ts";
 import { useGame } from "../../game/store.ts";
-import { Badge, Button, CountryChip, Empty, Field, Panel, SectionTitle, Spinner, Swatch } from "../common/ui.tsx";
+import { Badge, Button, CountryChip, Empty, Field, Panel, SectionTitle, Spinner } from "../common/ui.tsx";
+import { Flag } from "../common/Flag.tsx";
+import { FlagDesigner } from "../common/FlagDesigner.tsx";
 import { Icon } from "../common/Icon.tsx";
+
+/** The flag a goal will adopt (formNation derives the same one when none was chosen). */
+const goalFlag = (g: FormationGoal) => ({ tag: g.founder, color: g.color, name: g.name, flag: g.flag ?? deriveFlag(g.color, g.plan?.name ?? g.name) });
 
 const GOVERNMENTS = ["Federal republic", "Unitary republic", "Parliamentary democracy", "Constitutional monarchy", "Confederation", "Presidential republic", "One-party state", "Absolute monarchy", "Theocracy", "Military junta"];
 
@@ -46,7 +51,7 @@ function Invitation({ goal, me }: { goal: FormationGoal; me: string }) {
   return (
     <div className="mb-3 rounded border border-partial/50 bg-partial/[0.07] px-3 py-2.5">
       <div className="flex items-center gap-2">
-        <Swatch color={goal.color} size={12} />
+        <Flag country={goalFlag(goal)} size={20} />
         <span className="font-display text-[13px] text-parchment">{goal.name}</span>
       </div>
       <p className="mt-1 text-[11.5px] leading-snug text-parchment/60">
@@ -85,7 +90,7 @@ function GoalView({ goal, view, busy, onNew }: { goal: FormationGoal; view: Game
     <div>
       <div className="rounded border border-panel-edge/50 p-3" style={{ background: `linear-gradient(110deg, ${goal.color}44, transparent 75%)` }}>
         <div className="flex items-center gap-2.5">
-          <span className="h-8 w-11 shrink-0 rounded-[2px] border border-black/60" style={{ background: goal.color }} />
+          <Flag country={goalFlag(goal)} size={44} className="ring-1 ring-gold/40" />
           <div className="min-w-0">
             <div className="font-display text-[15px] leading-tight text-parchment">{goal.name}</div>
             <div className="text-[11px] text-parchment/55">{goal.government}</div>
@@ -174,6 +179,7 @@ function Composer({ view, me, busy, onSubmitted, onCancel }: { view: GameView; m
   const [concept, setConcept] = useState("");
   const [countries, setCountries] = useState<string[]>([]);
   const [color, setColor] = useState(myColor);
+  const [flag, setFlag] = useState(() => deriveFlag(myColor, me));
   const [government, setGovernment] = useState(GOVERNMENTS[0]);
   const formables = useMemo(
     () => [...view.formables].sort((a, b) => Number(b.countries.includes(me)) - Number(a.countries.includes(me))),
@@ -213,7 +219,7 @@ function Composer({ view, me, busy, onSubmitted, onCancel }: { view: GameView; m
         onSubmit={(e) => {
           e.preventDefault();
           if (!name.trim() || !concept.trim()) return;
-          assessFormation({ name: name.trim(), concept: concept.trim(), countries, color, government });
+          assessFormation({ name: name.trim(), concept: concept.trim(), countries, color, flag, government });
           onSubmitted();
         }}
       >
@@ -227,7 +233,7 @@ function Composer({ view, me, busy, onSubmitted, onCancel }: { view: GameView; m
           <CountryMultiSelect view={view} exclude={me} value={countries} onChange={setCountries} />
         </Field>
         <div className="grid grid-cols-[auto_1fr] gap-3">
-          <Field label="Colour">
+          <Field label="Map colour">
             <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="h-[31px] w-14 cursor-pointer rounded border border-panel-edge bg-transparent p-0.5" />
           </Field>
           <Field label="Government">
@@ -237,6 +243,10 @@ function Composer({ view, me, busy, onSubmitted, onCancel }: { view: GameView; m
               ))}
             </select>
           </Field>
+        </div>
+        <div>
+          <span className="hud-label mb-1 block">Flag colours</span>
+          <FlagDesigner value={flag} onChange={setFlag} tag={me} name={name} />
         </div>
         <div className="flex justify-end gap-2 pt-1">
           {onCancel && (
@@ -300,7 +310,7 @@ function CountryMultiSelect({ view, exclude, value, onChange }: { view: GameView
                     setQ("");
                   }}
                 >
-                  <Swatch color={c.color} size={9} /> {c.name}
+                  <Flag country={c} size={13} /> {c.name}
                 </button>
               </li>
             ))}

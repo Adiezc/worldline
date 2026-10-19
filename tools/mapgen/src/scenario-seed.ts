@@ -23,11 +23,16 @@
 //   SDS 0.2, SOL 0.1, KOS (WB) — microstates and island states without armies get token coast-guard/police
 //   figures (see MIL_EST below); anything else missing falls back to 1.2% of GDP.
 //
+// Flags: "iso:" codes from Natural Earth's ISO_A2(_EH) via tools/mapgen/src/flags.ts; Somaliland and
+// Northern Cyprus have historical-style flags drawn in the client (hist:somaliland, hist:trnc); the
+// Siachen and Spratly garrison areas get generated flags.
+//
 // G7: the EU also attends G7 summits as a non-enumerated member; G20: the EU and AU are members too, but
 // organisation members must be country tags, so only the 19 countries are listed.
 
 import { join } from "node:path";
 import {
+  deriveFlag,
   relKey,
   type CalendarEntry,
   type Country,
@@ -39,6 +44,7 @@ import {
   type Treaty,
   type War,
 } from "@worldline/shared";
+import { flagFor } from "./flags.ts";
 
 const ROOT = join(import.meta.dir, "..", "..", "..");
 const SCEN = join(ROOT, "packages", "scenarios", "modern-2026");
@@ -311,6 +317,15 @@ const countries: Country[] = start.countries.map((c) => {
   if (NUCLEAR.has(tag)) country.nuclear = true;
   return country;
 });
+
+// ---------- Flags ----------
+
+const FLAG_OVERRIDES: Record<string, string> = { KOS: "iso:xk", PSX: "iso:ps", TWN: "iso:tw", SOL: "hist:somaliland", CYN: "hist:trnc" };
+for (const c of countries) {
+  const flag = (await flagFor(c.tag, FLAG_OVERRIDES)) ?? (["KAS", "PGA"].includes(c.tag) ? deriveFlag(c.color, c.tag) : undefined);
+  if (!flag) throw new Error(`no flag for ${c.tag}`);
+  c.flag = flag;
+}
 
 // ---------- Tag helpers ----------
 

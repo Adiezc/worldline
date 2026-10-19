@@ -2,7 +2,7 @@
 // shared formation module enforces consent and performs the merge.
 
 import {
-  AssessorOutputSchema, checkFormation, countryByTag, formNation, GREAT_POWERS, getRelation, humanTags, nextId,
+  AssessorOutputSchema, checkFormation, cleanGenFlag, countryByTag, formNation, GREAT_POWERS, getRelation, humanTags, nextId,
   type FormationGoal, type FormationRequest, type GameState,
 } from "@worldline/shared";
 import type { EngineDeps } from "./api.ts";
@@ -50,6 +50,7 @@ function newGoal(state: GameState, founder: string, req: FormationRequest): Form
     name,
     concept: req.concept.trim().slice(0, 600),
     color: /^#[0-9a-fA-F]{6}$/.test(req.color) ? req.color : f.color,
+    flag: cleanGenFlag(req.flag),
     government: req.government.trim().slice(0, 80) || f.government,
     countries,
     provinces,

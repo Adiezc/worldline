@@ -1,5 +1,6 @@
 // Owns the single GameSocket and routes every ServerMessage into the store.
 import type { ClientMessage, ServerMessage } from "@worldline/shared";
+import { notifyNewMessages } from "./chatNotify.ts";
 import { GameSocket } from "../net/socket.ts";
 import { storage } from "../net/storage.ts";
 import { auth } from "../net/auth.ts";
@@ -68,6 +69,7 @@ function handleMessage(msg: ServerMessage) {
       break;
     }
     case "view": {
+      notifyNewMessages(useGame.getState().view, msg.view);
       applyView(msg.view);
       // A reply from whoever was typing ends the typing indicator.
       const typing = { ...useGame.getState().typing };

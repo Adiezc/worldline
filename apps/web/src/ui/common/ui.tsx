@@ -5,6 +5,7 @@ import { Icon, type IconName } from "./Icon.tsx";
 import { useGame } from "../../game/store.ts";
 import { countryMap } from "../../game/selectors.ts";
 import { selectCountry } from "../../game/actions.ts";
+import { Flag } from "./Flag.tsx";
 
 export function Panel({
   title,
@@ -107,6 +108,7 @@ export function Bar({ value, max = 100, color, className = "" }: { value: number
   );
 }
 
+/** Plain colour square, for legends and other non-country uses (countries get a Flag). */
 export function Swatch({ color, size = 12, className = "" }: { color?: string; size?: number; className?: string }) {
   return (
     <span
@@ -116,7 +118,13 @@ export function Swatch({ color, size = 12, className = "" }: { color?: string; s
   );
 }
 
-/** Country name with its colour; click selects the country. */
+/** Flag of the country with this tag in the current game (placeholder when unknown). */
+export function TagFlag({ tag, size, className }: { tag: string; size?: number; className?: string }) {
+  const c = useGame((s) => (s.view ? countryMap(s.view.countries).get(tag) : undefined));
+  return <Flag country={c ?? { tag }} size={size} className={className} />;
+}
+
+/** Country name with its flag; click selects the country. */
 export function CountryChip({ tag, onClick, small }: { tag: string; onClick?: () => void; small?: boolean }) {
   const c = useGame((s) => (s.view ? countryMap(s.view.countries).get(tag) : undefined));
   return (
@@ -129,7 +137,7 @@ export function CountryChip({ tag, onClick, small }: { tag: string; onClick?: ()
       className={`inline-flex max-w-full items-center gap-1.5 rounded-sm border border-panel-edge/50 bg-black/20 text-parchment/85 hover:border-gold/60 hover:text-parchment ${small ? "px-1.5 py-0 text-[10.5px]" : "px-2 py-0.5 text-[11.5px]"}`}
       title={c?.name ?? tag}
     >
-      <Swatch color={c?.color} size={small ? 8 : 9} />
+      <Flag country={c ?? { tag }} size={small ? 12 : 14} title={false} />
       <span className="truncate">{c?.name ?? tag}</span>
     </button>
   );

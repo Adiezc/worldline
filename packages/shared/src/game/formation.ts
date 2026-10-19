@@ -3,6 +3,7 @@
 
 import type { MapIndex } from "./mapIndex.ts";
 import { removeCountry } from "./engine.ts";
+import { cleanGenFlag, deriveFlag } from "./flags.ts";
 import { countryByTag, countryIndex, getRelation, humanTags, relKey, type FormationGoal, type GameState } from "./state.ts";
 
 export interface FormationCheck {
@@ -71,6 +72,7 @@ export function formNation(state: GameState, map: MapIndex, goal: FormationGoal)
 
   founder.name = goal.plan?.name ?? goal.name;
   founder.color = goal.color;
+  founder.flag = cleanGenFlag(goal.flag) ?? deriveFlag(goal.color, goal.plan?.name ?? goal.name);
   founder.government = goal.government;
   founder.population = Math.round(pop * 100) / 100;
   // Population-weighted mean. (Dividing by max(1, pop) wrongly shrank it for unions under 1M people.)

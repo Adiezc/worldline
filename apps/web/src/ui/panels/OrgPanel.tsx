@@ -4,7 +4,8 @@ import { proposeResolution, selectOrg, setMapMode, voteResolution } from "../../
 import { fmtShortDate } from "../../game/format.ts";
 import { countryMap, ORG_KIND_LABELS, RESOLUTION_LABELS, RULE_LABELS } from "../../game/selectors.ts";
 import { useGame } from "../../game/store.ts";
-import { Badge, Bar, Button, CountryChip, Empty, Field, Panel, SectionTitle, Swatch } from "../common/ui.tsx";
+import { Badge, Bar, Button, CountryChip, Empty, Field, Panel, SectionTitle } from "../common/ui.tsx";
+import { Flag } from "../common/Flag.tsx";
 import { Icon } from "../common/Icon.tsx";
 
 export function OrgPanel({ onClose }: { onClose: () => void }) {
@@ -264,7 +265,7 @@ function PastResolution({ r }: { r: Resolution }) {
                 className="inline-flex items-center gap-1 rounded-sm border px-1 text-[9.5px] text-parchment/75"
                 style={{ borderColor: VOTE_COLORS[v] + "aa", background: VOTE_COLORS[v] + "1f" }}
               >
-                <Swatch color={c?.color} size={6} />
+                <Flag country={c ?? { tag }} size={11} title={false} />
                 {tag}
               </span>
             );

@@ -1,8 +1,9 @@
-// Keeps the WebGL map in step with the store: palette (map mode), ownership, labels, playback,
-// and the era theme. Stands aside while the scenario editor owns the map.
+// Keeps the WebGL map in step with the store: palette (map mode), ownership, labels, front lines,
+// playback and the era theme. Stands aside while the scenario editor owns the map.
 import { useCallback, useEffect, useRef } from "react";
 import { getMap } from "../map/controller.ts";
 import { useMap } from "../store.ts";
+import { pushFronts } from "./fronts.ts";
 import { computePalette } from "./mapModes.ts";
 import { focusTag } from "./selectors.ts";
 import { useGame } from "./store.ts";
@@ -24,6 +25,8 @@ export function MapSync() {
   const view = useGame((s) => s.view);
   const hold = useGame((s) => s.mapHold);
   const mode = useGame((s) => s.mapMode);
+  const showFronts = useGame((s) => s.showFronts);
+  const meta = useMap((s) => s.meta);
   const focus = useGame(focusTag);
   const orgId = useGame((s) => s.selectedOrg ?? (s.view && s.view.you.country ? s.view.organizations.find((o) => o.members.includes(s.view!.you.country!))?.id ?? null : null));
   const labelled = useRef<{ owners: ArrayLike<number> | null; names: string }>({ owners: null, names: "" });
@@ -72,6 +75,11 @@ export function MapSync() {
     }
   }, [ready, editing, owners, controllers, hold, names]);
 
+  // Front lines + troop counters for the map as drawn (runs after the ownership upload above).
+  useEffect(() => {
+    if (ready) pushFronts();
+  }, [ready, editing, owners, controllers, hold, countries, wars, showFronts, meta]);
+
   const forgetLabels = useCallback(() => {
     labelled.current.owners = null;
   }, []);
@@ -94,6 +102,7 @@ function PlaybackRunner({ onLabelsChanged }: { onLabelsChanged: () => void }) {
         map.setOwnership(turnBase.owners, turnBase.controllers);
         map.recomputeLabels(turnBase.owners);
         onLabelsChanged();
+        pushFronts();
       }
     } else if (index < playback.events.length) {
       const ev = playback.events[index];
@@ -101,6 +110,7 @@ function PlaybackRunner({ onLabelsChanged }: { onLabelsChanged: () => void }) {
         for (const d of ev.mapDiff) map.setProvince(d.province, d.owner, d.controller);
         map.recomputeLabels(map.owners());
         onLabelsChanged();
+        pushFronts();
         map.focusOn(ev.mapDiff.map((d) => d.province), { minZoom: 0.45, maxZoom: 0.95, duration: 900 });
       }
     }

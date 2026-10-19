@@ -1,5 +1,7 @@
-// OpenRouter chat-completions client with a 20 requests/minute limiter, retries for 429/5xx and
-// a persisted daily counter (free tier: 50 requests/day, 1000 with purchased credits).
+// OpenRouter chat-completions client: a 20 requests/minute limiter, retries for 429/5xx, model
+// fallback in batches (OpenRouter's `models` array takes at most 3), and a persisted daily counter
+// that drives the usage meter. The counter only blocks when OPENROUTER_DAILY_LIMIT is set > 0;
+// OpenRouter enforces its own free-model cap (50/day, 1000/day with credits) either way.
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -10,6 +12,8 @@ const PER_MINUTE = 20;
 const MAX_RETRIES = 2;
 const DEFAULT_USAGE_FILE = join(import.meta.dir, "..", "..", "data", "usage.json");
 const LOG_SIZE = 200;
+/** OpenRouter rejects a `models` array longer than this. */
+const MAX_MODELS_PER_REQUEST = 3;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const today = () => new Date().toISOString().slice(0, 10);
@@ -18,6 +22,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 class DailyCounter {
   private counts: Record<string, number> = {};
 
+  /** `limit` 0 = count only, never block. */
   constructor(private file: string, readonly limit: number) {
     try {
       if (existsSync(file)) this.counts = JSON.parse(readFileSync(file, "utf8"));
@@ -32,10 +37,10 @@ class DailyCounter {
 
   take() {
     const day = today();
-    if (this.used() >= this.limit) {
+    if (this.limit > 0 && this.used() >= this.limit) {
       throw new Error(
         `Daily OpenRouter limit reached (${this.limit} requests on ${day} UTC). It resets at midnight UTC; ` +
-        "if your account has credits, set OPENROUTER_DAILY_LIMIT=1000.",
+        "raise or unset OPENROUTER_DAILY_LIMIT to allow more.",
       );
     }
     this.counts[day] = this.used() + 1;
@@ -88,7 +93,7 @@ export class OpenRouterProvider implements AiProvider {
   private onCall?: (info: AiCallInfo) => void;
 
   constructor(private apiKey: string, opts: { dailyLimit?: number; usageFile?: string; onCall?: (info: AiCallInfo) => void } = {}) {
-    this.daily = new DailyCounter(opts.usageFile ?? DEFAULT_USAGE_FILE, opts.dailyLimit ?? 50);
+    this.daily = new DailyCounter(opts.usageFile ?? DEFAULT_USAGE_FILE, opts.dailyLimit ?? 0);
     this.onCall = opts.onCall;
   }
 
@@ -116,9 +121,30 @@ export class OpenRouterProvider implements AiProvider {
     }
   }
 
+  /** Try the chain in batches of up to 3 models; OpenRouter falls back within a batch, we fall back between batches. */
   private async request(req: AiRequest, settings: { modelChain: string[]; reasoningEffort: string }, tries: { n: number }): Promise<AiResponse> {
     const chain = settings.modelChain.filter(Boolean);
     if (!chain.length) throw new Error("No model configured.");
+    const errors: string[] = [];
+    for (let i = 0; i < chain.length; i += MAX_MODELS_PER_REQUEST) {
+      const batch = chain.slice(i, i + MAX_MODELS_PER_REQUEST);
+      try {
+        return await this.requestBatch(req, batch, settings.reasoningEffort, tries);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        // Running out of the local daily allowance is not something a later batch can fix.
+        if (msg.startsWith("Daily OpenRouter limit")) throw err;
+        errors.push(`${batch.join(", ")}: ${msg}`);
+      }
+    }
+    throw new Error(errors.length > 1 ? `all models failed. ${errors.join(" | ")}` : errors[0]);
+  }
+
+  /** Models that rejected `reasoning: {enabled:false}`; they get minimal reasoning from then on. */
+  private needsReasoning = new Set<string>(["minimax/minimax-m3.1-flash:free"]);
+
+  private async requestBatch(req: AiRequest, chain: string[], reasoningEffort: string, tries: { n: number }): Promise<AiResponse> {
+    let effort = (!reasoningEffort || reasoningEffort === "none") && this.needsReasoning.has(chain[0]) ? "low" : reasoningEffort;
     let useSchema = req.jsonSchema !== undefined;
     let lastError = "unknown error";
 
@@ -136,11 +162,14 @@ export class OpenRouterProvider implements AiProvider {
             "HTTP-Referer": "http://localhost:5173",
             "X-Title": "Worldline",
           },
-          body: JSON.stringify(this.body(req, chain, settings.reasoningEffort, useSchema)),
-          signal: AbortSignal.timeout(TIMEOUT_MS[req.kind] ?? 120_000),
+          body: JSON.stringify(this.body(req, chain, effort, useSchema)),
+          signal: AbortSignal.timeout(timeoutFor(req.kind, effort)),
         });
       } catch (err) {
-        lastError = `network error: ${err instanceof Error ? err.message : String(err)}`;
+        const msg = err instanceof Error ? err.message : String(err);
+        // A stalled model will stall again: hand over to the next batch instead of re-waiting.
+        if (/timed out|timeout|abort/i.test(msg)) throw new Error(`timed out after ${Math.round(timeoutFor(req.kind, effort) / 1000)}s`);
+        lastError = `network error: ${msg}`;
         if (attempt < MAX_RETRIES) { await sleep(backoff(attempt)); continue; }
         break;
       }
@@ -152,6 +181,13 @@ export class OpenRouterProvider implements AiProvider {
       if (!res.ok || json?.error) {
         const status = res.ok ? Number(json?.error?.code) || 502 : res.status;
         lastError = `OpenRouter ${status}: ${describe(json, raw)}`;
+        // Some models (e.g. MiniMax's free endpoint) refuse to run with reasoning disabled.
+        if (status === 400 && (!effort || effort === "none") && /reasoning is mandatory|cannot be disabled/i.test(lastError)) {
+          effort = "low";
+          this.needsReasoning.add(chain[0]);
+          attempt--;
+          continue;
+        }
         // Some free endpoints reject structured output; retry once asking for plain JSON.
         if (status === 400 && useSchema && /response_format|json_schema|structured/i.test(lastError)) {
           useSchema = false;
@@ -206,7 +242,14 @@ export class OpenRouterProvider implements AiProvider {
 }
 
 /** Free models generate slowly; the two big turn calls write thousands of tokens. */
-const TIMEOUT_MS: Partial<Record<AiRequest["kind"], number>> = { resolver: 480_000, director: 300_000, assessor: 240_000, votes: 180_000 };
+const TIMEOUT_MS: Partial<Record<AiRequest["kind"], number>> = { resolver: 240_000, director: 180_000, assessor: 150_000, votes: 120_000 };
+
+/** Per-attempt limit; thinking models get extra time. A timeout moves on to the next models. */
+function timeoutFor(kind: AiRequest["kind"], effort: string) {
+  const base = TIMEOUT_MS[kind] ?? 90_000;
+  const extra = effort === "high" ? 2 : effort === "medium" ? 1.5 : effort === "low" ? 1.25 : 1;
+  return Math.round(base * extra);
+}
 
 const REASONING_HEADROOM: Record<string, number> = { low: 4000, medium: 8000, high: 16000 };
 

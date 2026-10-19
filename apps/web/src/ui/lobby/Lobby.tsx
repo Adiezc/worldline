@@ -4,7 +4,8 @@ import { countryMap } from "../../game/selectors.ts";
 import { useGame } from "../../game/store.ts";
 import { fmtDate, fmtGdp, fmtPop } from "../../game/format.ts";
 import { gameUrl, navigate } from "../../router.ts";
-import { Badge, Button, Panel, SectionTitle, Swatch } from "../common/ui.tsx";
+import { Badge, Button, Panel, SectionTitle } from "../common/ui.tsx";
+import { Flag } from "../common/Flag.tsx";
 import { SettingsForm } from "./SettingsForm.tsx";
 
 export function Lobby() {
@@ -54,7 +55,7 @@ export function Lobby() {
                   <div className="flex items-center gap-1.5 truncate text-[11.5px] text-parchment/55">
                     {c ? (
                       <>
-                        <Swatch color={c.color} size={9} /> {c.name}
+                        <Flag country={c} size={13} /> {c.name}
                       </>
                     ) : (
                       <span className="italic">Spectating</span>
@@ -72,7 +73,7 @@ export function Lobby() {
             <SectionTitle>Your nation</SectionTitle>
             <div className="rounded border border-panel-edge/50 p-3" style={{ background: `linear-gradient(90deg, ${myCountry.color}33, transparent)` }}>
               <div className="flex items-center gap-2">
-                <Swatch color={myCountry.color} size={22} />
+                <Flag country={myCountry} size={40} className="ring-1 ring-gold/40" />
                 <div className="min-w-0">
                   <div className="truncate font-display text-[15px] text-parchment">{myCountry.name}</div>
                   <div className="truncate text-[11px] text-parchment/55">

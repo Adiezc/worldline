@@ -43,8 +43,20 @@ export class Room {
       map: this.deps.map,
       seed: this.deps.seed(this.state.scenarioId),
       ai: this.deps.ai,
-      onProgress: (stage, detail) => this.broadcast({ t: "progress", stage, detail }),
+      onProgress: (stage, detail) => {
+        this.log("info", `turn ${this.state.turn}: ${stage}${detail ? ` (${detail})` : ""}`);
+        this.broadcast({ t: "progress", stage, detail });
+      },
+      onValidation: (e) => this.log(e.outcome === "failed" ? "error" : "warn", `AI ${e.kind} output ${e.outcome}: ${e.error}`),
     };
+  }
+
+  /** Server-side trace: errors players see as toasts also land in the terminal. */
+  log(level: "info" | "warn" | "error", message: string) {
+    const line = `[${new Date().toTimeString().slice(0, 8)}] [game ${this.state.id}] ${message}`;
+    if (level === "error") console.error(line);
+    else if (level === "warn") console.warn(line);
+    else console.log(line);
   }
 
   // ---------------------------------------------------------------------------------------
@@ -193,7 +205,10 @@ export class Room {
     const me = s.players.find((p) => p.id === ws.data.playerId);
     if (!me) return this.send(ws, { t: "error", message: "Join the game first." });
     const deps = this.engineDeps();
-    const fail = (message: string) => this.send(ws, { t: "error", message });
+    const fail = (message: string) => {
+      this.log("warn", `${me.name} (${me.country ?? "spectator"}) → ${msg.t}: ${message}`);
+      this.send(ws, { t: "error", message });
+    };
     const myTag = me.country;
 
     switch (msg.t) {
@@ -272,6 +287,7 @@ export class Room {
             this.send(ws, { t: "ai", reqId: msg.reqId, kind: "brainstorm", ok: true, ideas });
           }
         } catch (e) {
+          this.log("error", `${msg.kind} for ${myTag} failed: ${errorText(e)}`);
           this.send(ws, { t: "ai", reqId: msg.reqId, kind: msg.kind, ok: false, error: errorText(e) });
         }
         this.pushUsage();
@@ -338,6 +354,7 @@ export class Room {
           );
           this.send(ws, { t: "ai", reqId: msg.reqId, kind: "formation", ok: true, formationId: goal.id });
         } catch (e) {
+          this.log("error", `formation assessment for ${myTag} failed: ${errorText(e)}`);
           this.send(ws, { t: "ai", reqId: msg.reqId, kind: "formation", ok: false, error: errorText(e) });
         }
         return this.changed();
@@ -380,6 +397,7 @@ export class Room {
         const snap = Number.isFinite(turn) ? loadSnapshot(s.id, turn) : null;
         if (!snap) return fail("There is no saved turn to rewind to.");
         this.rewind(snap);
+        this.log("info", `${me.name} rewound to turn ${turn} (${snap.date})`);
         this.broadcast({ t: "toast", level: "info", text: `Rewound to ${snap.date} (turn ${turn})` });
         return this.changed();
       }
@@ -394,6 +412,7 @@ export class Room {
         this.armTimer();
         saveGame(s);
         const chosen = r.events.at(-1);
+        this.log("info", `${me.name} intervened: time stopped on ${r.date}${chosen ? ` at "${chosen.headline}"` : ""}, ${r.cut} later events undone`);
         this.broadcast({
           t: "toast", level: "info",
           text: `Time stopped on ${r.date}${chosen ? ` at "${chosen.headline}"` : ""}; ${r.cut} later event${r.cut === 1 ? "" : "s"} undone.`,
@@ -466,7 +485,12 @@ export class Room {
     try {
       saveSnapshot(s);
       this.snapEvents = undefined;
+      const started = Date.now();
+      const orderCount = Object.values(s.orders).flat().length;
+      this.log("info", `resolving turn ${s.turn} (${s.date}, ${orderCount} orders, jump ${s.settings.jumpDays}d, reasoning ${s.settings.reasoningEffort})`);
       const result = await engine.runTurn(s, this.engineDeps());
+      const rejected = result.events.reduce((n, e) => n + (e.rejected?.length ?? 0), 0);
+      this.log("info", `turn done in ${Math.round((Date.now() - started) / 1000)}s: ${result.events.length} events, ${result.verdicts.map((v) => `${v.orderId.slice(0, 6)}=${v.outcome}`).join(" ")}, ${rejected} effects rejected`);
       s.phase = "orders";
       this.armTimer();
       saveGame(s);
@@ -475,6 +499,7 @@ export class Room {
         this.send(ws, { t: "turn", result: { ...result, verdicts: result.verdicts.filter((v) => !v.country || v.country === tag) } });
       }
     } catch (e) {
+      this.log("error", `turn ${s.turn} failed: ${e instanceof Error ? e.stack ?? e.message : String(e)}`);
       s.phase = "orders";
       for (const p of s.players) p.ready = false;
       this.armTimer();

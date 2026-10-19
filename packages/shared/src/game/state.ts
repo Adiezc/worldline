@@ -27,6 +27,15 @@ export interface Country {
   alive: boolean;
   /** Nuclear-armed; informs AI deterrence reasoning. */
   nuclear?: boolean;
+  /**
+   * Flag reference, rendered by the client:
+   *   "iso:fr"                    real flag by ISO 3166-1 alpha-2 code
+   *   "hist:<id>"                 historical flag shipped with the client (e.g. "hist:su")
+   *   "gen:<pattern>:<c1>,<c2>[,<c3>]"  generated flag; pattern = vertical | horizontal |
+   *                               bicolor-v | bicolor-h | nordic | canton | diagonal | triband-star
+   * Missing → the client generates one from the country colour.
+   */
+  flag?: string;
 }
 
 export type TreatyType = "alliance" | "defensive" | "trade" | "nonaggression" | "vassal" | "customs_union";
@@ -117,7 +126,7 @@ export type Effect =
   | { type: "declareWar"; attackers: string[]; defenders: string[]; goal: string; name?: string }
   | { type: "joinWar"; warId: string; country: string; side: "attackers" | "defenders" }
   | { type: "makePeace"; warId: string; terms: string }
-  | { type: "spawnCountry"; tag?: string; name: string; government: string; leader: string; provinces: number[]; color?: string }
+  | { type: "spawnCountry"; tag?: string; name: string; government: string; leader: string; provinces: number[]; color?: string; flag?: string }
   | { type: "annexCountry"; target: string; by: string }
   | { type: "changeLeader"; country: string; leader: string; government?: string }
   | { type: "joinOrg"; orgId: string; country: string }
@@ -207,6 +216,8 @@ export interface FormationGoal {
   name: string;
   concept: string;
   color: string;
+  /** Generated flag ("gen:…") the new nation adopts; derived from `color` when missing. */
+  flag?: string;
   government: string;
   /** Countries whose territory is involved. */
   countries: string[];
@@ -287,7 +298,14 @@ export const DEFAULT_SETTINGS: GameSettings = {
   aiBehaviour: "plausible",
   jumpDays: 30,
   turnTimer: 0,
-  modelChain: ["nvidia/nemotron-3.5-super-vl:free", "nvidia/nemotron-3-super-120b-a12b:free"],
+  // Free models first, fastest first (a benchmarked turn: MiniMax ~27 s, Nemotron 3 Super ~53 s,
+  // Nemotron 3.5 VL ~100 s); a cheap paid model last so a turn never fails when the free ones are busy.
+  modelChain: [
+    "minimax/minimax-m3.1-flash:free",
+    "nvidia/nemotron-3-super-120b-a12b:free",
+    "nvidia/nemotron-3.5-super-vl:free",
+    "deepseek/deepseek-v4.1-flash-1017",
+  ],
   // Free models are slow; thinking roughly doubles turn time. Hosts can opt in from the lobby.
   reasoningEffort: "none",
   economyMode: false,

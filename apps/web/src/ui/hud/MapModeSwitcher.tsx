@@ -4,6 +4,7 @@ import { countryMap, focusTag } from "../../game/selectors.ts";
 import { useGame } from "../../game/store.ts";
 import { Swatch } from "../common/ui.tsx";
 import { Icon, type IconName } from "../common/Icon.tsx";
+import { FrontsToggle } from "./FrontsToggle.tsx";
 
 const ICONS: Record<MapMode, IconName> = {
   political: "map",
@@ -54,6 +55,7 @@ export function MapModeSwitcher() {
           )}
         </div>
       )}
+      <FrontsToggle />
       <div className="hud-panel flex gap-0.5 p-1">
         {MAP_MODES.map((m) => (
           <button

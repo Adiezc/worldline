@@ -1,7 +1,8 @@
 // Left editor column: scenario details and the searchable list of nations.
 import { useMemo, useState } from "react";
 import type { EraTheme } from "@worldline/shared";
-import { Field, Swatch } from "../ui/common/ui.tsx";
+import { Field } from "../ui/common/ui.tsx";
+import { Flag } from "../ui/common/Flag.tsx";
 import { Icon } from "../ui/common/Icon.tsx";
 import { getMap } from "../map/controller.ts";
 import { addCountry, selectCountryIdx, updateMeta, useEditor } from "./editorStore.ts";
@@ -99,7 +100,7 @@ export function NationsPanel() {
               title="Click to select · double-click to find on the map"
               className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left ${i === selected ? "bg-gold/15 ring-1 ring-gold/50" : "hover:bg-white/[0.04]"}`}
             >
-              <Swatch color={c.color} size={11} />
+              <Flag country={c} size={16} />
               <span className={`min-w-0 flex-1 truncate text-[12.5px] ${n === 0 ? "text-parchment/40 italic" : "text-parchment/90"}`}>{c.name}</span>
               <span className="w-9 text-right text-[10px] text-parchment/35">{c.tag}</span>
               <span className="w-8 text-right text-[11px] text-parchment/55 tabular-nums" title={`${n} region${n === 1 ? "" : "s"}`}>

@@ -17,6 +17,11 @@
 //     Algeria's post-independence crisis) are reflected in low values. No interstate war is open on the start
 //     date; war exhaustion records recent or ongoing colonial and civil wars.
 //
+// Flags: polities that still exist use today's flag ("iso:", via Natural Earth ISO codes) unless their
+// 1962 flag differed notably; those, and defunct states, use historical flags drawn in the client
+// (apps/web/src/flags/historical.ts). Czechoslovakia's flag is today's Czech flag; Libya's 1951 and
+// Syria's 1961–63 flags are the ones in use today.
+//
 // Organisation judgement calls:
 //   - UN: 108 seats on 1 Oct 1962; Byelorussia and Ukraine sit separately but are part of SOV on this map, so
 //     106 tags are members. Algeria (admitted 8 Oct) and Kuwait (Soviet veto 1961) are candidates.
@@ -42,6 +47,7 @@ import {
   type Treaty,
   type War,
 } from "@worldline/shared";
+import { flagFor } from "./flags.ts";
 
 const ROOT = join(import.meta.dir, "..", "..", "..");
 const MAP = join(ROOT, "packages", "mapdata", "public", "map");
@@ -319,6 +325,22 @@ const countries: Country[] = TAGS.map((tag, i) => {
   if (NUCLEAR.has(tag)) c.nuclear = true;
   return c;
 });
+
+// ---------- Flags (October 1962) ----------
+
+const FLAGS_1962: Record<string, string> = {
+  SOV: "hist:su", DDR: "hist:ddr", YUG: "hist:yu", CSK: "iso:cz", RVN: "hist:rvn", YAR: "hist:yar", RNY: "hist:rny",
+  EGY: "hist:uar", IRN: "hist:ir-lion", IRQ: "hist:iq1959", AFG: "hist:af-kingdom", MMR: "hist:mm1948",
+  COD: "hist:cd1960", LAO: "hist:la-kingdom", RWA: "hist:rw1962", ETH: "hist:et-imperial", CAN: "hist:ca-ensign",
+  ZAF: "hist:za1928", BFA: "hist:upper-volta", BDI: "hist:bi1962", CMR: "hist:cm1961", MRT: "hist:mr1959",
+  TZA: "hist:tanganyika", SDN: "hist:sd1956", OMN: "hist:muscat", BGR: "hist:bg1948", ROU: "hist:ro1952",
+  ESP: "hist:es1945", GRC: "hist:gr-cross", TWN: "iso:tw", LBY: "iso:ly", SYR: "iso:sy",
+};
+for (const c of countries) {
+  const flag = await flagFor(c.tag, FLAGS_1962);
+  if (!flag) throw new Error(`no flag for ${c.tag}`);
+  c.flag = flag;
+}
 
 // ---------- Hand data ----------
 
