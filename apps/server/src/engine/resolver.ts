@@ -2,6 +2,7 @@
 // shared validator (applyEvent), so the model can be wrong without breaking the rules.
 
 import {
+  atWar,
   addDays, applyEvent, countryByTag, daysBetween, humanTags, ResolverOutputSchema,
   type Effect, type GameEvent, type GameState, type Order, type OrderVerdict, type Tiers, type TurnContext,
 } from "@worldline/shared";
@@ -106,6 +107,8 @@ export async function runResolver(
       effects: d.effects as Effect[],
     });
     applyEvent(state, deps.map, ev, opts.ctx);
+    const unwarred = hostilitiesWithoutWar(state, ev);
+    if (unwarred) deps.onValidation?.({ kind: "resolver", outcome: "invalid", error: `"${ev.headline}" reads like fighting between ${unwarred} but no war is declared` });
     state.events.push(ev);
     events.push(ev);
   }
@@ -134,4 +137,19 @@ function nonEmptyTurn(orderCount: number, days: number) {
   return ResolverOutputSchema.refine((o) => o.events.length >= min, {
     message: `expected at least ${min} events covering the period and every order`,
   });
+}
+
+const COMBAT = /\b(invad\w*|invasion|offensive|incursion|raid(s|ed)?|shell(s|ed|ing)|air ?strikes?|missile strikes?|bombard\w*|troops? (cross|advance|attack)\w*|armed clash\w*)\b/i;
+
+/** Safety net for the prompt rule: combat narrated between two states that are not at war. */
+function hostilitiesWithoutWar(state: GameState, ev: GameEvent) {
+  if (!COMBAT.test(`${ev.headline} ${ev.body}`)) return null;
+  if (ev.effects.some((e) => e.type === "declareWar" || e.type === "joinWar")) return null;
+  const tags = ev.countries.filter((t) => countryByTag(state, t)?.alive);
+  for (const a of tags) for (const b of tags) if (a < b && !atWar(state, a, b)) {
+    // Only flag pairs that are hostile enough for fighting to be plausible.
+    const key = `${a}|${b}`;
+    if ((state.relations[key] ?? 0) <= -40) return `${a} and ${b}`;
+  }
+  return null;
 }

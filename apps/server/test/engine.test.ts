@@ -337,3 +337,58 @@ test("callJson repairs invalid output once", async () => {
   expect(state.usage.failures).toBe(1);
   expect(state.usage.requests).toBe(2);
 });
+
+describe("turn latency and long-game upkeep", () => {
+  const seed = seeds[0][1];
+
+  test("a Director plan computed while players write orders is used instead of a second planning call", async () => {
+    const ai = new SpyProvider();
+    const state = newGame(seed, [["p1", "FRA"]]);
+    const pre = engine.planDirector(state, depsFor(seed, ai));
+    await pre.plan;
+    expect(ai.kinds).toEqual(["director"]);
+    await engine.runTurn(state, { ...depsFor(seed, ai), directorPlan: pre });
+    expect(ai.kinds.filter((k) => k === "director")).toHaveLength(1);
+    expect(ai.kinds).toContain("resolver");
+  });
+
+  test("a stale plan (different jump length) is ignored and the turn plans live", async () => {
+    const ai = new SpyProvider();
+    const state = newGame(seed, [["p1", "FRA"]]);
+    const pre = engine.planDirector(state, depsFor(seed, ai));
+    state.settings.jumpDays = 90;
+    await engine.runTurn(state, { ...depsFor(seed, ai), directorPlan: pre });
+    expect(ai.kinds.filter((k) => k === "director")).toHaveLength(2);
+  });
+
+  test("the verdict history keeps every turn's verdicts with turn, date and order text", async () => {
+    const state = newGame(seed, [["p1", "FRA"]]);
+    for (let t = 0; t < 3; t++) {
+      state.orders = { p1: [{ id: `o${t}`, playerId: "p1", country: "FRA", text: `Order number ${t}` }] };
+      await engine.runTurn(state, depsFor(seed));
+    }
+    expect(state.verdictLog?.map((v) => [v.orderId, v.turn])).toEqual([["o0", 1], ["o1", 2], ["o2", 3]]);
+    expect(state.verdictLog?.[1].text).toBe("Order number 1");
+    expect(state.verdictLog?.[1].date).toBe("2026-01-31");
+  });
+
+  test("memory compaction folds old chronicles into one entry, with or without the AI", async () => {
+    const { compactMemory } = await import("../src/engine/consolidate.ts");
+    const fill = (state: GameState) => {
+      state.memory = Array.from({ length: 8 }, (_, i) => ({ upToTurn: (i + 1) * 5, text: `Chronicle ${i + 1}. Many things happened in this stretch.` }));
+    };
+    const state = newGame(seed);
+    fill(state);
+    await compactMemory(state, depsFor(seed));
+    expect(state.memory).toHaveLength(4);
+    expect(state.memory[0].text.startsWith("Earlier history:")).toBe(true);
+    expect(state.memory[0].upToTurn).toBe(25);
+    expect(state.memory.at(-1)!.upToTurn).toBe(40);
+
+    const offline = newGame(seed);
+    fill(offline);
+    await compactMemory(offline, depsFor(seed, failing));
+    expect(offline.memory).toHaveLength(4);
+    expect(offline.memory[0].text).toContain("Chronicle 1.");
+  });
+});

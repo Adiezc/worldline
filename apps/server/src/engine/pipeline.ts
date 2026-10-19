@@ -8,7 +8,7 @@ import {
 } from "@worldline/shared";
 import type { EngineDeps } from "./api.ts";
 import { consolidate, needsConsolidation } from "./consolidate.ts";
-import { runDirector, type NpcIntent } from "./director.ts";
+import { planDirector, runDirector, type NpcIntent } from "./director.ts";
 import { makeEvent } from "./game.ts";
 import { runResolver } from "./resolver.ts";
 import { runVotes } from "./votes.ts";
@@ -20,6 +20,19 @@ export async function runTurn(state: GameState, deps: EngineDeps): Promise<TurnR
   Object.assign(state, work);
   deps.onProgress?.("done");
   return result;
+}
+
+/**
+ * Kick off the Director for the turn that just opened. It runs on a copy of the state, so players
+ * can keep chatting and ordering meanwhile; runTurn uses it if the turn, date and jump still match.
+ */
+export function startDirectorPlan(state: GameState, deps: EngineDeps) {
+  const days = jumpDays(state);
+  const copy = structuredClone(state);
+  const plan = state.settings.economyMode
+    ? Promise.resolve(null)
+    : planDirector(copy, deps, { days, tiers: computeTiers(copy, deps.map) }).catch(() => null);
+  return { turn: state.turn, date: state.date, days, plan };
 }
 
 /** Jump length: the setting, or the median of the players' votes when jump voting is on. */
@@ -43,7 +56,10 @@ async function resolveTurn(state: GameState, deps: EngineDeps): Promise<TurnResu
   let intents: NpcIntent[] = [];
   if (!state.settings.economyMode) {
     progress("director");
-    intents = (await runDirector(state, deps, { days, ctx, tiers })).intents;
+    const pre = deps.directorPlan;
+    const usable = pre && pre.turn === turn && pre.date === fromDate && pre.days === days;
+    const plan = usable ? await pre.plan.catch(() => null) : null;
+    intents = (await runDirector(state, deps, { days, ctx, tiers, plan })).intents;
   }
 
   progress("votes");
@@ -76,6 +92,7 @@ async function resolveTurn(state: GameState, deps: EngineDeps): Promise<TurnResu
   state.orders = {};
   state.jumpVotes = {};
   state.lastVerdicts = res.verdicts;
+  state.verdictLog = [...(state.verdictLog ?? []), ...res.verdicts.map((v) => ({ ...v, turn, date: fromDate }))].slice(-500);
   state.phase = "orders";
   for (const p of state.players) p.ready = false;
 

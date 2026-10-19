@@ -115,6 +115,11 @@ export function intervene(state: GameState, deps: EngineDeps, opts: { snapshot: 
   const cutCauses = new Set(cut.flatMap((e) => e.causes));
   work.lastVerdicts = state.lastVerdicts.map((v): OrderVerdict =>
     cutCauses.has(v.orderId) && v.outcome !== "fail" ? { ...v, outcome: "partial", reason: INTERRUPTED } : { ...v });
+  // The verdict history keeps the snapshot's entries plus the (possibly downgraded) interrupted turn.
+  work.verdictLog = [
+    ...(work.verdictLog ?? []),
+    ...work.lastVerdicts.map((v) => ({ ...v, turn: opts.snapshot.turn, date: opts.snapshot.date })),
+  ].slice(-500);
 
   for (const key of Object.keys(state)) delete (state as unknown as Record<string, unknown>)[key];
   Object.assign(state, work);

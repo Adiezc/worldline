@@ -3,7 +3,7 @@
 
 import {
   addDays, applyEvent, countryByTag, DirectorOutputSchema, humanTags,
-  type Effect, type GameEvent, type GameState, type Tiers, type TurnContext,
+  type DirectorOutput, type Effect, type GameEvent, type GameState, type Tiers, type TurnContext,
 } from "@worldline/shared";
 import type { EngineDeps } from "./api.ts";
 import {
@@ -29,16 +29,34 @@ export function selfOnly(e: Effect, tag: string) {
   return (e.type === "statDelta" || e.type === "changeLeader" || e.type === "updateAgenda") && e.country === tag;
 }
 
+/** The planner's decision for one turn, computed ahead of time or on demand. */
+export interface DirectorPlan {
+  turn: number;
+  date: string;
+  days: number;
+  acting: string[];
+  out: DirectorOutput;
+}
+
 export async function runDirector(
-  state: GameState, deps: EngineDeps, opts: { days: number; ctx: TurnContext; tiers: Tiers },
+  state: GameState, deps: EngineDeps, opts: { days: number; ctx: TurnContext; tiers: Tiers; plan?: DirectorPlan | null },
 ): Promise<DirectorResult> {
+  const plan = opts.plan ?? (await planDirector(state, deps, opts));
+  return plan ? applyDirector(state, deps, plan, opts) : { intents: [], events: [] };
+}
+
+/**
+ * The slow half: build the prompt and ask the model. It doesn't depend on the players' orders, so
+ * the server runs it as soon as a turn opens and the turn itself only waits for the resolver.
+ */
+export async function planDirector(state: GameState, deps: EngineDeps, opts: { days: number; tiers: Tiers }): Promise<DirectorPlan | null> {
   const humans = humanTags(state);
   const end = windowEnd(state, opts.days);
   // Countries with scheduled events act too, so the planner can decide those events.
   const scheduled = calendarIn(deps.seed, state.date, end).flatMap((c) => c.countries);
   const acting = [...new Set([...opts.tiers.movers, ...opts.tiers.background, ...scheduled])]
     .filter((t) => !humans.has(t) && countryByTag(state, t)?.alive);
-  if (!acting.length) return { intents: [], events: [] };
+  if (!acting.length) return null;
 
   const scope = new Set([...acting, ...humans]);
   const user = [
@@ -69,10 +87,18 @@ export async function runDirector(
       calendar: calendarIn(deps.seed, state.date, end),
     },
   }, DirectorOutputSchema);
+  return { turn: state.turn, date: state.date, days: opts.days, acting, out };
+}
 
+/** The fast half: turn the plan into events and NPC intents against the current state. */
+export function applyDirector(state: GameState, deps: EngineDeps, plan: DirectorPlan, opts: { days: number; ctx: TurnContext }): DirectorResult {
+  const { out } = plan;
+  const end = windowEnd(state, opts.days);
   // Open-ended turns end at an unknown date; keep planner events early so they survive clamping.
   const evEnd = opts.days > 0 ? end : addDays(state.date, 14);
-  const allowed = new Set(acting);
+  // Anyone a player claimed since the plan was made is no longer the AI's to move.
+  const humans = humanTags(state);
+  const allowed = new Set(plan.acting.filter((t) => !humans.has(t) && countryByTag(state, t)?.alive));
   const intents: NpcIntent[] = [];
   const events: GameEvent[] = [];
   const valid = out.intents.filter((i) => allowed.has(i.country));

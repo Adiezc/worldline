@@ -151,6 +151,8 @@ export interface GameEvent {
   effects: Effect[];
   /** Effects the validator rejected, with reasons (kept for debugging and the AI's memory). */
   rejected?: { effect: Effect; reason: string }[];
+  /** Effects that were applied, but scaled down to the per-turn caps. */
+  clamped?: { effect: Effect; reason: string }[];
   /** Map changes produced by this event, for client playback. */
   mapDiff?: { province: number; owner: number; controller: number }[];
   scope: "player" | "world";
@@ -286,6 +288,8 @@ export interface GameState {
   /** Per-player jump votes when voting is enabled. */
   jumpVotes: Record<string, number>;
   lastVerdicts: OrderVerdict[];
+  /** Every past verdict with its turn and date (older saves may lack it). */
+  verdictLog?: (OrderVerdict & { turn: number; date: string })[];
   turnDeadline?: number;
   usage: UsageStats;
   /** Rotating offset for background (tier C) countries. */

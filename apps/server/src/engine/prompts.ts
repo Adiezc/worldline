@@ -59,6 +59,10 @@ PRINCIPLES
 - Judge each order on means, preparation, geography, politics and the reactions of others. Be skeptical: confident or emphatic wording earns nothing, and an order without the means to carry it out fails or only partly succeeds. Say why.
 - Other governments act in their own interest. NPC INTENTS are what AI governments are trying to do this period: play them out, letting them collide with or answer the players' orders.
 - Most of the world changes slowly. Keep effects proportionate.
+- STATE MUST MATCH THE STORY. Narrate nothing the effects don't record:
+  - Armed fighting between two states (an invasion, an offensive, a border raid with troops, air or missile strikes on another state's territory or forces) needs a war: if they are not already at war (see WARS), the first such event carries a declareWar effect, and any ground taken carries setController. Covert sabotage, cyberattacks and strikes on non-state groups are not wars; say so in the body.
+  - An agreement signed is a createTreaty; a pact dissolved is an endTreaty; sanctions announced are imposeSanctions (lifted: liftSanctions); a membership bid is applyToOrg; a ceasefire that ends a war is makePeace. Use relationDelta alone only for mood and rhetoric.
+- The world should visibly move: across a period of a month or more, include at least one or two structural changes somewhere in the world (a treaty, sanctions, an org application or resolution, a leadership change, a new or ended war) when the news and agendas plausibly support them.
 - VOTE OUTCOMES are facts that already happened: report their consequences, never contradict them.
 - Every pending CALL TO ARMS must be answered this period: either a joinWar effect, or an event in which that country explicitly declines or stalls.
 - Countries marked [PLAYER] act ONLY through their own orders. Never make them declare war, sign or end treaties, join or leave organisations, impose sanctions, make peace or cede land unless their order says so. Events may still change their stats and relations.
@@ -82,6 +86,7 @@ export function directorSystem(state: GameState) {
 - ${plausible ? "Behaviour is plausible: follow real-world agendas and scheduled events, drifting only as things change." : "Behaviour is dynamic: choose freely by personality and interest, but stay coherent."}
 - Every CALENDAR entry in this period must be decided: say what happened (who won an election, what a summit agreed). If a government changes, add a changeLeader self-effect for that country.
 - Never act for countries marked [PLAYER].
+- Make the world move: besides incremental steps, give two to four governments a structural move this period when their agenda and the news support it: signing or ending a treaty, imposing or lifting sanctions, applying to or leaving an organisation, tabling a resolution, a coup, a crisis escalating into armed conflict, or a ceasefire. Mark those affectsOthers and name the counterpart in the summary so the adjudicator can record it.
 
 OUTPUT: one JSON object, nothing else.
 {"intents":[

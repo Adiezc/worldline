@@ -221,7 +221,9 @@ describe("statDelta", () => {
     const e1 = ev([{ type: "statDelta", country: "UKR", stat: "stability", delta: 30 }]);
     const r1 = applyEvent(s, MAP, e1, c);
     expect(country(s, "UKR").stability).toBe(69);
-    expect(reasons(r1.rejected)).toContain("clamped from 30 to 9");
+    // Scaled-down effects are applied, so they're reported as clamps, not rejections.
+    expect(reasons(r1.clamped)).toContain("clamped from 30 to 9");
+    expect(r1.rejected.some((x) => x.reason.includes("clamped"))).toBe(false);
     expect(r1.applied[0]).toMatchObject({ delta: 9 }); // the log shows what was applied
     const r2 = applyEvent(s, MAP, ev([{ type: "statDelta", country: "UKR", stat: "stability", delta: 5 }]), c);
     expect(r2.applied).toHaveLength(0);

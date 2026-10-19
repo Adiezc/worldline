@@ -90,6 +90,7 @@ export function applyEvent(state: GameState, map: MapIndex, event: GameEvent, ct
   const humanOk = (tag: string) => !humans.has(tag) || causedBy.has(tag);
   const c = caps(state, ctx);
   const rejected: { effect: Effect; reason: string }[] = [];
+  const clamped: { effect: Effect; reason: string }[] = [];
   const applied: Effect[] = [];
   // Provinces whose owner/controller changed; the final values are read when the diff is built.
   const diff = new Set<number>();
@@ -126,6 +127,7 @@ export function applyEvent(state: GameState, map: MapIndex, event: GameEvent, ct
 
   for (const effect of event.effects) {
     const reject = (reason: string) => rejected.push({ effect, reason });
+    const noteClamp = (reason: string) => clamped.push({ effect, reason });
     const ok = () => applied.push(effect);
     switch (effect.type) {
       case "transferProvinces": {
@@ -210,7 +212,7 @@ export function applyEvent(state: GameState, map: MapIndex, event: GameEvent, ct
         const cap = c[effect.stat];
         const allowed = Math.max(-cap - used, Math.min(cap - used, effect.delta));
         if (Math.abs(allowed) < 1e-6) { reject(`${effect.stat} change already at this turn's cap`); break; }
-        if (allowed !== effect.delta) reject(`${effect.stat} change clamped from ${effect.delta} to ${round(allowed)}`);
+        if (allowed !== effect.delta) noteClamp(`${effect.stat} change clamped from ${effect.delta} to ${round(allowed)}`);
         ctx.statUsed.set(key, used + allowed);
         const [lo, hi] = STAT_RANGE[effect.stat];
         if (effect.stat === "gdp" || effect.stat === "population") k[effect.stat] = clamp(k[effect.stat] * (1 + allowed / 100), lo, hi);
@@ -227,7 +229,7 @@ export function applyEvent(state: GameState, map: MapIndex, event: GameEvent, ct
         const used = ctx.relUsed.get(key) ?? 0;
         const allowed = Math.max(-c.relation - used, Math.min(c.relation - used, effect.delta));
         if (Math.abs(allowed) < 1e-6) { reject("relation change already at this turn's cap"); break; }
-        if (allowed !== effect.delta) reject(`relation change clamped from ${effect.delta} to ${round(allowed)}`);
+        if (allowed !== effect.delta) noteClamp(`relation change clamped from ${effect.delta} to ${round(allowed)}`);
         ctx.relUsed.set(key, used + allowed);
         state.relations[key] = clamp(Math.round(getRelation(state, effect.a, effect.b) + allowed), -100, 100);
         applied.push(allowed === effect.delta ? effect : { ...effect, delta: round(allowed) });
@@ -494,8 +496,9 @@ export function applyEvent(state: GameState, map: MapIndex, event: GameEvent, ct
 
   event.effects = applied;
   if (rejected.length) event.rejected = rejected;
+  if (clamped.length) event.clamped = clamped;
   if (diff.size) event.mapDiff = [...diff].map((province) => ({ province, owner: state.owners[province], controller: state.controllers[province] }));
-  return { applied, rejected };
+  return { applied, rejected, clamped };
 }
 
 /** Members of mutual-defence organisations and defensive treaties are called to defend. */

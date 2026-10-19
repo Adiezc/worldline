@@ -5,6 +5,7 @@
 import type {
   FormationGoal, FormationRequest, GameEvent, GameState, MapIndex, ProposalDraft, ResolutionType, ScenarioSeed, TurnResult,
 } from "@worldline/shared";
+import type { DirectorPlan } from "./director.ts";
 
 export interface AiCallUsage {
   model: string;
@@ -58,6 +59,8 @@ export interface EngineDeps {
   map: MapIndex;
   seed: ScenarioSeed;
   ai: AiProvider;
+  /** A Director plan started when the turn opened; used if it matches the turn, date and jump. */
+  directorPlan?: { turn: number; date: string; days: number; plan: Promise<DirectorPlan | null> };
   onProgress?: (stage: "director" | "votes" | "resolver" | "applying" | "consolidating" | "done", detail?: string) => void;
   /** Output that failed validation: "invalid" before the repair round, then "repaired" or "failed". */
   onValidation?: (e: { kind: AiRequest["kind"]; outcome: "invalid" | "repaired" | "failed"; error: string }) => void;
@@ -73,6 +76,8 @@ export interface InterveneResult {
 }
 
 export interface EngineApi {
+  /** Start the AI governments' planning for the current turn ahead of time (see EngineDeps.directorPlan). */
+  planDirector(state: GameState, deps: EngineDeps): { turn: number; date: string; days: number; plan: Promise<DirectorPlan | null> };
   createGame(opts: { id: string; name: string; seed: ScenarioSeed }): GameState;
   /** Resolve the current turn: director → votes → resolver → validate/apply → simTick → consolidation. */
   runTurn(state: GameState, deps: EngineDeps): Promise<TurnResult>;

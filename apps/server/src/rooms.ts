@@ -7,7 +7,7 @@ import {
   DEFAULT_SETTINGS, countryByTag, type ClientMessage, type GameSettings, type GameState, type GameView,
   type MapIndex, type ScenarioSeed, type ServerMessage,
 } from "@worldline/shared";
-import { engine, turnEvents } from "./engine/index.ts";
+import { engine, jumpDays, turnEvents } from "./engine/index.ts";
 import type { AiProvider, EngineDeps } from "./engine/api.ts";
 import {
   deleteSnapshotsAfter, linkedPlayer, linkUserGame, listSnapshots, loadGame, loadSnapshot, saveGame, saveSnapshot, snapshotEventCount,
@@ -38,11 +38,37 @@ export class Room {
 
   constructor(public state: GameState, private deps: RoomDeps) {}
 
+  /** AI governments' plan for the open turn, computed while players write their orders. */
+  private directorPlan?: NonNullable<EngineDeps["directorPlan"]> & { key: string };
+
+  private planKey() {
+    const s = this.state;
+    return JSON.stringify([s.turn, s.date, jumpDays(s), s.settings.modelChain, s.settings.aiBehaviour, s.settings.economyMode]);
+  }
+
+  /** Start (or restart) the advance plan whenever the open turn or its AI settings change. */
+  private ensureDirectorPlan() {
+    const s = this.state;
+    if (s.phase !== "orders" || this.resolving || s.settings.economyMode) return;
+    if (!s.players.some((p) => p.connected && p.country)) return;
+    const key = this.planKey();
+    if (this.directorPlan?.key === key) return;
+    const started = Date.now();
+    const pre = engine.planDirector(s, { map: this.deps.map, seed: this.deps.seed(s.scenarioId), ai: this.deps.ai });
+    this.directorPlan = { ...pre, key };
+    void pre.plan.then((p) => {
+      if (this.directorPlan?.plan === pre.plan) {
+        this.log("info", `turn ${pre.turn}: AI governments planned ahead in ${Math.round((Date.now() - started) / 1000)}s${p ? "" : " (no plan; the turn will plan live)"}`);
+      }
+    });
+  }
+
   private engineDeps(): EngineDeps {
     return {
       map: this.deps.map,
       seed: this.deps.seed(this.state.scenarioId),
       ai: this.deps.ai,
+      directorPlan: this.directorPlan,
       onProgress: (stage, detail) => {
         this.log("info", `turn ${this.state.turn}: ${stage}${detail ? ` (${detail})` : ""}`);
         this.broadcast({ t: "progress", stage, detail });
@@ -74,6 +100,7 @@ export class Room {
       orders: orders[playerId] ?? [],
       // Orders are private, and verdicts quote them: only your own.
       lastVerdicts: s.lastVerdicts.filter((v) => !v.country || v.country === tag),
+      verdictLog: (s.verdictLog ?? []).filter((v) => v.country === tag).slice(-60),
       chats: tag ? chats.filter((c) => c.members.includes(tag)) : [],
       events: events.slice(-VIEW_EVENTS),
       eventCount: events.length,
@@ -121,6 +148,7 @@ export class Room {
   private changed() {
     this.pushViews();
     this.scheduleSave();
+    this.ensureDirectorPlan();
   }
 
   scheduleSave() {
@@ -490,10 +518,13 @@ export class Room {
       this.log("info", `resolving turn ${s.turn} (${s.date}, ${orderCount} orders, jump ${s.settings.jumpDays}d, reasoning ${s.settings.reasoningEffort})`);
       const result = await engine.runTurn(s, this.engineDeps());
       const rejected = result.events.reduce((n, e) => n + (e.rejected?.length ?? 0), 0);
-      this.log("info", `turn done in ${Math.round((Date.now() - started) / 1000)}s: ${result.events.length} events, ${result.verdicts.map((v) => `${v.orderId.slice(0, 6)}=${v.outcome}`).join(" ")}, ${rejected} effects rejected`);
+      const clamped = result.events.reduce((n, e) => n + (e.clamped?.length ?? 0), 0);
+      this.log("info", `turn done in ${Math.round((Date.now() - started) / 1000)}s: ${result.events.length} events, ${result.verdicts.map((v) => `${v.orderId.slice(0, 6)}=${v.outcome}`).join(" ")}, ${rejected} effects rejected, ${clamped} clamped`);
       s.phase = "orders";
       this.armTimer();
       saveGame(s);
+      this.resolving = false;
+      this.ensureDirectorPlan();
       for (const ws of this.sockets) {
         const tag = s.players.find((p) => p.id === ws.data.playerId)?.country;
         this.send(ws, { t: "turn", result: { ...result, verdicts: result.verdicts.filter((v) => !v.country || v.country === tag) } });

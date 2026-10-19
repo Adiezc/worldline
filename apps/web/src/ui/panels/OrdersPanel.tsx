@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { OrderVerdict } from "@worldline/shared";
 import { addOrder, brainstorm, deleteOrder, editOrder, polishOrder } from "../../game/actions.ts";
 import { useGame, type DraftOrder } from "../../game/store.ts";
+import { fmtShortDate } from "../../game/format.ts";
 import { countryMap } from "../../game/selectors.ts";
 import { Badge, Button, Empty, Panel, SectionTitle, outcomeColor, outcomeTone } from "../common/ui.tsx";
 import { Icon } from "../common/Icon.tsx";
@@ -32,6 +33,7 @@ export function OrdersPanel({ onClose }: { onClose: () => void }) {
           {!locked && <Composer />}
           {!locked && <Ideas />}
           <LastVerdicts />
+          <VerdictHistory />
         </>
       )}
     </Panel>
@@ -193,4 +195,50 @@ function toRoman(n: number) {
   let out = "";
   for (const [v, s] of map) while (n >= v) (out += s), (n -= v);
   return out;
+}
+
+type LoggedVerdict = OrderVerdict & { turn: number; date: string };
+const NO_LOG: LoggedVerdict[] = [];
+
+/** Your orders from earlier turns and how they turned out, newest first (collapsed by default). */
+function VerdictHistory() {
+  const log = useGame((s) => s.view?.verdictLog ?? NO_LOG);
+  const lastTurn = useGame((s) => (s.view ? s.view.turn - 1 : 0));
+  const [open, setOpen] = useState(false);
+  const earlier = log.filter((v) => v.turn < lastTurn);
+  if (!earlier.length) return null;
+  const turns = [...new Set(earlier.map((v) => v.turn))].sort((a, b) => b - a);
+  return (
+    <div className="mt-4">
+      <button onClick={() => setOpen(!open)} className="flex w-full items-center justify-between text-left">
+        <SectionTitle>Earlier turns ({earlier.length})</SectionTitle>
+        <Icon name={open ? "chevronUp" : "chevronDown"} size={12} className="text-parchment/45" />
+      </button>
+      {open && (
+        <div className="space-y-3">
+          {turns.map((t) => {
+            const items = earlier.filter((v) => v.turn === t);
+            return (
+              <div key={t}>
+                <div className="mb-1 text-[10.5px] tracking-wider text-parchment/40 uppercase">
+                  Turn {t} · {fmtShortDate(items[0].date)}
+                </div>
+                <ul className="space-y-1.5">
+                  {items.map((v) => (
+                    <li key={v.orderId} className="rounded border-l-2 bg-black/15 py-1.5 pr-2 pl-2.5" style={{ borderColor: outcomeColor(v.outcome) }}>
+                      {v.text && <div className="text-[12px] leading-snug text-parchment/75">{v.text}</div>}
+                      <div className="mt-0.5 flex items-start gap-1.5">
+                        <VerdictBadge v={v} />
+                        <span className="text-[11.5px] leading-snug text-parchment/50">{v.reason}</span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }

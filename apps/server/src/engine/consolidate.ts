@@ -45,4 +45,39 @@ export async function consolidate(state: GameState, deps: EngineDeps, turn: numb
     mockContext: { headlines: picked.map((e) => e.headline) },
   }, ConsolidationOutputSchema);
   state.memory.push({ upToTurn: cutoff, text: out.summary.trim() });
+  await compactMemory(state, deps);
+}
+
+/** Compaction keeps long games' prompts bounded: older chronicles fold into one entry. */
+export const MEMORY_MAX_ENTRIES = 6;
+export const MEMORY_MAX_CHARS = 6000;
+const MEMORY_KEEP_RECENT = 3;
+
+export async function compactMemory(state: GameState, deps: EngineDeps) {
+  const total = state.memory.reduce((n, m) => n + m.text.length, 0);
+  if (state.memory.length <= MEMORY_MAX_ENTRIES && total <= MEMORY_MAX_CHARS) return;
+  const keep = Math.min(MEMORY_KEEP_RECENT, state.memory.length - 1);
+  const old = state.memory.slice(0, state.memory.length - keep);
+  const recent = state.memory.slice(state.memory.length - keep);
+  const upTo = old.at(-1)!.upToTurn;
+  let text: string;
+  try {
+    const out = await callJson(deps, state, {
+      kind: "consolidation",
+      schemaName: "ConsolidationOutput",
+      system: CONSOLIDATION_SYSTEM,
+      user: [
+        `CHRONICLES (oldest first):\n${old.map((m) => `- (to turn ${m.upToTurn}) ${m.text}`).join("\n")}`,
+        "TASK: Condense these chronicles into ONE summary of at most 250 words. Keep what still matters: borders and wars, treaties and alliances, leaders, the players' major actions and their consequences. Drop routine diplomacy.",
+      ].join("\n\n"),
+      maxTokens: 1200,
+      temperature: 0.2,
+      mockContext: { headlines: old.map((m) => m.text.slice(0, 80)) },
+    }, ConsolidationOutputSchema);
+    text = out.summary.trim();
+  } catch {
+    // No AI available: keep each old chronicle's opening sentence so the size stays bounded.
+    text = old.map((m) => m.text.split(/(?<=\.)\s/)[0]).join(" ");
+  }
+  state.memory = [{ upToTurn: upTo, text: `Earlier history: ${text}` }, ...recent];
 }

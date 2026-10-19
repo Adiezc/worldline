@@ -6,7 +6,7 @@ import { openChat, respondProposal, sendChat } from "./chat.ts";
 import { abandonFormation, assessFormation, consentFormation, proclaimFormation } from "./formation.ts";
 import { createGame } from "./game.ts";
 import { intervene } from "./intervene.ts";
-import { runTurn } from "./pipeline.ts";
+import { runTurn, startDirectorPlan } from "./pipeline.ts";
 import { castVote, proposeResolution } from "./votes.ts";
 
 export const engine: EngineApi = {
@@ -25,6 +25,7 @@ export const engine: EngineApi = {
   proclaimFormation,
   abandonFormation,
   intervene,
+  planDirector: startDirectorPlan,
 };
 
 export {
@@ -32,6 +33,6 @@ export {
   proclaimFormation, proposeResolution, respondProposal, runTurn, sendChat, intervene,
 };
 export { INTERRUPTED, turnEvents } from "./intervene.ts";
-export { jumpDays } from "./pipeline.ts";
+export { jumpDays, startDirectorPlan } from "./pipeline.ts";
 export { callJson, callText, extractJson } from "./llm.ts";
 export type * from "./api.ts";
