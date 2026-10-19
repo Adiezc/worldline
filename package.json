@@ -1,0 +1,12 @@
+{
+  "name": "worldline",
+  "private": true,
+  "type": "module",
+  "workspaces": ["apps/*", "packages/*", "tools/*"],
+  "scripts": {
+    "dev": "bun --filter '@worldline/web' dev",
+    "mapgen": "bun run --cwd tools/mapgen build",
+    "test": "bun test",
+    "typecheck": "bun --filter '*' typecheck"
+  }
+}

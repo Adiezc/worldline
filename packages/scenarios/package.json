@@ -1,0 +1,7 @@
+{
+  "name": "@worldline/scenarios",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { "./modern-2026/*": "./modern-2026/*" }
+}

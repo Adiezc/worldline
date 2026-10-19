@@ -1,0 +1,26 @@
+{
+  "name": "@worldline/mapgen",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun run src/build.ts && bun run src/scenario-modern.ts",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@worldline/shared": "workspace:*",
+    "d3-geo": "^3.1.1",
+    "fast-png": "^8.0.0",
+    "topojson-client": "^3.1.0",
+    "topojson-server": "^3.0.1",
+    "topojson-simplify": "^3.0.3"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.3",
+    "@types/d3-geo": "^3.1.1",
+    "@types/topojson-client": "^3.1.5",
+    "@types/topojson-server": "^3.0.4",
+    "@types/topojson-simplify": "^3.0.3",
+    "typescript": "^7.0.2"
+  }
+}

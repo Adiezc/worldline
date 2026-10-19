@@ -1,0 +1,7 @@
+{
+  "name": "@worldline/mapdata",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { "./provinces.json": "./public/map/provinces.json" }
+}

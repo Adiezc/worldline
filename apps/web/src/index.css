@@ -1,0 +1,15 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Cinzel", Georgia, serif;
+  --font-sans: "Inter", system-ui, sans-serif;
+  --color-ink: #2a2118;
+  --color-parchment: #e9dcc0;
+  --color-parchment-dark: #cdb98f;
+  --color-panel: #1d1a16;
+  --color-panel-edge: #6b5636;
+  --color-gold: #c9a45c;
+}
+
+html, body, #root { height: 100%; margin: 0; overflow: hidden; background: #1b2a38; }
+body { font-family: var(--font-sans); color: #efe6d2; }
