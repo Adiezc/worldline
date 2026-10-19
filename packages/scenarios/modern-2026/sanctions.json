@@ -1,0 +1,10 @@
+[
+  { "id": "s_rus", "target": "RUS", "by": ["@EU", "USA", "GBR", "CAN", "JPN", "AUS", "NZL", "CHE", "NOR", "ISL", "LIE", "KOR", "SGP", "TWN", "UKR", "ALB", "MNE", "MKD", "MDA"], "source": "Post-invasion sanctions regimes: EU packages (19th adopted Oct 2025), US OFAC/BIS measures incl. Oct 2025 Rosneft and Lukoil designations, G7 oil price cap, central bank asset freeze", "since": "2022-02-24" },
+  { "id": "s_irn_un", "target": "IRN", "by": ["@EU", "GBR", "USA", "CAN", "AUS", "NZL", "CHE", "NOR", "JPN", "KOR"], "source": "UN sanctions reimposed via E3 snapback (in force 28 Sep 2025; Russia and China reject its validity)", "since": "2025-09-28" },
+  { "id": "s_irn_us", "target": "IRN", "by": ["USA"], "source": "US primary and secondary sanctions; 'maximum pressure' renewed Feb 2025 (NSPM-2)", "since": "1979-11-14" },
+  { "id": "s_prk", "target": "PRK", "by": ["USA", "@EU", "GBR", "JPN", "KOR", "AUS", "CAN", "NZL", "CHE", "NOR"], "source": "UNSC Resolution 1718 regime and successors (UN panel of experts ended 2024 by Russian veto) plus unilateral measures", "since": "2006-10-14" },
+  { "id": "s_blr", "target": "BLR", "by": ["@EU", "USA", "GBR", "CAN", "CHE", "NOR", "JPN", "AUS"], "source": "Sanctions over the 2020 crackdown and support for Russia's invasion; US eased some (Belavia, potash) in 2025 after prisoner releases", "since": "2020-10-02" },
+  { "id": "s_ven", "target": "VEN", "by": ["USA"], "source": "US oil, financial and individual sanctions (2017-19); Cartel de los Soles designated a terrorist organisation (Nov 2025)", "since": "2017-08-24" },
+  { "id": "s_cub", "target": "CUB", "by": ["USA"], "source": "US embargo (Helms-Burton); state sponsor of terrorism listing restored Jan 2025", "since": "1962-02-07" },
+  { "id": "s_mmr", "target": "MMR", "by": ["USA", "GBR", "CAN", "@EU"], "source": "Targeted sanctions and arms embargoes after the 2021 coup", "since": "2021-02-11" }
+]

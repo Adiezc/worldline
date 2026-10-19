@@ -1,0 +1,131 @@
+import { describe, expect, test } from "bun:test";
+import {
+  AssessorOutputSchema, ChatOutputSchema, DirectorOutputSchema, EffectSchema, ResolverOutputSchema, VotesOutputSchema, jsonSchemaOf,
+} from "../src/game/schemas.ts";
+import type { Effect } from "../src/game/state.ts";
+
+const resolverSample = {
+  orderVerdicts: [{ orderId: "o1", outcome: "partial", reason: "The offensive stalls." }],
+  events: [
+    {
+      date: "2026-02-01",
+      headline: "Russian offensive near Kharkiv",
+      body: "Fighting intensifies.",
+      countries: ["RUS", "UKR"],
+      causes: ["o1"],
+      effects: [
+        { type: "setController", provinces: ["2125", 2122], controller: "RUS" },
+        { type: "statDelta", country: "UKR", stat: "stability", delta: "-4.5" },
+        { type: "relationDelta", a: "RUS", b: "UKR", delta: -10 },
+        { type: "spawnCountry", name: "Free Kharkiv", government: "Council", leader: "X", provinces: [2125], color: "#AABBCC" },
+        { type: "updateFormation", country: "POL", index: "0", met: true },
+      ],
+    },
+    { date: "2026-02-03", headline: "Quiet week" },
+  ],
+};
+
+describe("ResolverOutputSchema", () => {
+  test("accepts well-formed output, coercing numeric strings and filling defaults", () => {
+    const r = ResolverOutputSchema.parse(resolverSample);
+    const fx = r.events[0].effects;
+    expect(fx[0]).toEqual({ type: "setController", provinces: [2125, 2122], controller: "RUS" });
+    expect(fx[1]).toMatchObject({ delta: -4.5 });
+    expect(fx[4]).toMatchObject({ index: 0 });
+    expect(r.events[1]).toEqual({ date: "2026-02-03", headline: "Quiet week", body: "", countries: [], causes: [], effects: [] });
+    expect(ResolverOutputSchema.parse({})).toEqual({ orderVerdicts: [], events: [] });
+  });
+
+  test("rejects malformed output", () => {
+    const bad = [
+      { events: [{ date: "Feb 1 2026", headline: "Bad date" }] },
+      { events: [{ date: "2026-02-01", headline: "x" }] }, // headline too short
+      { events: [{ date: "2026-02-01", headline: "Unknown effect", effects: [{ type: "nuke", target: "USA" }] }] },
+      { events: [{ date: "2026-02-01", headline: "Bad stat", effects: [{ type: "statDelta", country: "UKR", stat: "happiness", delta: 1 }] }] },
+      { events: [{ date: "2026-02-01", headline: "NaN delta", effects: [{ type: "statDelta", country: "UKR", stat: "gdp", delta: "lots" }] }] },
+      { events: [{ date: "2026-02-01", headline: "Bad ids", effects: [{ type: "setController", provinces: [-3, 1.5], controller: "RUS" }] }] },
+      { events: [{ date: "2026-02-01", headline: "One-member treaty", effects: [{ type: "createTreaty", treatyType: "alliance", members: ["UKR"] }] }] },
+      { events: [{ date: "2026-02-01", headline: "Bad colour", effects: [{ type: "spawnCountry", name: "X", government: "", leader: "", provinces: [1], color: "red" }] }] },
+      { orderVerdicts: [{ orderId: "o1", outcome: "maybe", reason: "" }] },
+      { stopDate: "soon" },
+      "not even an object",
+    ];
+    for (const b of bad) expect(ResolverOutputSchema.safeParse(b).success).toBe(false);
+  });
+
+  test("EffectSchema covers exactly the engine's Effect types", () => {
+    // Record<Effect["type"], …> makes tsc fail if a type is added to state.ts but not listed here.
+    const ALL: Record<Effect["type"], true> = {
+      transferProvinces: true, setController: true, statDelta: true, relationDelta: true, createTreaty: true, endTreaty: true,
+      declareWar: true, joinWar: true, makePeace: true, spawnCountry: true, annexCountry: true, changeLeader: true, joinOrg: true,
+      leaveOrg: true, createOrg: true, proposeResolution: true, applyToOrg: true, imposeSanctions: true, liftSanctions: true,
+      updateAgenda: true, updateFormation: true,
+    };
+    const types = EffectSchema.options.map((o) => o.shape.type.value as string).sort();
+    expect(types).toEqual(Object.keys(ALL).sort());
+  });
+});
+
+describe("DirectorOutputSchema", () => {
+  test("accepts well-formed output", () => {
+    const r = DirectorOutputSchema.parse({
+      intents: [{ country: "FRA", summary: "Boost defence spending", selfEffects: [{ type: "statDelta", country: "FRA", stat: "military", delta: "2" }] }],
+      agendaUpdates: [{ country: "FRA", goals: ["European strategic autonomy"] }],
+      resolutions: [{ orgId: "eu", resolutionType: "sanction", proposer: "FRA", target: "RUS", text: "18th package" }],
+    });
+    expect(r.intents[0].affectsOthers).toBe(false);
+    expect(r.intents[0].selfEffects[0]).toMatchObject({ delta: 2 });
+    expect(DirectorOutputSchema.parse({})).toEqual({ intents: [], agendaUpdates: [], resolutions: [] });
+  });
+
+  test("rejects malformed output", () => {
+    expect(DirectorOutputSchema.safeParse({ intents: [{ country: "FRA" }] }).success).toBe(false);
+    // Over-long lists are trimmed, not rejected (a rejection costs a repair call).
+    expect(DirectorOutputSchema.parse({ agendaUpdates: [{ country: "FRA", goals: ["1", "2", "3", "4", "5", "6"] }] }).agendaUpdates[0].goals).toHaveLength(5);
+    expect(DirectorOutputSchema.safeParse({ resolutions: [{ orgId: "eu", resolutionType: "invade", proposer: "FRA", text: "" }] }).success).toBe(false);
+    expect(DirectorOutputSchema.safeParse({ intents: [{ country: "A", summary: "too-short tag" }] }).success).toBe(false);
+  });
+});
+
+describe("AssessorOutputSchema", () => {
+  test("accepts well-formed output", () => {
+    const r = AssessorOutputSchema.parse({
+      verdict: "notYet",
+      requirements: [{ text: "Union treaty", met: false, why: "Not negotiated" }],
+      consent: [{ country: "LTU", needed: true, willing: false }],
+      suggestedPath: "Negotiate first",
+      plan: { name: "Commonwealth", orgHandling: "Single EU seat", reactions: [{ a: "POL", b: "RUS", delta: "-15" }] },
+    });
+    expect(r.plan!.reactions[0].delta).toBe(-15);
+    expect(AssessorOutputSchema.parse({ verdict: "unrealistic", requirements: [{ text: "x", met: false, why: "" }], suggestedPath: "" }).consent).toEqual([]);
+  });
+
+  test("rejects malformed output", () => {
+    expect(AssessorOutputSchema.safeParse({ verdict: "maybe", requirements: [{ text: "", met: true, why: "" }], suggestedPath: "" }).success).toBe(false);
+    expect(AssessorOutputSchema.safeParse({ verdict: "achievable", requirements: [], suggestedPath: "" }).success).toBe(false);
+    expect(AssessorOutputSchema.safeParse({ verdict: "achievable", requirements: [{ text: "", met: "yes", why: "" }], suggestedPath: "" }).success).toBe(false);
+  });
+});
+
+describe("other schemas", () => {
+  test("chat and votes", () => {
+    expect(ChatOutputSchema.parse({ speaker: "FRA", reply: "Bonjour", relationDelta: "3" })).toMatchObject({ tone: "neutral", relationDelta: 3 });
+    expect(ChatOutputSchema.parse({ speaker: "FRA", reply: "x", relationDelta: 50 }).relationDelta).toBe(15);
+    expect(VotesOutputSchema.parse({ votes: [{ resolutionId: "r1", country: "FRA", vote: "yes" }] }).votes[0].reason).toBe("");
+    expect(VotesOutputSchema.safeParse({ votes: [{ resolutionId: "r1", country: "FRA", vote: "maybe" }] }).success).toBe(false);
+  });
+});
+
+describe("jsonSchemaOf", () => {
+  test("returns a JSON schema object for each LLM output", () => {
+    for (const schema of [ResolverOutputSchema, DirectorOutputSchema, AssessorOutputSchema, ChatOutputSchema, VotesOutputSchema]) {
+      const js = jsonSchemaOf(schema) as Record<string, unknown>;
+      expect(typeof js).toBe("object");
+      expect(js.type).toBe("object");
+      expect(js.properties).toBeDefined();
+      expect(() => JSON.stringify(js)).not.toThrow();
+    }
+    const resolver = jsonSchemaOf(ResolverOutputSchema) as { properties: Record<string, unknown> };
+    expect(Object.keys(resolver.properties).sort()).toEqual(["events", "orderVerdicts", "stopDate"]);
+  });
+});

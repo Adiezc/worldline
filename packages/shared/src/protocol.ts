@@ -1,0 +1,112 @@
+// WebSocket + REST contract between apps/web and apps/server.
+//
+// REST (JSON):
+//   GET  /api/health            → HealthResponse
+//   POST /api/games             CreateGameRequest → { gameId }
+//   GET  /api/games/:id         → GameSummary
+// WebSocket: /ws   (first client message must be `join`)
+
+import type { CalendarEntry, Formable } from "./game/scenario.ts";
+import type {
+  Chat, GameEvent, GameSettings, GameState, Order, OrderVerdict, Proposal, ResolutionType, TreatyType,
+} from "./game/state.ts";
+
+export const SERVER_PORT = 3001;
+
+export interface HealthResponse {
+  ok: true;
+  ai: "openrouter" | "mock";
+  dailyLimit: number;
+  usedToday: number;
+}
+
+export interface CreateGameRequest {
+  name: string;
+  scenarioId?: string;
+}
+
+export interface GameSummary {
+  id: string;
+  name: string;
+  date: string;
+  turn: number;
+  players: { name: string; country: string | null; connected: boolean }[];
+}
+
+/** What one player is allowed to see: their own orders and chats only. */
+export type GameView = Omit<GameState, "orders" | "chats" | "events" | "jumpVotes"> & {
+  orders: Order[];
+  chats: Chat[];
+  /** Most recent events (newest last); `eventCount` is the full total. */
+  events: GameEvent[];
+  eventCount: number;
+  jumpVotes: Record<string, number>;
+  you: { playerId: string; country: string | null; isHost: boolean };
+  /** Scenario suggestions for the Form a Nation panel. */
+  formables: Formable[];
+  /** Scheduled real-world events from the current date onward. */
+  calendar: CalendarEntry[];
+  ai: { provider: "openrouter" | "mock"; usedToday: number; dailyLimit: number };
+};
+
+export interface ResolutionResult {
+  resolutionId: string;
+  orgAbbrev: string;
+  status: "passed" | "failed" | "vetoed";
+  summary: string;
+  text: string;
+}
+
+export interface TurnResult {
+  turn: number;
+  fromDate: string;
+  toDate: string;
+  events: GameEvent[];
+  verdicts: OrderVerdict[];
+  votes: ResolutionResult[];
+}
+
+export type ProposalDraft = Pick<Proposal, "kind" | "treatyType" | "members" | "terms">;
+
+export interface FormationRequest {
+  name: string;
+  concept: string;
+  /** Countries whose territory would join (excluding the founder). */
+  countries: string[];
+  /** Optional explicit regions; defaults to all regions of founder + countries. */
+  provinces?: number[];
+  color: string;
+  government: string;
+}
+
+export type ClientMessage =
+  | { t: "join"; gameId: string; playerId?: string; name: string }
+  | { t: "claim"; tag: string | null }
+  | { t: "settings"; settings: Partial<GameSettings> }
+  | { t: "start" }
+  | { t: "orders"; orders: { id: string; text: string }[] }
+  | { t: "ready"; ready: boolean }
+  | { t: "jump"; days: number }
+  | { t: "ai"; reqId: string; kind: "advisor" | "polish" | "brainstorm"; text?: string }
+  | { t: "chat.open"; with: string[] }
+  | { t: "chat.send"; chatId: string; text: string; proposal?: ProposalDraft }
+  | { t: "proposal.respond"; chatId: string; proposalId: string; accept: boolean }
+  | { t: "org.propose"; orgId: string; resolutionType: ResolutionType; target?: string; text: string }
+  | { t: "org.vote"; resolutionId: string; vote: "yes" | "no" | "abstain" }
+  | { t: "formation.assess"; reqId: string; request: FormationRequest }
+  | { t: "formation.recheck"; reqId: string; formationId: string }
+  | { t: "formation.proclaim"; formationId: string }
+  | { t: "formation.consent"; formationId: string; accept: boolean }
+  | { t: "formation.abandon"; formationId: string };
+
+export type ServerMessage =
+  | { t: "welcome"; playerId: string; view: GameView }
+  | { t: "view"; view: GameView }
+  | { t: "progress"; stage: "director" | "votes" | "resolver" | "applying" | "consolidating" | "done"; detail?: string }
+  | { t: "turn"; result: TurnResult }
+  | { t: "ai"; reqId: string; kind: "advisor" | "polish" | "brainstorm" | "formation"; ok: boolean; text?: string; ideas?: string[]; formationId?: string; error?: string }
+  | { t: "chat.typing"; chatId: string; from: string }
+  | { t: "toast"; level: "info" | "warn" | "error"; text: string }
+  | { t: "error"; message: string };
+
+export type { TreatyType };

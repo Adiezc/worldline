@@ -1,0 +1,214 @@
+[
+  {
+    "id": "un", "abbrev": "UN", "name": "United Nations", "kind": "global",
+    "members": "@UN",
+    "observers": ["PSX", "VAT"],
+    "candidates": [{ "tag": "PSX", "since": "2011-09-23", "note": "Full membership blocked by US veto (2011, 2024)" }],
+    "suspended": [],
+    "bodies": [
+      { "id": "ga", "name": "General Assembly", "seats": [], "rule": "simpleMajority", "handles": ["condemn", "custom", "tradePolicy", "suspendMember", "expelMember"] },
+      { "id": "sc", "name": "Security Council", "seats": ["USA", "RUS", "CHN", "GBR", "FRA", "BHR", "COL", "COD", "LVA", "LBR", "DNK", "GRC", "PAK", "PAN", "SOM"], "veto": ["USA", "RUS", "CHN", "GBR", "FRA"], "rule": "vetoMajority", "handles": ["sanction", "peacekeeping", "authorizeForce", "admitMember"] }
+    ],
+    "powers": ["sanction", "condemn", "peacekeeping", "admitMember", "suspendMember", "expelMember", "tradePolicy", "authorizeForce", "custom"],
+    "effects": {}, "cohesion": 35, "founded": "1945-10-24"
+  },
+  {
+    "id": "eu", "abbrev": "EU", "name": "European Union", "kind": "regional",
+    "members": ["AUT", "BEL", "BGR", "HRV", "CYP", "CZE", "DNK", "EST", "FIN", "FRA", "DEU", "GRC", "HUN", "IRL", "ITA", "LVA", "LTU", "LUX", "MLT", "NLD", "POL", "PRT", "ROU", "SVK", "SVN", "ESP", "SWE"],
+    "observers": [],
+    "candidates": [
+      { "tag": "UKR", "since": "2022-06-23", "note": "Accession talks opened June 2024; clusters blocked by Hungary" },
+      { "tag": "MDA", "since": "2022-06-23", "note": "Accession talks opened June 2024" },
+      { "tag": "MNE", "since": "2010-12-17", "note": "Front-runner, aims to close talks by 2026" },
+      { "tag": "SRB", "since": "2012-03-01", "note": "Talks stalled over rule of law and Kosovo" },
+      { "tag": "ALB", "since": "2014-06-27", "note": "All clusters opened; aims to finish by 2027" },
+      { "tag": "MKD", "since": "2005-12-17", "note": "Stalled over constitutional dispute with Bulgaria" },
+      { "tag": "BIH", "since": "2022-12-15", "note": "Talks approved in principle, not yet opened" },
+      { "tag": "GEO", "since": "2023-12-14", "note": "Process de facto frozen since 2024" },
+      { "tag": "TUR", "since": "1999-12-11", "note": "Talks frozen since 2018" }
+    ],
+    "suspended": [],
+    "bodies": [
+      { "id": "council", "name": "Council of the EU", "seats": [], "rule": "qualifiedMajority", "handles": ["tradePolicy", "custom"] },
+      { "id": "european-council", "name": "European Council", "seats": [], "rule": "consensus", "handles": ["sanction", "admitMember", "condemn", "suspendMember"] }
+    ],
+    "powers": ["tradePolicy", "custom", "sanction", "admitMember", "condemn", "suspendMember"],
+    "effects": { "tradeBloc": true }, "cohesion": 68, "founded": "1993-11-01"
+  },
+  {
+    "id": "nato", "abbrev": "NATO", "name": "North Atlantic Treaty Organization", "kind": "military",
+    "members": ["ALB", "BEL", "BGR", "CAN", "HRV", "CZE", "DNK", "EST", "FIN", "FRA", "DEU", "GRC", "HUN", "ISL", "ITA", "LVA", "LTU", "LUX", "MNE", "NLD", "MKD", "NOR", "POL", "PRT", "ROU", "SVK", "SVN", "ESP", "SWE", "TUR", "GBR", "USA"],
+    "observers": [],
+    "candidates": [
+      { "tag": "UKR", "since": "2008-04-03", "note": "Bucharest pledge; 'irreversible path' but no invitation, US opposed for now" },
+      { "tag": "GEO", "since": "2008-04-03", "note": "Bucharest pledge; dormant" },
+      { "tag": "BIH", "since": "2010-04-22", "note": "Membership Action Plan; blocked by Republika Srpska" }
+    ],
+    "suspended": [],
+    "bodies": [
+      { "id": "nac", "name": "North Atlantic Council", "seats": [], "rule": "consensus" }
+    ],
+    "powers": ["condemn", "admitMember", "authorizeForce", "custom"],
+    "effects": { "mutualDefense": true }, "cohesion": 70, "founded": "1949-04-04"
+  },
+  {
+    "id": "oas", "abbrev": "OAS", "name": "Organization of American States", "kind": "regional",
+    "members": ["ATG", "ARG", "BHS", "BRB", "BLZ", "BOL", "BRA", "CAN", "CHL", "COL", "CRI", "DMA", "DOM", "ECU", "SLV", "GRD", "GTM", "GUY", "HTI", "HND", "JAM", "MEX", "PAN", "PRY", "PER", "KNA", "LCA", "VCT", "SUR", "TTO", "USA", "URY"],
+    "observers": [],
+    "candidates": [],
+    "suspended": [],
+    "bodies": [
+      { "id": "general-assembly", "name": "General Assembly", "seats": [], "rule": "simpleMajority", "handles": ["condemn", "custom"] },
+      { "id": "special", "name": "Special Session (Democratic Charter)", "seats": [], "rule": "twoThirds", "handles": ["suspendMember", "admitMember"] }
+    ],
+    "powers": ["condemn", "suspendMember", "admitMember", "custom"],
+    "effects": {}, "cohesion": 40, "founded": "1948-04-30"
+  },
+  {
+    "id": "au", "abbrev": "AU", "name": "African Union", "kind": "regional",
+    "members": ["DZA", "AGO", "BEN", "BWA", "BFA", "BDI", "CPV", "CMR", "CAF", "TCD", "COM", "COD", "COG", "CIV", "DJI", "EGY", "GNQ", "ERI", "SWZ", "ETH", "GAB", "GMB", "GHA", "GIN", "GNB", "KEN", "LSO", "LBR", "LBY", "MDG", "MWI", "MLI", "MRT", "MUS", "MAR", "MOZ", "NAM", "NER", "NGA", "RWA", "STP", "SEN", "SYC", "SLE", "SOM", "ZAF", "SDS", "SDN", "TZA", "TGO", "TUN", "UGA", "ZMB", "ZWE"],
+    "observers": [],
+    "candidates": [],
+    "suspended": ["MLI", "BFA", "NER", "GIN", "SDN", "MDG", "GNB"],
+    "bodies": [
+      { "id": "assembly", "name": "Assembly of Heads of State", "seats": [], "rule": "twoThirds", "handles": ["admitMember", "tradePolicy", "custom", "condemn"] },
+      { "id": "psc", "name": "Peace and Security Council", "seats": [], "rule": "twoThirds", "handles": ["suspendMember", "sanction", "peacekeeping"] }
+    ],
+    "powers": ["condemn", "sanction", "suspendMember", "admitMember", "peacekeeping", "tradePolicy", "custom"],
+    "effects": { "tradeBloc": true }, "cohesion": 55, "founded": "2002-07-09"
+  },
+  {
+    "id": "asean", "abbrev": "ASEAN", "name": "Association of Southeast Asian Nations", "kind": "regional",
+    "members": ["BRN", "KHM", "IDN", "LAO", "MYS", "MMR", "PHL", "SGP", "THA", "VNM", "TLS"],
+    "observers": ["PNG"],
+    "candidates": [],
+    "suspended": [],
+    "bodies": [ { "id": "summit", "name": "ASEAN Summit", "seats": [], "rule": "consensus" } ],
+    "powers": ["condemn", "tradePolicy", "admitMember", "custom"],
+    "effects": { "tradeBloc": true }, "cohesion": 55, "founded": "1967-08-08"
+  },
+  {
+    "id": "arab-league", "abbrev": "Arab League", "name": "League of Arab States", "kind": "regional",
+    "members": ["DZA", "BHR", "COM", "DJI", "EGY", "IRQ", "JOR", "KWT", "LBN", "LBY", "MRT", "MAR", "OMN", "PSX", "QAT", "SAU", "SOM", "SDN", "SYR", "TUN", "ARE", "YEM"],
+    "observers": ["ERI", "IND", "BRA", "VEN"],
+    "candidates": [],
+    "suspended": [],
+    "bodies": [ { "id": "council", "name": "Council of the Arab League", "seats": [], "rule": "consensus" } ],
+    "powers": ["condemn", "sanction", "suspendMember", "admitMember", "custom"],
+    "effects": {}, "cohesion": 35, "founded": "1945-03-22"
+  },
+  {
+    "id": "gcc", "abbrev": "GCC", "name": "Gulf Cooperation Council", "kind": "regional",
+    "members": ["SAU", "ARE", "QAT", "KWT", "BHR", "OMN"],
+    "observers": [], "candidates": [], "suspended": [],
+    "bodies": [ { "id": "supreme-council", "name": "Supreme Council", "seats": [], "rule": "consensus" } ],
+    "powers": ["tradePolicy", "condemn", "admitMember", "custom"],
+    "effects": { "tradeBloc": true }, "cohesion": 60, "founded": "1981-05-25"
+  },
+  {
+    "id": "mercosur", "abbrev": "Mercosur", "name": "Southern Common Market", "kind": "economic",
+    "members": ["ARG", "BRA", "PRY", "URY", "BOL", "VEN"],
+    "observers": ["CHL", "COL", "ECU", "PER", "GUY", "SUR"],
+    "candidates": [],
+    "suspended": ["VEN"],
+    "bodies": [ { "id": "cmc", "name": "Common Market Council", "seats": [], "rule": "consensus" } ],
+    "powers": ["tradePolicy", "suspendMember", "admitMember", "custom"],
+    "effects": { "tradeBloc": true }, "cohesion": 50, "founded": "1991-03-26"
+  },
+  {
+    "id": "sco", "abbrev": "SCO", "name": "Shanghai Cooperation Organisation", "kind": "regional",
+    "members": ["CHN", "RUS", "IND", "PAK", "KAZ", "KGZ", "TJK", "UZB", "IRN", "BLR"],
+    "observers": ["AFG", "MNG"],
+    "candidates": [],
+    "suspended": [],
+    "bodies": [ { "id": "heads-of-state", "name": "Council of Heads of State", "seats": [], "rule": "consensus" } ],
+    "powers": ["condemn", "admitMember", "custom"],
+    "effects": {}, "cohesion": 40, "founded": "2001-06-15"
+  },
+  {
+    "id": "brics", "abbrev": "BRICS", "name": "BRICS", "kind": "forum",
+    "members": ["BRA", "RUS", "IND", "CHN", "ZAF", "EGY", "ETH", "IRN", "ARE", "IDN"],
+    "observers": ["BLR", "BOL", "KAZ", "CUB", "MYS", "THA", "UGA", "UZB", "NGA", "VNM"],
+    "candidates": [],
+    "suspended": [],
+    "bodies": [ { "id": "summit", "name": "Leaders' Summit", "seats": [], "rule": "consensus" } ],
+    "powers": ["condemn", "admitMember", "custom"],
+    "effects": { "forum": true }, "cohesion": 35, "founded": "2009-06-16"
+  },
+  {
+    "id": "g7", "abbrev": "G7", "name": "Group of Seven", "kind": "forum",
+    "members": ["USA", "CAN", "GBR", "FRA", "DEU", "ITA", "JPN"],
+    "observers": [], "candidates": [], "suspended": [],
+    "bodies": [ { "id": "summit", "name": "Leaders' Summit", "seats": [], "rule": "consensus" } ],
+    "powers": ["condemn", "custom"],
+    "effects": { "forum": true }, "cohesion": 55, "founded": "1975-11-15"
+  },
+  {
+    "id": "g20", "abbrev": "G20", "name": "Group of Twenty", "kind": "forum",
+    "members": ["ARG", "AUS", "BRA", "CAN", "CHN", "FRA", "DEU", "IND", "IDN", "ITA", "JPN", "MEX", "RUS", "SAU", "ZAF", "KOR", "TUR", "GBR", "USA"],
+    "observers": [], "candidates": [], "suspended": [],
+    "bodies": [ { "id": "summit", "name": "Leaders' Summit", "seats": [], "rule": "consensus" } ],
+    "powers": ["condemn", "custom"],
+    "effects": { "forum": true }, "cohesion": 25, "founded": "1999-09-26"
+  },
+  {
+    "id": "csto", "abbrev": "CSTO", "name": "Collective Security Treaty Organization", "kind": "military",
+    "members": ["RUS", "BLR", "KAZ", "KGZ", "TJK", "ARM"],
+    "observers": [], "candidates": [],
+    "suspended": ["ARM"],
+    "bodies": [ { "id": "csc", "name": "Collective Security Council", "seats": [], "rule": "consensus" } ],
+    "powers": ["authorizeForce", "peacekeeping", "admitMember", "suspendMember", "condemn", "custom"],
+    "effects": { "mutualDefense": true }, "cohesion": 40, "founded": "2002-10-07"
+  },
+  {
+    "id": "eaeu", "abbrev": "EAEU", "name": "Eurasian Economic Union", "kind": "economic",
+    "members": ["RUS", "BLR", "KAZ", "KGZ", "ARM"],
+    "observers": ["UZB", "CUB", "IRN"],
+    "candidates": [], "suspended": [],
+    "bodies": [ { "id": "supreme-council", "name": "Supreme Eurasian Economic Council", "seats": [], "rule": "consensus" } ],
+    "powers": ["tradePolicy", "admitMember", "custom"],
+    "effects": { "tradeBloc": true }, "cohesion": 55, "founded": "2015-01-01"
+  },
+  {
+    "id": "opec-plus", "abbrev": "OPEC+", "name": "OPEC and allied producers", "kind": "economic",
+    "members": ["DZA", "COG", "GNQ", "GAB", "IRN", "IRQ", "KWT", "LBY", "NGA", "SAU", "ARE", "VEN", "RUS", "KAZ", "MEX", "OMN", "AZE", "BHR", "BRN", "MYS", "SDN", "SDS"],
+    "observers": ["BRA"],
+    "candidates": [], "suspended": [],
+    "bodies": [ { "id": "ministerial", "name": "OPEC+ Ministerial Meeting", "seats": [], "rule": "consensus" } ],
+    "powers": ["custom", "tradePolicy"],
+    "effects": {}, "cohesion": 55, "founded": "2016-12-10"
+  },
+  {
+    "id": "commonwealth", "abbrev": "Commonwealth", "name": "Commonwealth of Nations", "kind": "forum",
+    "members": ["ATG", "AUS", "BHS", "BGD", "BRB", "BLZ", "BWA", "BRN", "CMR", "CAN", "CYP", "DMA", "SWZ", "FJI", "GAB", "GMB", "GHA", "GRD", "GUY", "IND", "JAM", "KEN", "KIR", "LSO", "MWI", "MYS", "MDV", "MLT", "MUS", "MOZ", "NAM", "NRU", "NZL", "NGA", "PAK", "PNG", "RWA", "KNA", "LCA", "VCT", "WSM", "SYC", "SLE", "SGP", "SLB", "ZAF", "LKA", "TZA", "TGO", "TON", "TTO", "TUV", "UGA", "GBR", "VUT", "ZMB"],
+    "observers": [], "candidates": [], "suspended": [],
+    "bodies": [ { "id": "chogm", "name": "Heads of Government Meeting", "seats": [], "rule": "consensus" } ],
+    "powers": ["condemn", "suspendMember", "admitMember", "custom"],
+    "effects": { "forum": true }, "cohesion": 45, "founded": "1949-04-26"
+  },
+  {
+    "id": "ecowas", "abbrev": "ECOWAS", "name": "Economic Community of West African States", "kind": "regional",
+    "members": ["BEN", "CPV", "CIV", "GMB", "GHA", "GIN", "GNB", "LBR", "NGA", "SEN", "SLE", "TGO"],
+    "observers": [], "candidates": [],
+    "suspended": ["GIN", "GNB"],
+    "bodies": [ { "id": "authority", "name": "Authority of Heads of State", "seats": [], "rule": "consensus" } ],
+    "powers": ["condemn", "sanction", "suspendMember", "admitMember", "peacekeeping", "tradePolicy", "custom"],
+    "effects": { "tradeBloc": true }, "cohesion": 45, "founded": "1975-05-28"
+  },
+  {
+    "id": "aes", "abbrev": "AES", "name": "Alliance of Sahel States", "kind": "military",
+    "members": ["MLI", "BFA", "NER"],
+    "observers": [], "candidates": [], "suspended": [],
+    "bodies": [ { "id": "college", "name": "College of Heads of State", "seats": [], "rule": "consensus" } ],
+    "powers": ["authorizeForce", "condemn", "admitMember", "custom"],
+    "effects": { "mutualDefense": true }, "cohesion": 70, "founded": "2023-09-16"
+  },
+  {
+    "id": "quad", "abbrev": "Quad", "name": "Quadrilateral Security Dialogue", "kind": "forum",
+    "members": ["USA", "JPN", "IND", "AUS"],
+    "observers": [], "candidates": [], "suspended": [],
+    "bodies": [ { "id": "summit", "name": "Leaders' Summit", "seats": [], "rule": "consensus" } ],
+    "powers": ["condemn", "custom"],
+    "effects": { "forum": true }, "cohesion": 45, "founded": "2017-11-12"
+  }
+]

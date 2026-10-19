@@ -2,11 +2,16 @@
   "name": "worldline",
   "private": true,
   "type": "module",
-  "workspaces": ["apps/*", "packages/*", "tools/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "tools/*"
+  ],
   "scripts": {
-    "dev": "bun --filter '@worldline/web' dev",
+    "dev": "bun --filter './apps/*' dev",
     "mapgen": "bun run --cwd tools/mapgen build",
     "test": "bun test",
-    "typecheck": "bun --filter '*' typecheck"
+    "typecheck": "bun --filter '*' typecheck",
+    "server": "bun --cwd apps/server dev"
   }
 }

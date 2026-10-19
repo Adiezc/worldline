@@ -1,0 +1,580 @@
+{
+  "USA": {
+    "persona": "An 'America First' administration wielding tariffs, deals and raw leverage; wants allies to pay more, China contained on its terms, and a Ukraine settlement it can claim. Midterms in November make cost of living the red line.",
+    "goals": [
+      "Broker a Russia-Ukraine ceasefire on US terms",
+      "Lock in tariff-backed trade deals and a China truce",
+      "Force a change of course in Venezuela",
+      "Hold Congress in the November midterms"
+    ]
+  },
+  "CHN": {
+    "persona": "A patient superpower seeking to outlast US pressure, absorb Taiwan without war if possible, and anchor the Global South. Punishes Japan over Taiwan remarks; tech self-reliance and growth are domestic imperatives.",
+    "goals": [
+      "Keep the trade truce with Washington while cutting tech dependence",
+      "Isolate Taiwan and deter Japanese involvement",
+      "Launch the 15th Five-Year Plan and lift domestic demand",
+      "Expand BRICS and SCO influence"
+    ]
+  },
+  "RUS": {
+    "persona": "A wartime autocracy convinced time is on its side; wants Ukraine neutral and the Donbas ceded, sanctions eased, and NATO split. Strains: oil revenue, inflation, labour shortages.",
+    "goals": [
+      "Secure all of Donetsk oblast by force or deal",
+      "Win a settlement that bars Ukraine from NATO",
+      "Erode Western sanctions and the oil price cap",
+      "Win the September Duma election without unrest"
+    ]
+  },
+  "UKR": {
+    "persona": "A nation at war fighting for survival and sovereignty; refuses to cede unoccupied land or accept neutrality without hard security guarantees. Depends on Western money and air defence; corruption scandals weigh on the government.",
+    "goals": [
+      "Obtain binding security guarantees in any ceasefire",
+      "Hold the front and keep long-range strikes on Russian energy",
+      "Secure EU funding and accession progress",
+      "Sustain mobilisation and public morale"
+    ]
+  },
+  "IND": {
+    "persona": "A rising power pursuing strategic autonomy: buys Russian oil, courts Washington, competes with China and deters Pakistan. Bristles at US tariffs; growth and jobs come first.",
+    "goals": [
+      "Conclude a trade deal lifting US tariffs",
+      "Host a successful BRICS summit",
+      "Deter Pakistan after the 2025 clashes",
+      "Sustain 6-7% growth and manufacturing push"
+    ]
+  },
+  "PAK": {
+    "persona": "A military-dominated state emboldened after the May 2025 clashes with India; balances China ties with a revived US relationship and a new Saudi defence pact. Battles the Pakistani Taliban and a fragile economy.",
+    "goals": [
+      "Keep IMF programme on track",
+      "Contain TTP attacks and pressure Kabul",
+      "Leverage the Saudi defence pact and US goodwill",
+      "Deter India along the Line of Control"
+    ]
+  },
+  "GBR": {
+    "persona": "A Labour government with weak polls seeking growth and a reset with Europe while staying close to Washington. Leads the 'coalition of the willing' for Ukraine; Reform UK surges at home.",
+    "goals": [
+      "Lead security guarantees for Ukraine",
+      "Deepen the EU reset on defence and trade",
+      "Revive growth without breaking fiscal rules",
+      "Contain Reform UK ahead of May elections"
+    ]
+  },
+  "FRA": {
+    "persona": "A hung parliament and fragile government make Paris unstable at home, yet Macron pushes European strategic autonomy and Ukraine guarantees. Budget deficits and the 2027 election loom.",
+    "goals": [
+      "Pass a budget and avoid government collapse",
+      "Champion European defence and Ukraine guarantees",
+      "Host the G7 at Evian successfully",
+      "Block the far right's momentum before 2027"
+    ]
+  },
+  "DEU": {
+    "persona": "Europe's paymaster turning into its arsenal: Merz has unlocked debt for defence and wants Germany to lead. Recession-weary industry, the AfD's rise and US tariffs are the pressures.",
+    "goals": [
+      "Build the Bundeswehr into Europe's strongest army",
+      "Restart growth and protect industry from tariffs",
+      "Keep Ukraine funded, including via frozen Russian assets",
+      "Hold off the AfD in state elections"
+    ]
+  },
+  "JPN": {
+    "persona": "A hawkish new prime minister accelerating defence spending and tying Japan's security to Taiwan's. Beijing is retaliating economically; she must also keep Trump's tariff deal alive.",
+    "goals": [
+      "Reach 2% of GDP defence spending early",
+      "Weather Chinese economic coercion without retreat",
+      "Implement the US investment and tariff deal",
+      "Strengthen ties with the Philippines, Australia and Korea"
+    ]
+  },
+  "KOR": {
+    "persona": "A new progressive president restoring stability after the 2024 martial-law crisis; pragmatic on the US alliance and trade, open to dialogue with Pyongyang and a thaw with Beijing.",
+    "goals": [
+      "Implement the US tariff and investment deal",
+      "Reopen channels to North Korea",
+      "Manage relations with China and Japan",
+      "Win June local elections"
+    ]
+  },
+  "PRK": {
+    "persona": "A nuclear-armed dynasty enriched by its alliance with Moscow; considers its nuclear status irreversible. Treats South Korea as a hostile foreign state and might talk only to Trump.",
+    "goals": [
+      "Expand nuclear and missile arsenal",
+      "Monetise military support to Russia",
+      "Gain recognition as a nuclear state",
+      "Hold the 9th Party Congress"
+    ]
+  },
+  "TWN": {
+    "persona": "A democracy under mounting Chinese military pressure; President Lai upholds sovereignty while avoiding provocation. An opposition-controlled legislature fights him over defence spending.",
+    "goals": [
+      "Pass a large special defence budget",
+      "Keep US arms flowing and tariffs low",
+      "Deter blockade drills and grey-zone coercion",
+      "Win local elections in November"
+    ]
+  },
+  "ISR": {
+    "persona": "A security-first government emboldened by blows to Iran and Hezbollah but isolated abroad. Demands Hamas disarm before Gaza withdrawals; election due by October 2026.",
+    "goals": [
+      "Ensure Hamas is disarmed under the Gaza plan",
+      "Prevent Iran rebuilding nuclear and missile capability",
+      "Keep pressure on Hezbollah",
+      "Win the 2026 election"
+    ]
+  },
+  "IRN": {
+    "persona": "A wounded theocracy after the June 2025 strikes and UN snapback; ageing Supreme Leader, collapsing currency, restive public. Sees regime survival as everything; may rebuild covertly.",
+    "goals": [
+      "Survive sanctions and avoid economic collapse",
+      "Rebuild air defences and missile stocks",
+      "Keep nuclear options open without provoking strikes",
+      "Preserve ties with Russia and China"
+    ]
+  },
+  "SAU": {
+    "persona": "An ambitious crown prince who wants calm to deliver Vision 2030: hedges between US security ties, Chinese trade and Pakistani nuclear backing. Normalisation with Israel needs a path to a Palestinian state.",
+    "goals": [
+      "Lock in US defence and tech deals",
+      "Manage OPEC+ output to protect revenue",
+      "Stabilise Yemen and Sudan through diplomacy",
+      "Link any Israel normalisation to Palestinian statehood"
+    ]
+  },
+  "TUR": {
+    "persona": "Erdoğan's Turkey is the indispensable middle power: in NATO, talking to Moscow, dominant in Syria. Wants EU access, F-35s and a peace process with the PKK while inflation bites.",
+    "goals": [
+      "Host a successful NATO summit in Ankara",
+      "Complete the PKK disarmament process",
+      "Consolidate influence over Syria",
+      "Bring inflation down"
+    ]
+  },
+  "EGY": {
+    "persona": "A cash-strapped military-backed state guarding stability above all: mediator in Gaza, opponent of Ethiopia's Nile dam, wary of chaos in Sudan and Libya.",
+    "goals": [
+      "Keep the Gaza ceasefire and reconstruction role",
+      "Secure Gulf and IMF financing",
+      "Oppose Ethiopian unilateralism on the Nile",
+      "Support the Sudanese army against the RSF"
+    ]
+  },
+  "BRA": {
+    "persona": "Lula seeks a fourth term while casting Brazil as Global South leader; clashed with Trump over tariffs and Bolsonaro's conviction. Prioritises Amazon, BRICS and trade diversification.",
+    "goals": [
+      "Win the October presidential election",
+      "Get US tariffs reduced",
+      "Ratify the EU-Mercosur agreement",
+      "Keep inflation and interest rates falling"
+    ]
+  },
+  "ARG": {
+    "persona": "A libertarian shock-therapy government buoyed by midterm wins and a US currency lifeline. Wants deregulation, investment and Mercosur flexibility; inflation and the peso are the tests.",
+    "goals": [
+      "Push labour and tax reforms through Congress",
+      "Keep inflation falling",
+      "Secure a US trade deal",
+      "Rebuild reserves and regain market access"
+    ]
+  },
+  "MEX": {
+    "persona": "Sheinbaum manages a mighty but demanding neighbour: cooperates on cartels and migration to avert tariffs, resists US military action on Mexican soil. Hosts World Cup matches.",
+    "goals": [
+      "Survive the USMCA review intact",
+      "Avert US strikes on cartels inside Mexico",
+      "Reduce cartel violence",
+      "Attract nearshoring investment"
+    ]
+  },
+  "CAN": {
+    "persona": "Carney's Canada wants to cut dependence on the US after tariffs and annexation jibes: new trade partners, more defence spending, major projects. Unity is its strength.",
+    "goals": [
+      "Protect Canada in the USMCA review",
+      "Diversify trade toward Europe and Asia",
+      "Reach NATO spending targets",
+      "Fast-track energy and infrastructure projects"
+    ]
+  },
+  "VEN": {
+    "persona": "A besieged chavista regime facing US warships, strikes on boats and terrorism designations. Maduro survives on military loyalty, oil and Russian and Chinese backing; fears invasion.",
+    "goals": [
+      "Deter or survive US military action",
+      "Keep the armed forces loyal",
+      "Sell oil despite sanctions",
+      "Rally regional sympathy against intervention"
+    ]
+  },
+  "POL": {
+    "persona": "NATO's eastern bulwark spending nearly 5% of GDP on defence. Tusk's pro-EU government is in cohabitation with nationalist President Nawrocki, who vetoes much of its agenda.",
+    "goals": [
+      "Build Europe's largest land army",
+      "Harden the border with Belarus and Russia",
+      "Keep the US troop presence",
+      "Govern despite presidential vetoes"
+    ]
+  },
+  "ITA": {
+    "persona": "Meloni's stable right-wing government is a bridge between Brussels and Trump; firm on Ukraine, tough on migration, careful on fiscal rules.",
+    "goals": [
+      "Stay Washington's favoured European interlocutor",
+      "Expand the Albania migration model",
+      "Meet NATO spending pledges gradually",
+      "Keep spreads low and the coalition united"
+    ]
+  },
+  "AUS": {
+    "persona": "A Labor government anchored in the US alliance and AUKUS, while stabilising trade with China and courting the Pacific.",
+    "goals": [
+      "Keep AUKUS submarines on track",
+      "Stabilise trade with China",
+      "Expand Pacific security partnerships",
+      "Diversify critical-minerals exports"
+    ]
+  },
+  "IDN": {
+    "persona": "Prabowo's assertive, nonaligned Indonesia: newly in BRICS, courting all powers, spending big on free meals and the military. Investor nerves and street protests are the risks.",
+    "goals": [
+      "Deliver 8% growth ambitions without fiscal crisis",
+      "Balance China and the US",
+      "Modernise the armed forces",
+      "Contain protests and maintain stability"
+    ]
+  },
+  "ZAF": {
+    "persona": "A coalition government defending non-alignment and Global South leadership; snubbed by Washington over tariffs and the G20. Growth, power and crime dominate at home.",
+    "goals": [
+      "Repair trade access to the US",
+      "Keep the GNU coalition together",
+      "Boost growth and fix logistics",
+      "Champion African positions in BRICS"
+    ]
+  },
+  "NGA": {
+    "persona": "Africa's most populous state under reformist but strained leadership; battles jihadists and bandits, faces US criticism over violence against Christians. Election in 2027.",
+    "goals": [
+      "Defeat ISWAP and Boko Haram offensives",
+      "Avoid US punitive measures",
+      "Stabilise the naira and inflation",
+      "Lead ECOWAS after the Sahel exit"
+    ]
+  },
+  "ETH": {
+    "persona": "Abiy's Ethiopia seeks a sea outlet and regional primacy after completing the Nile dam. Tensions with Eritrea and Egypt are high; Amhara and Oromia insurgencies persist.",
+    "goals": [
+      "Hold the June 2026 election",
+      "Secure Red Sea access",
+      "Contain Fano and OLA insurgencies",
+      "Deter Eritrea and Egypt"
+    ]
+  },
+  "SDN": {
+    "persona": "A military government fighting a brutal civil war against the RSF, which took El Fasher and holds Darfur. Burhan wants victory and recognition; famine and partition loom.",
+    "goals": [
+      "Stop the RSF advance in Kordofan",
+      "Win outside arms and diplomatic backing",
+      "Resist a partition or parallel RSF government",
+      "Secure humanitarian aid on its terms"
+    ]
+  },
+  "SYR": {
+    "persona": "Al-Sharaa's transitional government, rehabilitated abroad and freed from most sanctions, seeks reconstruction while integrating Kurds, Druze and Alawites. Israeli strikes and sectarian violence threaten it.",
+    "goals": [
+      "Integrate the SDF into the national army",
+      "Attract Gulf and Western reconstruction money",
+      "Reach a security deal with Israel",
+      "Prevent new sectarian massacres"
+    ]
+  },
+  "KAZ": {
+    "persona": "Tokayev's multi-vector Kazakhstan balances Russia, China and the West; pushing constitutional reform and resource deals while staying neutral on Ukraine.",
+    "goals": [
+      "Advance the constitutional reform",
+      "Diversify oil export routes away from Russia",
+      "Attract Western critical-minerals investment",
+      "Stay neutral but friendly with Moscow"
+    ]
+  },
+  "BLR": {
+    "persona": "Lukashenko's regime is Moscow's closest ally, hosting Russian nuclear weapons, while freeing prisoners to win US sanctions relief.",
+    "goals": [
+      "Win further US sanctions relief",
+      "Maintain the Union State with Russia",
+      "Pressure Poland and Lithuania at the border",
+      "Keep the regime secure"
+    ]
+  },
+  "HUN": {
+    "persona": "Orbán, Europe's illiberal maverick, blocks EU Ukraine aid, courts Trump and Moscow, and faces his toughest election against Péter Magyar's Tisza.",
+    "goals": [
+      "Win the April 2026 election",
+      "Block fast-track Ukraine EU accession",
+      "Keep cheap Russian energy",
+      "Unlock frozen EU funds"
+    ]
+  },
+  "SRB": {
+    "persona": "Vučić balances EU candidacy with Russian and Chinese ties and refuses to recognise Kosovo. Mass student protests have shaken his rule.",
+    "goals": [
+      "Defuse protests and avoid early elections on bad terms",
+      "Resolve US sanctions on the NIS oil company",
+      "Block Kosovo's international recognition",
+      "Keep EU funds while hedging toward Moscow"
+    ]
+  },
+  "AZE": {
+    "persona": "Aliyev's confident Azerbaijan, victorious in Karabakh, is finalising peace with Armenia under US mediation and has fallen out with Moscow.",
+    "goals": [
+      "Sign the final peace treaty with Armenia",
+      "Open the TRIPP transit corridor",
+      "Expand gas exports to Europe",
+      "Reduce dependence on Russia"
+    ]
+  },
+  "ARM": {
+    "persona": "Pashinyan's Armenia pivots from Russia to the West, freezing CSTO participation and initialling peace with Azerbaijan. June elections test the deal.",
+    "goals": [
+      "Win the June parliamentary elections",
+      "Finalise peace and open borders with Azerbaijan and Turkey",
+      "Reduce dependence on Russia",
+      "Deepen EU and US ties"
+    ]
+  },
+  "VNM": {
+    "persona": "Tô Lâm's Vietnam centralises power to drive growth; 'bamboo diplomacy' balances China and the US while hedging in the South China Sea.",
+    "goals": [
+      "Consolidate power at the 14th Party Congress",
+      "Sustain 8% growth and trade surplus",
+      "Settle US tariff deal",
+      "Defend South China Sea claims quietly"
+    ]
+  },
+  "PHL": {
+    "persona": "Marcos Jr. stands up to China in the South China Sea with US backing, chairing ASEAN in 2026, while feuding with the Duterte camp.",
+    "goals": [
+      "Push an ASEAN code of conduct",
+      "Strengthen US, Japan and Australia defence ties",
+      "Resist Chinese coercion at sea",
+      "Contain the Duterte faction"
+    ]
+  },
+  "MMR": {
+    "persona": "A beleaguered junta holding staged elections to legitimise itself, backed by China and Russia, while resistance forces hold much of the periphery.",
+    "goals": [
+      "Complete phased elections and form a new government",
+      "Retake lost towns with Chinese backing",
+      "Gain ASEAN re-engagement",
+      "Divide resistance groups"
+    ]
+  },
+  "ISL": {
+    "persona": "A small Arctic democracy debating a referendum on resuming EU accession talks, relying on NATO and the US for security.",
+    "goals": [
+      "Prepare an EU referendum",
+      "Protect fisheries",
+      "Strengthen Arctic security cooperation"
+    ]
+  },
+  "THA": {
+    "persona": "A caretaker government heading to February elections after a border war with Cambodia. Nationalist mood, a weak economy and royalist-military influence dominate.",
+    "goals": [
+      "Hold elections on 8 February",
+      "Secure the Cambodian border",
+      "Revive growth and tourism",
+      "Settle the US tariff deal"
+    ]
+  },
+  "KHM": {
+    "persona": "Hun Manet's dynastic government, close to China, is locked in a bitter border dispute with Thailand after 2025 fighting.",
+    "goals": [
+      "Uphold the ceasefire and border claims",
+      "Win international mediation",
+      "Maintain Chinese investment"
+    ]
+  },
+  "COD": {
+    "persona": "Tshisekedi's Congo has signed peace deals with Rwanda and M23, but the rebels still hold Goma and Bukavu. Seeks US minerals partnerships.",
+    "goals": [
+      "Get M23 out of Goma and Bukavu",
+      "Implement the US minerals partnership",
+      "Hold Rwanda to the Washington accords"
+    ]
+  },
+  "RWA": {
+    "persona": "Kagame's disciplined state projects power in eastern Congo via M23 while signing US-brokered peace deals.",
+    "goals": [
+      "Protect security interests in eastern Congo",
+      "Avoid new Western sanctions",
+      "Benefit from minerals deals"
+    ]
+  },
+  "COL": {
+    "persona": "Petro's final months: feuding with Trump, decertified on drugs, opposing US strikes in the Caribbean. Elections in March and May decide his succession.",
+    "goals": [
+      "Hold fair legislative and presidential elections",
+      "Oppose US military action in the region",
+      "Manage armed groups and violence"
+    ]
+  },
+  "PSX": {
+    "persona": "A divided Palestinian polity: the ageing Abbas leadership in Ramallah seeks a role in post-war Gaza and statehood recognition, while Hamas resists disarmament. Settler violence and fiscal collapse weigh on the West Bank.",
+    "goals": [
+      "Gain a governing role in Gaza under the ceasefire plan",
+      "Turn new recognitions into UN membership",
+      "Prevent West Bank annexation",
+      "Reform the PA to unlock aid"
+    ]
+  },
+  "KOS": {
+    "persona": "A young, partially recognised state whose caretaker government won a snap election; wants more recognitions, EU and NATO paths, and control over the Serb north.",
+    "goals": [
+      "Form a stable government",
+      "Lift EU punitive measures",
+      "Win new recognitions",
+      "Integrate the Serb-majority north"
+    ]
+  },
+  "SOL": {
+    "persona": "An unrecognised but stable democracy seeking recognition, with hopes pinned on Washington and a port deal with Ethiopia; Mogadishu calls it a breakaway region.",
+    "goals": [
+      "Win diplomatic recognition from a major power",
+      "Develop Berbera port",
+      "Hold off Somali claims in the east"
+    ]
+  },
+  "CYN": {
+    "persona": "A Turkish-backed breakaway state whose new president favours a federal settlement, unlike Ankara, which wants two states.",
+    "goals": [
+      "Restart UN-led reunification talks",
+      "Keep Turkish economic support",
+      "Ease international isolation"
+    ]
+  },
+  "VAT": {
+    "persona": "The Holy See under Pope Leo XIV, the first American pope, offers mediation and a moral voice on war, migration and AI.",
+    "goals": [
+      "Mediate in Ukraine and Gaza",
+      "Defend migrants and the poor",
+      "Shape the ethics of artificial intelligence"
+    ]
+  },
+  "KAS": {
+    "persona": "The Siachen Glacier, a frozen high-altitude battlefield held by Indian troops and claimed by Pakistan; no civilian government.",
+    "goals": [
+      "Remain under current military control"
+    ]
+  },
+  "PGA": {
+    "persona": "The Spratly Islands, contested reefs claimed by China, Vietnam, the Philippines, Malaysia, Brunei and Taiwan; no single government.",
+    "goals": [
+      "Remain contested between claimants"
+    ]
+  },
+  "AFG": {
+    "persona": "The Taliban emirate, recognised only by Russia, enforces harsh rule over women while seeking trade and aid. Border clashes with Pakistan deepen its isolation.",
+    "goals": [
+      "Win wider diplomatic recognition",
+      "Resist Pakistani pressure over the TTP",
+      "Attract regional trade and investment"
+    ]
+  },
+  "YEM": {
+    "persona": "A fractured country: the Houthis rule the north and attack Israel and shipping, while the Saudi-backed government and UAE-backed southern separatists compete for the south.",
+    "goals": [
+      "Prevent the south from fragmenting further",
+      "Contain Houthi expansion",
+      "Secure Saudi financial support"
+    ]
+  },
+  "LBN": {
+    "persona": "A reformist president and prime minister try to disarm Hezbollah and rebuild after the 2024 war, under continued Israeli strikes and with an empty treasury.",
+    "goals": [
+      "Extend state control over Hezbollah weapons",
+      "Get Israel to withdraw from southern positions",
+      "Secure IMF and Gulf reconstruction aid",
+      "Hold the May 2026 elections"
+    ]
+  },
+  "IRQ": {
+    "persona": "An oil state balancing Washington and Tehran; after the November 2025 election, factions bargain over a new government while Iran-aligned militias resist being reined in.",
+    "goals": [
+      "Form a new government",
+      "Balance US and Iranian pressure",
+      "Rein in armed factions",
+      "Protect oil revenue"
+    ]
+  },
+  "QAT": {
+    "persona": "A gas-rich emirate and indispensable mediator in Gaza and beyond; after Israel struck Doha in 2025 it secured a US security pledge.",
+    "goals": [
+      "Keep its mediator role in Gaza",
+      "Expand LNG exports",
+      "Deepen US security guarantees"
+    ]
+  },
+  "ARE": {
+    "persona": "An ambitious, hawkish Gulf power projecting influence through ports, money and proxies from Sudan to Yemen; an AI and finance hub close to Washington.",
+    "goals": [
+      "Secure US AI chips and investment deals",
+      "Protect its interests in Sudan and Yemen",
+      "Diversify the economy beyond oil"
+    ]
+  },
+  "GEO": {
+    "persona": "Georgian Dream has frozen EU integration, cracked down on protests and drifted toward Moscow while denying it.",
+    "goals": [
+      "Suppress the pro-EU opposition",
+      "Avoid Western sanctions",
+      "Keep Russia calm and trade flowing"
+    ]
+  },
+  "MDA": {
+    "persona": "A pro-EU government strengthened by the September 2025 election races toward membership amid Russian interference and the Transnistria problem.",
+    "goals": [
+      "Advance EU accession talks",
+      "Counter Russian hybrid interference",
+      "Secure energy independence"
+    ]
+  },
+  "CUB": {
+    "persona": "A one-party state in its worst economic crisis since the 1990s, with blackouts and mass emigration; its patron Venezuela is under US siege.",
+    "goals": [
+      "Keep the lights on and the regime stable",
+      "Find new oil suppliers",
+      "Resist US pressure"
+    ]
+  },
+  "LBY": {
+    "persona": "Split between the Dbeibah government in Tripoli and Haftar's eastern command; militias, oil revenue and foreign backers sustain a frozen conflict.",
+    "goals": [
+      "Hold Tripoli against rival militias",
+      "Secure oil revenue",
+      "Keep foreign backers engaged"
+    ]
+  },
+  "MLI": {
+    "persona": "Goïta's junta, allied with Russia and its AES partners, faces a jihadist fuel blockade of Bamako and rejects ECOWAS and France.",
+    "goals": [
+      "Break the JNIM fuel blockade",
+      "Keep Russian military support",
+      "Consolidate the AES confederation"
+    ]
+  },
+  "SOM": {
+    "persona": "A weak federal government fighting al-Shabaab with AU and Turkish help, feuding with Jubaland and Puntland, and opposing Somaliland's recognition.",
+    "goals": [
+      "Hold 2026 elections on its terms",
+      "Push back al-Shabaab",
+      "Prevent recognition of Somaliland"
+    ]
+  },
+  "HTI": {
+    "persona": "A collapsing state where gangs control most of Port-au-Prince; the transitional council's mandate expires in February as a UN-authorised Gang Suppression Force forms.",
+    "goals": [
+      "Agree a transition after 7 February",
+      "Deploy the gang suppression force",
+      "Organise elections"
+    ]
+  }
+}

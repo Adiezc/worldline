@@ -1,0 +1,22 @@
+[
+  { "name": "United Korea", "concept": "Peaceful or forced reunification of the Korean peninsula under one government.", "countries": ["KOR", "PRK"] },
+  { "name": "Gran Colombia", "concept": "Revival of Bolívar's republic uniting the northern Andes and the isthmus.", "countries": ["COL", "VEN", "ECU", "PAN"] },
+  { "name": "European Federation", "concept": "The EU turned into a single federal state with a common government, army and foreign policy.", "countries": ["AUT", "BEL", "BGR", "HRV", "CYP", "CZE", "DNK", "EST", "FIN", "FRA", "DEU", "GRC", "HUN", "IRL", "ITA", "LVA", "LTU", "LUX", "MLT", "NLD", "POL", "PRT", "ROU", "SVK", "SVN", "ESP", "SWE"] },
+  { "name": "Nordic Union", "concept": "A federation of the Nordic countries sharing defence, currency and foreign policy.", "countries": ["DNK", "FIN", "ISL", "NOR", "SWE"] },
+  { "name": "Maghreb Union", "concept": "A political union of North Africa's western Arab states, reviving the Arab Maghreb Union.", "countries": ["MAR", "DZA", "TUN", "LBY", "MRT"] },
+  { "name": "Greater Somalia", "concept": "Unification of the Somali-inhabited lands of the Horn of Africa.", "countries": ["SOM", "SOL", "DJI"] },
+  { "name": "East African Federation", "concept": "The long-planned political federation of the East African Community.", "countries": ["KEN", "TZA", "UGA", "RWA", "BDI", "SDS", "COD"] },
+  { "name": "Union of South American Nations", "concept": "A continental union of South America with a common market, parliament and currency.", "countries": ["ARG", "BOL", "BRA", "CHL", "COL", "ECU", "GUY", "PRY", "PER", "SUR", "URY", "VEN"] },
+  { "name": "Pan-Arab Federation", "concept": "A unified Arab state from the Atlantic to the Gulf.", "countries": ["EGY", "SAU", "JOR", "IRQ", "SYR", "LBN", "PSX", "YEM", "ARE", "OMN", "KWT", "QAT", "BHR", "LBY", "TUN", "DZA", "MAR", "SDN"] },
+  { "name": "Central Asian Union", "concept": "Integration of the five Central Asian republics into a single union.", "countries": ["KAZ", "UZB", "KGZ", "TJK", "TKM"] },
+  { "name": "Benelux Union", "concept": "Full political union of Belgium, the Netherlands and Luxembourg.", "countries": ["BEL", "NLD", "LUX"] },
+  { "name": "Federation of Indochina", "concept": "A federation of the former French Indochina states.", "countries": ["VNM", "LAO", "KHM"] },
+  { "name": "Iberian Union", "concept": "Union of Spain and Portugal under a shared state.", "countries": ["ESP", "PRT"] },
+  { "name": "Balkan Federation", "concept": "A federation of the western and southern Balkan states overcoming old rivalries.", "countries": ["SRB", "HRV", "BIH", "MNE", "MKD", "SVN", "ALB", "KOS", "BGR"] },
+  { "name": "Baltic Union", "concept": "A federal union of Estonia, Latvia and Lithuania.", "countries": ["EST", "LVA", "LTU"] },
+  { "name": "Turkic Union", "concept": "A confederation of Turkic states building on the Organization of Turkic States.", "countries": ["TUR", "AZE", "KAZ", "UZB", "KGZ", "TKM", "CYN"] },
+  { "name": "Greater Romania", "concept": "Reunification of Romania and Moldova.", "countries": ["ROU", "MDA"] },
+  { "name": "United Ireland", "concept": "Irish reunification through a border poll in Northern Ireland.", "countries": ["IRL", "GBR"] },
+  { "name": "Reunified Cyprus", "concept": "A bizonal, bicommunal federation ending the island's division.", "countries": ["CYP", "CYN"] },
+  { "name": "Central American Federation", "concept": "Revival of the 19th-century Federal Republic of Central America.", "countries": ["GTM", "SLV", "HND", "NIC", "CRI"] }
+]

@@ -12,3 +12,6 @@ createRoot(document.getElementById("root")!).render(
     <App />
   </StrictMode>,
 );
+
+// Console helpers to preview the HUD without a server (see src/dev/mock.ts).
+if (import.meta.env.DEV) void import("./dev/mock.ts");

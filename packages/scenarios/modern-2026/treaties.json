@@ -1,0 +1,22 @@
+[
+  { "id": "t_us_jpn", "type": "defensive", "members": ["USA", "JPN"], "name": "US-Japan Treaty of Mutual Cooperation and Security", "since": "1960-06-23" },
+  { "id": "t_us_kor", "type": "defensive", "members": ["USA", "KOR"], "name": "US-ROK Mutual Defense Treaty", "since": "1954-11-17" },
+  { "id": "t_us_phl", "type": "defensive", "members": ["USA", "PHL"], "name": "US-Philippines Mutual Defense Treaty", "since": "1952-08-27" },
+  { "id": "t_anzus", "type": "defensive", "members": ["AUS", "NZL", "USA"], "name": "ANZUS Treaty", "since": "1952-04-29" },
+  { "id": "t_chn_prk", "type": "defensive", "members": ["CHN", "PRK"], "name": "Sino-North Korean Treaty of Friendship, Cooperation and Mutual Assistance", "since": "1961-07-11" },
+  { "id": "t_rus_prk", "type": "defensive", "members": ["RUS", "PRK"], "name": "Treaty on Comprehensive Strategic Partnership", "since": "2024-12-04" },
+  { "id": "t_rus_blr", "type": "alliance", "members": ["RUS", "BLR"], "name": "Union State of Russia and Belarus", "since": "2000-01-26" },
+  { "id": "t_usmca", "type": "trade", "members": ["USA", "CAN", "MEX"], "name": "USMCA", "since": "2020-07-01" },
+  { "id": "t_sau_pak", "type": "defensive", "members": ["SAU", "PAK"], "name": "Strategic Mutual Defense Agreement", "since": "2025-09-17" },
+  { "id": "t_tur_aze", "type": "defensive", "members": ["TUR", "AZE"], "name": "Shusha Declaration on Allied Relations", "since": "2021-06-15" },
+  { "id": "t_tur_cyn", "type": "defensive", "members": ["TUR", "CYN"], "name": "Turkish security guarantee of Northern Cyprus", "since": "1983-11-15" },
+  { "id": "t_chn_rus", "type": "nonaggression", "members": ["CHN", "RUS"], "name": "Treaty of Good-Neighbourliness and Friendly Cooperation", "since": "2001-07-16" },
+  { "id": "t_rus_irn", "type": "nonaggression", "members": ["RUS", "IRN"], "name": "Treaty on Comprehensive Strategic Partnership", "since": "2025-10-02" },
+  { "id": "t_fra_pol", "type": "defensive", "members": ["FRA", "POL"], "name": "Treaty of Nancy", "since": "2025-05-09" },
+  { "id": "t_fra_grc", "type": "defensive", "members": ["FRA", "GRC"], "name": "Franco-Greek Strategic Partnership", "since": "2021-09-28" },
+  { "id": "t_gbr_deu", "type": "defensive", "members": ["GBR", "DEU"], "name": "Kensington Treaty", "since": "2025-07-17" },
+  { "id": "t_cptpp", "type": "trade", "members": ["AUS", "BRN", "CAN", "CHL", "JPN", "MYS", "MEX", "NZL", "PER", "SGP", "VNM", "GBR"], "name": "CPTPP", "since": "2018-12-30" },
+  { "id": "t_rcep", "type": "trade", "members": ["BRN", "KHM", "IDN", "LAO", "MYS", "PHL", "SGP", "THA", "VNM", "CHN", "JPN", "KOR", "AUS", "NZL"], "name": "Regional Comprehensive Economic Partnership", "since": "2022-01-01" },
+  { "id": "t_efta", "type": "trade", "members": ["ISL", "LIE", "NOR", "CHE"], "name": "European Free Trade Association", "since": "1960-05-03" },
+  { "id": "t_sacu", "type": "customs_union", "members": ["ZAF", "BWA", "LSO", "NAM", "SWZ"], "name": "Southern African Customs Union", "since": "1910-06-29" }
+]

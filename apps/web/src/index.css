@@ -7,9 +7,75 @@
   --color-parchment: #e9dcc0;
   --color-parchment-dark: #cdb98f;
   --color-panel: #1d1a16;
+  --color-panel-light: #29241d;
   --color-panel-edge: #6b5636;
   --color-gold: #c9a45c;
+  --color-gold-bright: #e2c27e;
+  --color-success: #6fbf73;
+  --color-partial: #d9a441;
+  --color-fail: #d0574d;
 }
 
 html, body, #root { height: 100%; margin: 0; overflow: hidden; background: #1b2a38; }
 body { font-family: var(--font-sans); color: #efe6d2; }
+
+@layer components {
+  /* Dark translucent panel with a bronze edge and a faint inner gilt line. */
+  .hud-panel {
+    background: linear-gradient(180deg, rgb(33 29 24 / 0.95), rgb(24 21 18 / 0.93));
+    border: 1px solid var(--color-panel-edge);
+    border-radius: 6px;
+    box-shadow: 0 10px 30px rgb(0 0 0 / 0.45), inset 0 0 0 1px rgb(201 164 92 / 0.08);
+    backdrop-filter: blur(6px);
+  }
+  .hud-input {
+    width: 100%;
+    background: rgb(12 10 8 / 0.55);
+    border: 1px solid rgb(107 86 54 / 0.7);
+    border-radius: 4px;
+    padding: 6px 9px;
+    color: var(--color-parchment);
+    font-size: 13px;
+    outline: none;
+    transition: border-color 120ms, box-shadow 120ms;
+  }
+  .hud-input::placeholder { color: rgb(233 220 192 / 0.35); }
+  .hud-input:focus { border-color: var(--color-gold); box-shadow: 0 0 0 2px rgb(201 164 92 / 0.18); }
+  .hud-input:disabled { opacity: 0.6; }
+  select.hud-input { appearance: none; padding-right: 26px; background-image: linear-gradient(45deg, transparent 50%, #c9a45c 50%), linear-gradient(135deg, #c9a45c 50%, transparent 50%); background-position: calc(100% - 13px) 50%, calc(100% - 8px) 50%; background-size: 5px 5px; background-repeat: no-repeat; }
+  select.hud-input option { background: #1d1a16; color: #e9dcc0; }
+
+  .hud-label {
+    font-family: var(--font-display);
+    font-size: 10.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgb(201 164 92 / 0.85);
+  }
+
+  .hud-scroll { overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgb(107 86 54 / 0.8) transparent; }
+  .hud-scroll::-webkit-scrollbar { width: 6px; }
+  .hud-scroll::-webkit-scrollbar-thumb { background: rgb(107 86 54 / 0.8); border-radius: 3px; }
+
+  .gilt-rule {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgb(201 164 92 / 0.55), transparent);
+  }
+
+  /* Advisor letters: warm paper, serif ink. */
+  .letter {
+    background:
+      radial-gradient(ellipse at 20% 0%, rgb(255 255 255 / 0.35), transparent 60%),
+      linear-gradient(180deg, #efe2c3, #e2d0a8);
+    color: #2a2118;
+    border: 1px solid #b89a63;
+    border-radius: 3px;
+    box-shadow: 0 6px 18px rgb(0 0 0 / 0.35), inset 0 0 40px rgb(120 90 40 / 0.18);
+    font-family: Georgia, "Times New Roman", serif;
+  }
+}
+
+@keyframes hud-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.animate-hud-in { animation: hud-in 180ms ease-out both; }
+@keyframes hud-pulse { 0%, 100% { opacity: 0.45; } 50% { opacity: 1; } }
+.animate-hud-pulse { animation: hud-pulse 1.4s ease-in-out infinite; }

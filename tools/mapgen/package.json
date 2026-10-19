@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "bun run src/build.ts && bun run src/scenario-modern.ts",
+    "build": "bun run src/build.ts && bun run src/scenario-modern.ts && bun run src/scenario-seed.ts",
     "typecheck": "tsc -p ."
   },
   "dependencies": {

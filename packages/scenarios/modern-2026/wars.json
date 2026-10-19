@@ -1,0 +1,10 @@
+[
+  {
+    "id": "w_rus_ukr",
+    "name": "Russo-Ukrainian War",
+    "attackers": ["RUS"],
+    "defenders": ["UKR"],
+    "goal": "Russia seeks Ukraine's neutrality, demilitarisation and the cession of Donetsk, Luhansk, Zaporizhzhia and Kherson oblasts; Ukraine seeks to preserve sovereignty and recover occupied territory.",
+    "since": "2022-02-24"
+  }
+]

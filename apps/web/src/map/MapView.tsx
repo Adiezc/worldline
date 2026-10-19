@@ -6,9 +6,19 @@ import { MapRenderer, type Camera } from "./renderer.ts";
 import { LabelLayer } from "./labelLayer.ts";
 import { theme } from "./theme.ts";
 import type { WorkerRequest, WorkerResponse } from "./map.worker.ts";
+import { emitMapClick, publishMap, type FocusOptions, type FocusTarget, type MapController } from "./controller.ts";
 import { useMap } from "../store.ts";
 
 const MAX_ZOOM = 10;
+
+interface Tween {
+  from: Camera;
+  to: Camera;
+  start: number;
+  duration: number;
+}
+
+const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
 
 export function MapView() {
   const glRef = useRef<HTMLCanvasElement>(null);
@@ -20,8 +30,12 @@ export function MapView() {
     let renderer: MapRenderer;
     const labels = new LabelLayer(labelCanvas, theme);
     let ids: Uint16Array | null = null;
+    let meta: MapMeta | null = null;
     let dirty = true;
     let raf = 0;
+    let tween: Tween | null = null;
+    // Ownership as currently drawn (province id → owner index).
+    let owners: Int32Array = new Int32Array(0);
     const worker = new Worker(new URL("./map.worker.ts", import.meta.url), { type: "module" });
     const send = (m: WorkerRequest) => worker.postMessage(m);
     const scenario = start as ScenarioStart;
@@ -52,14 +66,27 @@ export function MapView() {
     const ro = new ResizeObserver(resize);
     ro.observe(glCanvas);
 
-    const frame = () => {
+    const frame = (now: number) => {
       raf = requestAnimationFrame(frame);
+      if (tween) {
+        const t = Math.min(1, (now - tween.start) / tween.duration);
+        const k = ease(t);
+        const c = renderer.camera;
+        // Interpolate zoom geometrically so the motion feels even.
+        c.zoom = tween.from.zoom * (tween.to.zoom / tween.from.zoom) ** k;
+        c.cx = tween.from.cx + (tween.to.cx - tween.from.cx) * k;
+        c.cy = tween.from.cy + (tween.to.cy - tween.from.cy) * k;
+        clampCamera(c);
+        if (t >= 1) tween = null;
+        dirty = true;
+      }
       if (!dirty || !ids) return;
       dirty = false;
       const st = useMap.getState();
       renderer.hover = st.hoverId;
       renderer.selected = st.selectedId;
-      renderer.selectedOwner = st.selectedId ? Math.max(0, scenario.owners[st.selectedId]) : 0xffff;
+      const so = st.selectedId ? owners[st.selectedId] : -1;
+      renderer.selectedOwner = so >= 0 ? so : 0xffff;
       renderer.render();
       labels.draw(renderer.camera, renderer.mapW);
     };
@@ -83,29 +110,112 @@ export function MapView() {
     const coastP = fetch("/map/coast.png").then((r) => r.arrayBuffer()).then((b) => decode(b));
     send({ type: "load", url: "/map/provinces.png" });
 
+    // --- Imperative controller -------------------------------------------------------------
+    const animateTo = (to: Camera, duration: number) => {
+      const from = { ...renderer.camera };
+      // Take the short way round the wrapped x axis.
+      const W = renderer.mapW;
+      let dx = to.cx - from.cx;
+      dx = ((dx + W / 2) % W + W) % W - W / 2;
+      tween = { from, to: { ...to, cx: from.cx + dx }, start: performance.now(), duration: Math.max(1, duration) };
+      dirty = true;
+    };
+
+    const focusOn = (target: FocusTarget, opts: FocusOptions = {}) => {
+      if (!meta) return;
+      let list: number[];
+      if (typeof target === "number") list = [target];
+      else if (Array.isArray(target)) list = target;
+      else {
+        list = [];
+        for (let id = 1; id < owners.length; id++) if (owners[id] === target.country) list.push(id);
+      }
+      const provs = list.map((id) => meta!.provinces[id - 1]).filter(Boolean);
+      if (!provs.length) return;
+      // Circular mean on x (the map wraps), pixel-weighted.
+      const W = renderer.mapW;
+      let sx = 0, sy = 0, wy = 0, total = 0;
+      for (const p of provs) {
+        const a = (p.cx / W) * Math.PI * 2;
+        const w = Math.max(1, p.pixels);
+        sx += Math.cos(a) * w;
+        sy += Math.sin(a) * w;
+        wy += p.cy * w;
+        total += w;
+      }
+      const cx = ((Math.atan2(sy, sx) / (Math.PI * 2)) * W + W) % W;
+      const cy = wy / total;
+      let zoom = renderer.camera.zoom;
+      const mode = opts.zoom ?? "fit";
+      if (typeof mode === "number") zoom = mode;
+      else if (mode === "fit") {
+        let spanX = 0, spanY = 0;
+        for (const p of provs) {
+          const r = Math.sqrt(p.pixels) * 0.7;
+          const dx = ((p.cx - cx + W / 2) % W + W) % W - W / 2;
+          spanX = Math.max(spanX, Math.abs(dx) + r);
+          spanY = Math.max(spanY, Math.abs(p.cy - cy) + r);
+        }
+        const vw = glCanvas.clientWidth, vh = glCanvas.clientHeight;
+        zoom = Math.min((vw * 0.32) / Math.max(spanX, 20), (vh * 0.32) / Math.max(spanY, 20));
+        zoom = Math.max(opts.minZoom ?? 0, Math.min(opts.maxZoom ?? 3, zoom));
+      }
+      animateTo({ cx, cy, zoom }, opts.duration ?? 700);
+    };
+
+    const controller: MapController = {
+      setPalette: (colors) => {
+        renderer.setPalette(colors);
+        dirty = true;
+      },
+      setOwnership: (o, c) => {
+        owners = Int32Array.from(o);
+        renderer.setOwnership(o, c);
+        dirty = true;
+      },
+      setProvince: (id, owner, ctl = owner) => {
+        if (id <= 0 || id >= owners.length) return;
+        owners[id] = owner;
+        renderer.setProvince(id, owner, ctl);
+        dirty = true;
+      },
+      setLabelStyle: (names, colors) => {
+        labels.names = names;
+        labels.setColors(colors);
+        dirty = true;
+      },
+      recomputeLabels: (o) => {
+        send({ type: "labels", owners: Int32Array.from(o), nameLengths: labels.names.map((n) => n.length) });
+      },
+      focusOn,
+      owners: () => owners,
+    };
+
     async function onLoaded(data: Uint16Array, width: number, height: number) {
-      const [meta, borders, coast] = await Promise.all([metaP, bordersP, coastP, document.fonts.load(`700 24px ${theme.labelFont}`)]);
+      const [m, borders, coast] = await Promise.all([metaP, bordersP, coastP, document.fonts.load(`700 24px ${theme.labelFont}`)]);
       if (disposed) return;
       try {
         renderer.init({
           ids: data, width, height,
           coast: coast.data as Uint8Array, coastW: coast.width, coastH: coast.height,
-          borders, provinceCount: meta.provinces.length,
+          borders, provinceCount: m.provinces.length,
         });
       } catch (e) {
         useMap.setState({ status: "error", error: String(e) });
         return;
       }
-      renderer.setPalette(scenario.countries.map((c) => c.color));
-      renderer.setOwnership(scenario.owners, scenario.controllers);
-      labels.names = scenario.countries.map((c) => c.name);
-      labels.setColors(scenario.countries.map((c) => c.color));
-      send({ type: "labels", owners: Int32Array.from(scenario.owners), nameLengths: labels.names.map((n) => n.length) });
+      meta = m;
+      // Static start map until a game view takes over (the menu backdrop).
+      controller.setPalette(scenario.countries.map((c) => c.color));
+      controller.setOwnership(scenario.owners, scenario.controllers);
+      controller.setLabelStyle(scenario.countries.map((c) => c.name), scenario.countries.map((c) => c.color));
+      controller.recomputeLabels(scenario.owners);
       ids = data;
       // Open on Europe/Middle East, like a Paradox start screen.
       Object.assign(renderer.camera, { cx: 4400, cy: 1250, zoom: Math.max(minZoom(), 0.42) });
       resize();
-      useMap.setState({ status: "ready", meta, scenario });
+      publishMap(controller);
+      useMap.setState({ status: "ready", meta: m, scenario });
     }
 
     // --- Input: drag to pan, wheel to zoom at the cursor, click to select.
@@ -129,6 +239,7 @@ export function MapView() {
         const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
         if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true;
         if (drag.moved) {
+          tween = null;
           const c = renderer.camera;
           c.cx -= dx / c.zoom;
           c.cy -= dy / c.zoom;
@@ -143,11 +254,16 @@ export function MapView() {
       if (id !== useMap.getState().hoverId) useMap.getState().setHover(id);
     };
     const onUp = (e: PointerEvent) => {
-      if (drag && !drag.moved) useMap.getState().setSelected(pick(e.clientX, e.clientY));
+      if (drag && !drag.moved) {
+        const id = pick(e.clientX, e.clientY);
+        useMap.getState().setSelected(id);
+        emitMapClick(id);
+      }
       drag = null;
     };
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
+      tween = null;
       const c = renderer.camera;
       const r = glCanvas.getBoundingClientRect();
       const mx = e.clientX - r.left - r.width / 2, my = e.clientY - r.top - r.height / 2;
@@ -169,6 +285,7 @@ export function MapView() {
 
     return () => {
       disposed = true;
+      publishMap(null);
       cancelAnimationFrame(raf);
       ro.disconnect();
       unsub();

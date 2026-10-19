@@ -6,3 +6,4 @@ dist/
 .env.local
 tools/mapgen/data/raw/
 *.sqlite
+apps/server/data/
