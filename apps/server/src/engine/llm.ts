@@ -1,7 +1,7 @@
 // Thin layer over the AI provider: JSON extraction, zod validation, one repair round and usage
 // accounting. Every engine feature talks to the model through callJson or callText.
 
-import { jsonSchemaOf, type GameState } from "@worldline/shared";
+import { jsonSchemaOf, salvageModelOutput, type GameState } from "@worldline/shared";
 import type { AiRequest, AiResponse, EngineDeps } from "./api.ts";
 
 type Schema = Parameters<typeof jsonSchemaOf>[0];
@@ -74,8 +74,12 @@ function parseWith(text: string, schema: Schema): { ok: true; value: unknown } |
   } catch (err) {
     return { ok: false, error: `not valid JSON (${err instanceof Error ? err.message : String(err)})` };
   }
+  const dropped = salvageModelOutput(raw);
   const parsed = schema.safeParse(raw);
-  if (parsed.success) return { ok: true, value: parsed.data };
+  if (parsed.success) {
+    if (dropped.length) console.warn(`[ai] dropped ${dropped.length} malformed effect(s): ${dropped.slice(0, 4).join("; ")}`);
+    return { ok: true, value: parsed.data };
+  }
   const issues = parsed.error.issues.slice(0, 8).map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`);
   return { ok: false, error: `schema mismatch: ${issues.join("; ")}` };
 }

@@ -134,3 +134,67 @@ export type VotesOutput = z.infer<typeof VotesOutputSchema>;
 export function jsonSchemaOf(schema: z.ZodType) {
   return z.toJSONSchema(schema, { target: "draft-7", io: "input" });
 }
+
+// ---- Salvaging model output ----------------------------------------------------------------
+
+const TREATY_TYPES = treatyType.options;
+/** Free-text treaty kinds models invent, mapped onto the closest real one (first match wins). */
+const TREATY_SYNONYMS: [RegExp, (typeof TREATY_TYPES)[number]][] = [
+  [/customs/, "customs_union"],
+  [/vassal|protectorate|puppet|client|tribut|suzerain/, "vassal"],
+  [/non.?aggression|ceasefire|armistice|peace|neutral|truce/, "nonaggression"],
+  [/defen[cs]|security|mutual|guarantee/, "defensive"],
+  [/allian|military|coalition/, "alliance"],
+  [/trade|econom|commerc|tariff|invest|energy|free|market|financ|agri|partner|cooperat|transit|infrastructure/, "trade"],
+];
+
+export function normalizeTreatyType(value: unknown): (typeof TREATY_TYPES)[number] | null {
+  if (typeof value !== "string") return null;
+  const v = value.toLowerCase().trim();
+  if ((TREATY_TYPES as readonly string[]).includes(v)) return v as (typeof TREATY_TYPES)[number];
+  return TREATY_SYNONYMS.find(([re]) => re.test(v))?.[1] ?? null;
+}
+
+/**
+ * Repair what can be repaired in a raw model reply before validation, in place: invented treaty
+ * types are mapped to real ones and any single effect that still fails its schema is dropped,
+ * so one malformed effect no longer sinks a whole turn. Returns a note per dropped effect.
+ */
+export function salvageModelOutput(raw: unknown): string[] {
+  const dropped: string[] = [];
+  if (!raw || typeof raw !== "object") return dropped;
+  const clean = (list: unknown, where: string) => {
+    if (!Array.isArray(list)) return list;
+    return list.filter((e, i) => {
+      if (e && typeof e === "object" && (e as { type?: unknown }).type === "createTreaty") {
+        const t = normalizeTreatyType((e as { treatyType?: unknown }).treatyType);
+        if (t) (e as { treatyType: string }).treatyType = t;
+      }
+      const ok = EffectSchema.safeParse(e);
+      if (!ok.success) {
+        const issue = ok.error.issues[0];
+        dropped.push(`${where}.${i} (${(e as { type?: string })?.type ?? "?"}): ${issue ? `${issue.path.join(".") || "(root)"}: ${issue.message}` : "invalid"}`);
+      }
+      return ok.success;
+    });
+  };
+  const r = raw as { events?: unknown; intents?: unknown; proposal?: unknown };
+  if (Array.isArray(r.events)) {
+    r.events.forEach((ev, i) => {
+      if (ev && typeof ev === "object") (ev as { effects?: unknown }).effects = clean((ev as { effects?: unknown }).effects, `events.${i}.effects`);
+    });
+  }
+  if (Array.isArray(r.intents)) {
+    r.intents.forEach((it, i) => {
+      if (it && typeof it === "object") (it as { selfEffects?: unknown }).selfEffects = clean((it as { selfEffects?: unknown }).selfEffects, `intents.${i}.selfEffects`);
+    });
+  }
+  // Chat proposals: an unknown treaty type becomes the closest one, or none.
+  const p = r.proposal as { treatyType?: unknown } | undefined;
+  if (p && typeof p === "object" && p.treatyType !== undefined) {
+    const t = normalizeTreatyType(p.treatyType);
+    if (t) p.treatyType = t;
+    else delete p.treatyType;
+  }
+  return dropped;
+}

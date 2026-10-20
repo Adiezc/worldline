@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
-  AssessorOutputSchema, ChatOutputSchema, DirectorOutputSchema, EffectSchema, ResolverOutputSchema, VotesOutputSchema, jsonSchemaOf,
+  AssessorOutputSchema, ChatOutputSchema, DirectorOutputSchema, EffectSchema, ResolverOutputSchema, VotesOutputSchema, jsonSchemaOf, salvageModelOutput,
 } from "../src/game/schemas.ts";
 import type { Effect } from "../src/game/state.ts";
 
@@ -127,5 +127,35 @@ describe("jsonSchemaOf", () => {
     }
     const resolver = jsonSchemaOf(ResolverOutputSchema) as { properties: Record<string, unknown> };
     expect(Object.keys(resolver.properties).sort()).toEqual(["events", "orderVerdicts", "stopDate"]);
+  });
+});
+
+describe("salvaging model output", () => {
+  test("invented treaty types map to real ones; hopeless effects are dropped, not fatal", () => {
+    const raw = {
+      orderVerdicts: [],
+      events: [
+        { date: "2026-02-01", headline: "Pact signed", effects: [
+          { type: "createTreaty", treatyType: "security_pact", members: ["POL", "UKR"] },
+          { type: "createTreaty", treatyType: "Economic Partnership", members: ["DEU", "FRA"] },
+          { type: "createTreaty", treatyType: "cultural_exchange", members: ["ITA", "ESP"] },
+          { type: "statDelta", country: "POL", stat: "happiness", delta: 3 },
+          { type: "relationDelta", a: "POL", b: "UKR", delta: 5 },
+        ] },
+      ],
+    };
+    const dropped = salvageModelOutput(raw);
+    expect(dropped).toHaveLength(2);
+    const parsed = ResolverOutputSchema.parse(raw);
+    expect(parsed.events[0].effects.map((e) => (e.type === "createTreaty" ? e.treatyType : e.type))).toEqual(["defensive", "trade", "relationDelta"]);
+  });
+
+  test("a chat proposal with an unknown treaty type keeps the closest one or none", () => {
+    const a = { speaker: "FRA", reply: "Yes.", proposal: { kind: "treaty", treatyType: "mutual defence", members: ["FRA", "POL"], terms: "x" } };
+    const b = { speaker: "FRA", reply: "Yes.", proposal: { kind: "custom", treatyType: "space program", members: ["FRA", "POL"], terms: "x" } };
+    salvageModelOutput(a);
+    salvageModelOutput(b);
+    expect(ChatOutputSchema.parse(a).proposal?.treatyType).toBe("defensive");
+    expect(ChatOutputSchema.parse(b).proposal?.treatyType).toBeUndefined();
   });
 });
