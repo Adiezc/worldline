@@ -33,6 +33,7 @@ export function OrdersPanel({ onClose }: { onClose: () => void }) {
               You are ready. Un-ready in the top bar to change your orders.
             </div>
           )}
+          <CallsToArms me={me.tag} locked={locked} />
           {orders.length === 0 && <Empty>No orders yet. Tell your government what to do, in plain words.</Empty>}
           <ol className="space-y-2">
             {orders.map((o, i) => (
@@ -47,6 +48,56 @@ export function OrdersPanel({ onClose }: { onClose: () => void }) {
         </>
       )}
     </Panel>
+  );
+}
+
+/**
+ * Allies calling this nation to war. Left unanswered for two turns, a call counts as a refusal
+ * (relations and the alliance suffer), so it is put to the player as a decision with ready orders.
+ */
+function CallsToArms({ me, locked }: { me: string; locked: boolean }) {
+  const view = useGame((s) => s.view)!;
+  const orders = useGame((s) => s.orders);
+  const calls = view.wars.flatMap((w) => (w.calls ?? []).filter((c) => c.tag === me).map((c) => ({ war: w, ...c })));
+  if (!calls.length) return null;
+  const names = (tags: string[]) => {
+    const n = tags.map((t) => countryMap(view.countries).get(t)?.name ?? t);
+    return n.length > 1 ? `${n.slice(0, -1).join(", ")} and ${n.at(-1)}` : n.join("");
+  };
+  return (
+    <div className="mb-3 space-y-2">
+      {calls.map(({ war, via, since }) => {
+        const allies = names(war.defenders), enemies = names(war.attackers);
+        const join = `Honour our ${via} commitment: join the ${war.name} on the side of ${allies} against ${enemies}.`;
+        const decline = `Decline the call to arms from ${allies}: stay out of the ${war.name}.`;
+        const answered = orders.some((o) => o.text === join || o.text === decline);
+        // Calls expire at the end of the second turn after the one that made them.
+        const lastTurn = since + 3 - view.turn <= 1;
+        return (
+          <div key={war.id} className="rounded border border-partial/50 bg-partial/[0.08] px-3 py-2 text-[12px] leading-snug">
+            <div className="flex items-center gap-1.5 font-display text-[12.5px] text-[#f1d39a]">
+              <Icon name="swords" size={13} /> Called to arms
+            </div>
+            <p className="mt-1 text-parchment/80">
+              Through {via}, {allies} {war.defenders.length === 1 ? "calls" : "call"} on you to join the {war.name} against {enemies}.
+            </p>
+            <p className="mt-0.5 text-parchment/50">
+              {lastTurn ? "Answer this turn" : "Answer within two turns"}, or it counts as a refusal and the alliance suffers.
+            </p>
+            {!locked && !answered && (
+              <div className="mt-1.5 flex gap-1.5">
+                <Button size="sm" variant="primary" icon="swords" onClick={() => addOrder(join)}>
+                  Join the war
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => addOrder(decline)}>
+                  Decline
+                </Button>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
