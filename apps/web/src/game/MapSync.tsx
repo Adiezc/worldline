@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import { getMap } from "../map/controller.ts";
 import { useMap } from "../store.ts";
-import { pushFronts } from "./fronts.ts";
+import { mapIndexFor, pushFronts } from "./fronts.ts";
 import { pushOperations } from "./operations.ts";
 import { pushDisputes } from "./disputes.ts";
 import { computePalette } from "./mapModes.ts";
@@ -17,6 +17,12 @@ function sameOwners(a: ArrayLike<number> | null, b: ArrayLike<number>) {
   for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
   return true;
 }
+
+/**
+ * Capital stars (map/capitalLayer.ts) are built but switched off for now; flip this to show them.
+ * Capitals themselves stay in the data: countries keep one, and it moves when the region is lost.
+ */
+const SHOW_CAPITALS = false;
 
 export function MapSync() {
   const ready = useMap((s) => s.status === "ready");
@@ -62,6 +68,40 @@ export function MapSync() {
     map.setPalette(computePalette(mode, { countries, relations: relations ?? {}, wars: wars ?? [], organizations: orgs ?? [], claims: view?.claims, owners: view?.owners }, { focus, orgId }));
     map.setLabelStyle(countries.map((c) => (c.alive === false ? "" : c.name)), countries.map((c) => c.color));
   }, [ready, editing, scenario, countries, relations, wars, orgs, mode, focus, orgId, view?.claims, view?.owners]);
+
+  // Capital stars: each living country's capital while it still owns that region.
+  useEffect(() => {
+    const map = getMap();
+    if (!ready || !map) return;
+    if (!SHOW_CAPITALS || editing || !view) {
+      map.setCapitals([]);
+      return;
+    }
+    if (!meta) return;
+    // Size of the land around each capital (the country's connected regions, so Greenland doesn't
+    // make Denmark look huge): the capital appears once that land is big on screen.
+    const idx = mapIndexFor(meta);
+    const extentAround = (start: number, owner: number) => {
+      const seen = new Set([start]);
+      const queue = [start];
+      let pixels = 0;
+      while (queue.length) {
+        const id = queue.pop()!;
+        pixels += meta.provinces[id - 1]?.pixels ?? 0;
+        for (const n of idx.neighbors[id] ?? []) {
+          if (!seen.has(n) && view.owners[n] === owner) {
+            seen.add(n);
+            queue.push(n);
+          }
+        }
+      }
+      return Math.sqrt(pixels);
+    };
+    map.setCapitals(view.countries.flatMap((c, i) =>
+      c.alive !== false && c.capital && view.owners[c.capital.province] === i
+        ? [{ tag: c.tag, name: c.capital.name, x: c.capital.x, y: c.capital.y, extent: extentAround(c.capital.province, i) }]
+        : []));
+  }, [ready, editing, view?.countries, view?.owners, meta]);
 
   // Disputed territories: dashed claim lines, and claimant stripes in the Disputes mode.
   useEffect(() => {

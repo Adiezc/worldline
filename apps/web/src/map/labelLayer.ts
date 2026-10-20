@@ -17,6 +17,8 @@ export class LabelLayer {
   /** Per-owner ink: a deep shade of the country's own colour, Paradox style. */
   inks: string[] = [];
   private fade = 1;
+  /** Screen boxes (CSS px) of the letters drawn last frame, so other marks can keep clear. */
+  boxes: { x0: number; y0: number; x1: number; y1: number }[] = [];
   private colors: string[] = [];
 
   setColors(colors: string[]) {
@@ -61,6 +63,7 @@ export class LabelLayer {
     const W = this.canvas.width / dpr, H = this.canvas.height / dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, W, H);
+    this.boxes = [];
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillStyle = this.theme.labelInk;
@@ -136,6 +139,8 @@ export class LabelLayer {
       ctx.rotate(ang);
       ctx.fillText(ch, 0, 0);
       ctx.restore();
+      // A legible letter claims its spot (an axis-aligned box is close enough for gentle curves).
+      if (alpha > 0.3) this.boxes.push({ x0: x - w / 2, y0: y - size * 0.45, x1: x + w / 2, y1: y + size * 0.45 });
       s += w + spacing;
     }
     ctx.globalAlpha = 1;

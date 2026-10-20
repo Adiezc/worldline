@@ -561,8 +561,9 @@ export function applyEvent(state: GameState, map: MapIndex, event: GameEvent, ct
     }
   }
 
-  // A claim is settled once the claimant owns the land.
+  // A claim is settled once the claimant owns the land; a lost capital moves.
   if (diff.size && state.claims?.length) pruneClaims(state);
+  if (diff.size) relocateCapitals(state, map);
 
   // Countries that lost their last region cease to exist.
   const held = new Set(state.owners.filter((o) => o >= 0));
@@ -581,6 +582,38 @@ export function applyEvent(state: GameState, map: MapIndex, event: GameEvent, ct
 }
 
 const MAX_CLAIM_REGIONS = 20;
+
+/**
+ * Keep every living country's capital in a region it owns: a capital lost to annexation or cession
+ * moves to the country's nearest remaining region, and a country without one (newly created) gets
+ * its largest region.
+ */
+export function relocateCapitals(state: GameState, map: MapIndex) {
+  const owned = new Map<number, number[]>();
+  for (let id = 1; id <= map.count; id++) {
+    const o = state.owners[id];
+    if (o < 0) continue;
+    if (!owned.has(o)) owned.set(o, []);
+    owned.get(o)!.push(id);
+  }
+  state.countries.forEach((c, i) => {
+    const mine = owned.get(i);
+    if (!c.alive || !mine?.length || c.capital === null) return;
+    if (c.capital && state.owners[c.capital.province] === i) return;
+    let pick = mine[0];
+    if (c.capital) {
+      const { x, y } = c.capital;
+      const dist = (id: number) => {
+        const dx = Math.abs(map.cx[id] - x);
+        return Math.hypot(Math.min(dx, map.width - dx), map.cy[id] - y);
+      };
+      pick = mine.reduce((a, b) => (dist(b) < dist(a) ? b : a));
+    } else {
+      pick = mine.reduce((a, b) => ((map.area[b] ?? 0) > (map.area[a] ?? 0) ? b : a));
+    }
+    c.capital = { name: map.names[pick] ?? c.name, x: map.cx[pick], y: map.cy[pick], province: pick };
+  });
+}
 
 /** Drop claimed regions the claimant now owns, and claims of countries that no longer exist. */
 export function pruneClaims(state: GameState) {

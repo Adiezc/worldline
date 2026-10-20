@@ -47,6 +47,7 @@ import {
   type Treaty,
   type War,
 } from "@worldline/shared";
+import { assignCapitals } from "./capitals.ts";
 import { flagFor } from "./flags.ts";
 
 const ROOT = join(import.meta.dir, "..", "..", "..");
@@ -430,6 +431,10 @@ fill(members("commonwealth"), members("commonwealth"), 20);
 const nDefault = Object.keys(relations).length - nHand;
 
 // ---------- Assemble and validate ----------
+
+// ---------- Capitals ----------
+
+await assignCapitals("cold-war-1962", countries, owners, meta, warn);
 
 const seed: ScenarioSeed = {
   id: "cold-war-1962",

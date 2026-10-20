@@ -2,8 +2,9 @@
 import type { EraTheme } from "@worldline/shared";
 import type { FrontCounter, FrontsOverlay } from "./counterLayer.ts";
 import type { OperationArrow } from "./operationLayer.ts";
+import type { CapitalMark } from "./capitalLayer.ts";
 
-export type { FrontCounter, FrontsOverlay, OperationArrow };
+export type { CapitalMark, FrontCounter, FrontsOverlay, OperationArrow };
 
 export type FocusTarget =
   | number // province id
@@ -45,6 +46,8 @@ export interface MapController {
   setMarked(ids: ArrayLike<number>): void;
   /** Disputed territories: dashed claim lines (province pairs) and claimant stripes (id → claimant index). */
   setClaims(linePairs: [number, number][] | null, marks: Map<number, number> | null): void;
+  /** Capital stars (empty hides them). */
+  setCapitals(marks: CapitalMark[]): void;
   /** Battle plans: offensive arrows and hold lines (province pairs along the held border). */
   setOperations(arrows: OperationArrow[], holdPairs: [number, number][] | null): void;
 }

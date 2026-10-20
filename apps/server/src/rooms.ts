@@ -4,7 +4,7 @@
 
 import type { ServerWebSocket } from "bun";
 import {
-  DEFAULT_SETTINGS, countryByTag, pruneClaims, sanitizeOperation, type ClientMessage, type GameSettings, type GameState, type GameView,
+  DEFAULT_SETTINGS, countryByTag, pruneClaims, relocateCapitals, sanitizeOperation, type ClientMessage, type GameSettings, type GameState, type GameView,
   type MapIndex, type ScenarioSeed, type ServerMessage,
 } from "@worldline/shared";
 import { engine, jumpDays, turnEvents } from "./engine/index.ts";
@@ -446,6 +446,7 @@ export class Room {
     next.seq = Math.max(next.seq, s.seq);
     // Snapshots from before disputes existed get the scenario's claims.
     if (!next.claims) next.claims = backfillClaims(next, this.deps.seed(next.scenarioId));
+    backfillCapitals(next, this.deps.seed(next.scenarioId), this.deps.map);
     delete next.turnDeadline;
     this.state = next;
     this.snapEvents = undefined;
@@ -565,6 +566,7 @@ export class RoomManager {
     for (const p of state.players) p.connected = false;
     // Games saved before disputes existed get the scenario's claims (minus land already settled).
     if (!state.claims) state.claims = backfillClaims(state, this.deps.seed(state.scenarioId));
+    backfillCapitals(state, this.deps.seed(state.scenarioId), this.deps.map);
     room = new Room(state, this.deps);
     this.rooms.set(id, room);
     return room;
@@ -576,6 +578,18 @@ function backfillClaims(state: GameState, seed: ScenarioSeed) {
   const tmp = { ...state, claims };
   pruneClaims(tmp);
   return tmp.claims;
+}
+
+/** Games saved before capitals existed take the scenario's, moved if the region has changed hands. */
+function backfillCapitals(state: GameState, seed: ScenarioSeed, map: MapIndex) {
+  if (state.countries.every((c) => c.capital !== undefined || !c.alive)) return;
+  const fromSeed = new Map(seed.countries.map((c) => [c.tag, c.capital]));
+  for (const c of state.countries) {
+    if (c.capital !== undefined || !fromSeed.has(c.tag)) continue;
+    const cap = fromSeed.get(c.tag);
+    c.capital = cap ? { ...cap } : null;
+  }
+  relocateCapitals(state, map);
 }
 
 function sanitizeSettings(s: GameSettings): GameSettings {

@@ -6,6 +6,7 @@ import { MapRenderer, type Camera } from "./renderer.ts";
 import { LabelLayer } from "./labelLayer.ts";
 import { CounterLayer } from "./counterLayer.ts";
 import { OperationLayer } from "./operationLayer.ts";
+import { CapitalLayer } from "./capitalLayer.ts";
 import { getTheme, theme } from "./theme.ts";
 import type { WorkerRequest, WorkerResponse } from "./map.worker.ts";
 import { emitMapClick, getPaintHandler, getPickHandler, publishMap, type FocusOptions, type FocusTarget, type MapController } from "./controller.ts";
@@ -33,6 +34,7 @@ export function MapView() {
     const labels = new LabelLayer(labelCanvas, theme);
     const counters = new CounterLayer(labelCanvas);
     const operations = new OperationLayer(labelCanvas);
+    const capitals = new CapitalLayer(labelCanvas);
     let ids: Uint16Array | null = null;
     let meta: MapMeta | null = null;
     let dirty = true;
@@ -109,6 +111,7 @@ export function MapView() {
       if (dirty || tick) renderer.render();
       if (dirty || overlayDirty) {
         labels.draw(renderer.camera, renderer.mapW);
+        capitals.draw(renderer.camera, labels.boxes);
         operations.draw(renderer.camera);
         counters.draw(renderer.camera);
       }
@@ -246,6 +249,7 @@ export function MapView() {
         if (renderer.theme === t) return;
         renderer.theme = t;
         labels.setTheme(t);
+        capitals.setFont(t.labelFont);
         dirty = true;
       },
       setHighlightOwner: (o) => {
@@ -259,6 +263,10 @@ export function MapView() {
       setClaims: (linePairs, marks) => {
         renderer.setClaimLines(linePairs);
         renderer.setClaimMarks(marks);
+        dirty = true;
+      },
+      setCapitals: (marks) => {
+        capitals.set(marks, renderer.mapW);
         dirty = true;
       },
       setOperations: (arrows, holdPairs) => {

@@ -28,6 +28,8 @@ export interface Country {
   alive: boolean;
   /** Nuclear-armed; informs AI deterrence reasoning. */
   nuclear?: boolean;
+  /** Capital city: its map position (px) and the region it lies in. null = none (uninhabited entries). */
+  capital?: { name: string; x: number; y: number; province: number } | null;
   /**
    * Flag reference, rendered by the client:
    *   "iso:fr"                    real flag by ISO 3166-1 alpha-2 code

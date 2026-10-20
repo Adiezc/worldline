@@ -45,6 +45,7 @@ import {
   type Treaty,
   type War,
 } from "@worldline/shared";
+import { assignCapitals } from "./capitals.ts";
 import { flagFor } from "./flags.ts";
 
 const ROOT = join(import.meta.dir, "..", "..", "..");
@@ -449,6 +450,10 @@ const disputes = disputesRaw.flatMap((d) => {
 });
 
 // ---------- Assemble and validate ----------
+
+// ---------- Capitals ----------
+
+await assignCapitals("modern-2026", countries, start.owners, meta, warn);
 
 const seed: ScenarioSeed = {
   id: "modern-2026",

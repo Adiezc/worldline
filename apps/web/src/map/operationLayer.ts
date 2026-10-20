@@ -15,11 +15,12 @@ export interface OperationArrow {
   label?: string;
 }
 
-const PALETTE: Record<ArrowStyle, { fill: string; edge: string; alpha: number }> = {
-  plan: { fill: "#c9372c", edge: "#3b0d0a", alpha: 0.92 },
-  draft: { fill: "#e0574a", edge: "#3b0d0a", alpha: 0.75 },
-  ally: { fill: "#d9892b", edge: "#3a2207", alpha: 0.85 },
-  result: { fill: "#a8463c", edge: "#2a0c09", alpha: 0.9 },
+/** HOI4-like battle-plan colours: fill, border, the lighter streak along the spine. */
+const PALETTE: Record<ArrowStyle, { fill: string; edge: string; light: string; alpha: number }> = {
+  plan: { fill: "#d0342a", edge: "#4a0d08", light: "#ff9a7e", alpha: 0.88 },
+  draft: { fill: "#e0574a", edge: "#4a0d08", light: "#ffb39c", alpha: 0.72 },
+  ally: { fill: "#e08a2a", edge: "#4a2a06", light: "#ffd08a", alpha: 0.85 },
+  result: { fill: "#b0392f", edge: "#3a0b07", light: "#f08a72", alpha: 0.9 },
 };
 const FONT = "Inter, system-ui, sans-serif";
 
@@ -47,7 +48,8 @@ export class OperationLayer {
     const W = this.canvas.width / dpr, H = this.canvas.height / dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     // Arrow width in CSS px: readable at world scale, not a slab when zoomed in.
-    const w = Math.max(5, Math.min(14, 7 + 3 * Math.log2(Math.max(0.05, cam.zoom) / 0.5)));
+    // Arrow width in CSS px: chunky like HOI4's at every zoom, never a slab.
+    const w = Math.max(8, Math.min(24, 13 + 4.5 * Math.log2(Math.max(0.05, cam.zoom) / 0.5)));
     const halfW = W / 2 / cam.zoom;
     for (const a of this.arrows) {
       if (a.points.length < 2) continue;
@@ -64,68 +66,63 @@ export class OperationLayer {
   private drawArrow(a: OperationArrow, pts: [number, number][], w: number) {
     const ctx = this.ctx;
     const pal = PALETTE[a.style];
-    // Start a little past the jump-off centroid and stop short of the last one for the head.
-    const path = trimEnds(pts, w * 0.6, w * 1.6);
-    if (path.length < 2) return;
-    const head = path[path.length - 1];
-    const prev = path[path.length - 2];
-    const ang = Math.atan2(head[1] - prev[1], head[0] - prev[0]);
-    const tip: [number, number] = [head[0] + Math.cos(ang) * w * 1.6, head[1] + Math.sin(ang) * w * 1.6];
+    const shape = arrowShape(pts, w);
+    if (!shape) return;
 
     ctx.save();
     ctx.lineJoin = "round";
-    ctx.lineCap = "round";
     if (a.style === "result") {
-      // What the offensive took is solid; the rest of the plan fades out.
-      const split = Math.max(0, Math.min(pts.length - 1, a.reached ?? 0));
-      const done = split > 0 ? trimEnds(pts.slice(0, split + 1), w * 0.6, 0) : [];
-      ctx.globalAlpha = 0.35;
-      ctx.setLineDash([w * 1.2, w * 0.9]);
-      this.body(path, w, pal);
-      this.head(path, tip, ang, w, pal);
-      ctx.setLineDash([]);
-      ctx.globalAlpha = pal.alpha;
-      if (done.length >= 2) this.body(done, w, pal);
+      // The whole plan as a ghost; what the offensive actually took as a full, pointed arrow
+      // ending where the advance stopped.
+      const reached = Math.max(0, Math.min(pts.length - 1, a.reached ?? 0));
+      if (reached < pts.length - 1) this.paint(shape.outline, shape, pal, 0.3, true);
+      const done = reached > 0 ? arrowShape(pts.slice(0, reached + 1), w) : null;
+      if (done) this.paint(done.outline, done, pal, pal.alpha, false);
     } else {
-      ctx.globalAlpha = pal.alpha;
-      if (a.style === "draft") ctx.setLineDash([w * 1.4, w * 0.7]);
-      this.body(path, w, pal);
-      ctx.setLineDash([]);
-      this.head(path, tip, ang, w, pal);
+      this.paint(shape.outline, shape, pal, pal.alpha, a.style === "draft");
     }
     ctx.restore();
     // Caption beyond the arrowhead, where the troop counters (on the line) won't cover it.
-    if (a.label) this.caption(a.label, [tip[0] + Math.cos(ang) * 6, tip[1] + Math.sin(ang) * 6], ang, pal);
+    if (a.label) this.caption(a.label, [shape.tip[0] + Math.cos(shape.ang) * 6, shape.tip[1] + Math.sin(shape.ang) * 6], shape.ang, pal);
   }
 
-  /** Smooth body: a dark edge stroke under the fill stroke. */
-  private body(path: [number, number][], w: number, pal: (typeof PALETTE)[ArrowStyle]) {
+  /**
+   * HOI4 look: a pale rim, then the red fill with a lighter streak down the middle, then a dark
+   * red border. `dashed` draws the border dashed (a plan still being drawn, or what was not taken).
+   */
+  private paint(poly: [number, number][], shape: ArrowShape, pal: (typeof PALETTE)[ArrowStyle], alpha: number, dashed: boolean) {
     const ctx = this.ctx;
-    smoothPath(ctx, path);
-    ctx.strokeStyle = pal.edge;
-    ctx.lineWidth = w + 3;
+    const trace = () => {
+      ctx.beginPath();
+      poly.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+      ctx.closePath();
+    };
+    ctx.globalAlpha = alpha;
+    trace();
+    ctx.strokeStyle = "rgba(255, 238, 214, 0.75)";
+    ctx.lineWidth = 4;
     ctx.stroke();
-    smoothPath(ctx, path);
-    ctx.strokeStyle = pal.fill;
-    ctx.lineWidth = w;
-    ctx.stroke();
-  }
-
-  private head(path: [number, number][], tip: [number, number], ang: number, w: number, pal: (typeof PALETTE)[ArrowStyle]) {
-    const ctx = this.ctx;
-    const base = path[path.length - 1];
-    const nx = -Math.sin(ang), ny = Math.cos(ang);
-    const hw = w * 1.35;
-    ctx.beginPath();
-    ctx.moveTo(tip[0], tip[1]);
-    ctx.lineTo(base[0] + nx * hw, base[1] + ny * hw);
-    ctx.lineTo(base[0] - nx * hw, base[1] - ny * hw);
-    ctx.closePath();
     ctx.fillStyle = pal.fill;
-    ctx.strokeStyle = pal.edge;
-    ctx.lineWidth = 1.5;
     ctx.fill();
+    // Highlight: a narrow lighter band along the spine, clipped to the arrow.
+    ctx.save();
+    trace();
+    ctx.clip();
+    ctx.beginPath();
+    shape.spine.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+    ctx.strokeStyle = pal.light;
+    ctx.globalAlpha = alpha * 0.45;
+    ctx.lineWidth = shape.width * 0.28;
+    ctx.lineCap = "round";
     ctx.stroke();
+    ctx.restore();
+    ctx.globalAlpha = alpha;
+    trace();
+    if (dashed) ctx.setLineDash([shape.width * 0.6, shape.width * 0.4]);
+    ctx.strokeStyle = pal.edge;
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
+    ctx.setLineDash([]);
   }
 
   private caption(text: string, at: [number, number], ang: number, pal: (typeof PALETTE)[ArrowStyle]) {
@@ -151,39 +148,73 @@ export class OperationLayer {
   }
 }
 
-/** Quadratic curve through the midpoints: a smooth line that still passes near every point. */
-function smoothPath(ctx: CanvasRenderingContext2D, p: [number, number][]) {
-  ctx.beginPath();
-  ctx.moveTo(p[0][0], p[0][1]);
-  if (p.length === 2) {
-    ctx.lineTo(p[1][0], p[1][1]);
-    return;
-  }
-  for (let i = 1; i < p.length - 1; i++) {
-    const mx = (p[i][0] + p[i + 1][0]) / 2, my = (p[i][1] + p[i + 1][1]) / 2;
-    ctx.quadraticCurveTo(p[i][0], p[i][1], i === p.length - 2 ? p[i + 1][0] : mx, i === p.length - 2 ? p[i + 1][1] : my);
-  }
+interface ArrowShape {
+  /** Body plus head, as one closed polygon (screen px). */
+  outline: [number, number][];
+  /** Centre line of the body. */
+  spine: [number, number][];
+  tip: [number, number];
+  ang: number;
+  width: number;
 }
 
-/** Shorten a polyline by `start` px at its beginning and `end` px at its end. */
-function trimEnds(p: [number, number][], start: number, end: number): [number, number][] {
-  const out = p.map((q) => [...q] as [number, number]);
-  const cut = (from: number, dir: 1 | -1, amount: number) => {
-    let left = amount;
-    for (let i = from; out.length >= 2 && left > 0; ) {
-      const j = i + dir;
-      if (j < 0 || j >= out.length) break;
-      const d = Math.hypot(out[j][0] - out[i][0], out[j][1] - out[i][1]);
-      if (d > left) {
-        out[i] = [out[i][0] + ((out[j][0] - out[i][0]) * left) / d, out[i][1] + ((out[j][1] - out[i][1]) * left) / d];
-        return;
-      }
-      left -= d;
-      out.splice(i, 1);
-      if (dir === -1) i = out.length - 1;
+/** Catmull-Rom samples through the points: a smooth path that passes through every one. */
+function spline(p: [number, number][], steps = 12) {
+  const out: [number, number][] = [p[0]];
+  const idx: number[] = [0];
+  for (let i = 0; i < p.length - 1; i++) {
+    const p0 = p[Math.max(0, i - 1)], p1 = p[i], p2 = p[i + 1], p3 = p[Math.min(p.length - 1, i + 2)];
+    for (let k = 1; k <= steps; k++) {
+      const t = k / steps, t2 = t * t, t3 = t2 * t;
+      const f = (a: number, b: number, c: number, d: number) =>
+        0.5 * (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (-a + 3 * b - 3 * c + d) * t3);
+      out.push([f(p0[0], p1[0], p2[0], p3[0]), f(p0[1], p1[1], p2[1], p3[1])]);
     }
+    idx.push(out.length - 1);
+  }
+  return { pts: out, idx };
+}
+
+/**
+ * The arrow outline: a body that widens from a slim tail toward a broad, sharp head, following
+ * the smoothed route.
+ */
+function arrowShape(points: [number, number][], w: number): ArrowShape | null {
+  const { pts } = spline(points);
+  const cum = [0];
+  for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+  const total = cum[cum.length - 1];
+  if (total < w * 2) return null;
+  const start = Math.min(w * 0.7, total * 0.15); // leave the jump-off point itself visible
+  const headLen = Math.min(w * 2.4, total * 0.4);
+  const headBase = total - headLen;
+  const stop = headBase;
+  const at = (s: number): [number, number, number] => {
+    let i = 1;
+    while (i < cum.length - 1 && cum[i] < s) i++;
+    const t = (s - cum[i - 1]) / Math.max(1e-6, cum[i] - cum[i - 1]);
+    const x = pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * t, y = pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * t;
+    return [x, y, Math.atan2(pts[i][1] - pts[i - 1][1], pts[i][0] - pts[i - 1][0])];
   };
-  if (start > 0) cut(0, 1, start);
-  if (end > 0) cut(out.length - 1, -1, end);
-  return out;
+  const half = (s: number) => w * 0.5 * (0.5 + 0.5 * Math.min(1, (s - start) / Math.max(1, headBase - start)));
+  const left: [number, number][] = [], right: [number, number][] = [], spine: [number, number][] = [];
+  const n = Math.max(2, Math.ceil((stop - start) / 4));
+  for (let k = 0; k <= n; k++) {
+    const s = start + ((stop - start) * k) / n;
+    const [x, y, a] = at(s);
+    const h = half(s), nx = -Math.sin(a), ny = Math.cos(a);
+    left.push([x + nx * h, y + ny * h]);
+    right.push([x - nx * h, y - ny * h]);
+    spine.push([x, y]);
+  }
+  const back_: [number, number][] = [...right].reverse();
+  // Head: a broad base just past the body, swept back slightly, to a sharp point at the route's end.
+  const [bx, by, ba] = at(headBase);
+  const tip = pts[pts.length - 1];
+  const ang = Math.atan2(tip[1] - by, tip[0] - bx) || ba;
+  const nx = -Math.sin(ang), ny = Math.cos(ang), hw = w * 1.2, back = w * 0.25;
+  const bl: [number, number] = [bx + nx * hw - Math.cos(ang) * back, by + ny * hw - Math.sin(ang) * back];
+  const br: [number, number] = [bx - nx * hw - Math.cos(ang) * back, by - ny * hw - Math.sin(ang) * back];
+  const outline: [number, number][] = [...left, bl, [tip[0], tip[1]], br, ...back_];
+  return { outline, spine, tip: [tip[0], tip[1]], ang, width: w };
 }
