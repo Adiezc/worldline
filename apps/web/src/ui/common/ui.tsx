@@ -157,7 +157,7 @@ export function Empty({ children }: { children: ReactNode }) {
   return <p className="py-2 text-xs text-parchment/40 italic">{children}</p>;
 }
 
-export function Badge({ children, tone = "gold", className = "" }: { children: ReactNode; tone?: "gold" | "red" | "green" | "grey" | "amber" | "blue"; className?: string }) {
+export function Badge({ children, tone = "gold", className = "", title }: { children: ReactNode; tone?: "gold" | "red" | "green" | "grey" | "amber" | "blue"; className?: string; title?: string }) {
   const tones = {
     gold: "border-gold/60 text-gold-bright bg-gold/10",
     red: "border-fail/60 text-[#f0b2aa] bg-fail/10",
@@ -166,7 +166,7 @@ export function Badge({ children, tone = "gold", className = "" }: { children: R
     blue: "border-sky-400/50 text-sky-200 bg-sky-400/10",
     grey: "border-white/20 text-parchment/60 bg-white/5",
   };
-  return <span className={`inline-flex items-center gap-1 rounded-sm border px-1.5 py-px whitespace-nowrap text-[10px] font-semibold tracking-wider uppercase ${tones[tone]} ${className}`}>{children}</span>;
+  return <span title={title} className={`inline-flex items-center gap-1 rounded-sm border px-1.5 py-px whitespace-nowrap text-[10px] font-semibold tracking-wider uppercase ${tones[tone]} ${className}`}>{children}</span>;
 }
 
 export function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: ReactNode }) {

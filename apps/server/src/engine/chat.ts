@@ -2,9 +2,9 @@
 // once through the validator, with the chat standing in for a player order.
 
 import {
-  applyEvent, atWar, ChatOutputSchema, computeFronts, connectedTransfer, countryByTag, countryIndex, estimateForces, getRelation,
+  applyEvent, atWar, ChatOutputSchema, warCollapse, computeFronts, connectedTransfer, countryByTag, countryIndex, estimateForces, getRelation,
   humanTags, newTurnContext,
-  nextId, relKey, type Chat, type ChatMessage, type Effect, type GameEvent, type GameState, type MapIndex, type Proposal,
+  nextId, relKey, type Chat, type ChatMessage, type Effect, type GameEvent, type GameState, type MapIndex, type Outreach, type Proposal,
   type ProposalCession, type ProposalDraft, type TreatyType, type War,
 } from "@worldline/shared";
 import type { EngineDeps } from "./api.ts";
@@ -81,7 +81,9 @@ export async function sendChat(
 
   if (proposal) {
     const aiParties = proposal.members.filter((m) => !humans.has(m));
-    const agrees = (t: string) => (t === speaker ? out.acceptsPlayerProposal === true : aiWouldAccept(state, t, proposal, humans));
+    // A nation in collapse can't refuse peace: it signs whatever terms survive the rules' checks.
+    const capitulates = (t: string) => proposal.kind === "endWar" && warCollapse(state, t);
+    const agrees = (t: string) => capitulates(t) || (t === speaker ? out.acceptsPlayerProposal === true : aiWouldAccept(state, t, proposal, humans));
     if (!aiParties.every(agrees)) proposal.status = "rejected";
     else if (!proposal.awaiting.length) {
       const res = applyProposal(state, deps.map, chat, proposal);
@@ -109,6 +111,52 @@ export async function sendChat(
   }
   chat.messages.push(reply);
   chat.lastTurn = state.turn;
+  const memory = out.memory?.replace(/\s+/g, " ").trim();
+  if (memory) chat.summary = memory.slice(0, 600);
+}
+
+const MAX_OUTREACH = 3;
+
+/**
+ * Messages AI governments send players on their own initiative (from the resolver's output). Each
+ * lands in the private channel between the two, opening it if needed; a deal they attach waits for
+ * the player's answer like any other proposal. Anything malformed or addressed wrongly is skipped.
+ */
+export function deliverOutreach(state: GameState, outreach: Outreach[], date: string): ChatMessage[] {
+  const humans = humanTags(state);
+  const sent: ChatMessage[] = [];
+  const senders = new Set<string>();
+  const perPlayer = new Map<string, number>();
+  for (const o of outreach) {
+    if (sent.length >= MAX_OUTREACH) break;
+    const text = o.message.trim().slice(0, 1200);
+    if (!text || o.from === o.to || humans.has(o.from) || !humans.has(o.to)) continue;
+    if (!countryByTag(state, o.from)?.alive || !countryByTag(state, o.to)?.alive) continue;
+    // One message per sender and two per player a turn, so the inbox stays readable.
+    if (senders.has(o.from) || (perPlayer.get(o.to) ?? 0) >= 2) continue;
+    const chatId = openChat(state, { from: o.from, with: [o.to] });
+    const chat = state.chats.find((c) => c.id === chatId)!;
+    const msg: ChatMessage = { id: nextId(state, "m"), from: o.from, text, at: date, unprompted: true };
+    const p = o.proposal;
+    if (p) {
+      // A deal between the two governments in the channel: nobody else has agreed to it.
+      const members = [o.from, o.to];
+      const valid = p.kind !== "endWar" || !!warBetween(state, [o.from, o.to]);
+      if (valid) {
+        msg.proposal = {
+          id: nextId(state, "p"), kind: p.kind, treatyType: p.kind === "treaty" ? p.treatyType ?? "nonaggression" : p.treatyType,
+          peace: p.kind === "endWar" ? p.peace ?? "white" : undefined, members, terms: p.terms.trim().slice(0, 1000),
+          status: "open", awaiting: members.filter((m) => humans.has(m)),
+        };
+      }
+    }
+    chat.messages.push(msg);
+    chat.lastTurn = state.turn;
+    senders.add(o.from);
+    perPlayer.set(o.to, (perPlayer.get(o.to) ?? 0) + 1);
+    sent.push(msg);
+  }
+  return sent;
 }
 
 export function respondProposal(
@@ -256,6 +304,7 @@ function chatPrompt(state: GameState, map: MapIndex, chat: Chat, speaker: string
     ...others.map((t) => warSituation(state, map, speaker, t)).filter(Boolean),
     sanctions.length ? `SANCTIONS:\n${sanctions.join("\n")}` : "",
     recentEventsBlock(state, { involving: focus, max: 14, bodies: true }),
+    chat.summary ? `EARLIER IN THIS CONVERSATION (your running record):\n${chat.summary}` : "",
     `CONVERSATION (latest last):\n${lines.join("\n")}`,
     `TASK: Reply as ${me.name} to ${them.name}'s last message${group ? ", speaking for your delegation before everyone present; you may address other delegations by name" : ""}.` +
       `${history.at(-1)?.proposal ? " It contains a PROPOSAL: set acceptsPlayerProposal." : ""}`,
@@ -285,9 +334,13 @@ export function warSituation(state: GameState, map: MapIndex, speaker: string, o
   const own = total(mySide), enemy = total(enemySide);
   const allies = mySide.filter((t) => t !== speaker && countryByTag(state, t)?.alive);
   const share = owned ? lost / owned : 0;
+  // In words, not force counts: the model weighs the war, the estimate only sets the tone.
+  const balance = enemy >= 2 * own ? "the enemy side is far stronger" : enemy > 1.2 * own ? "the enemy side is stronger"
+    : own >= 2 * enemy ? "your side is far stronger" : own > 1.2 * enemy ? "your side is stronger" : "roughly even";
   const exhaustion = Math.round(countryByTag(state, speaker)?.warExhaustion ?? 0);
-  const assessment =
-    share >= 0.5 || (share >= 0.2 && enemy >= 3 * own) || exhaustion >= 70
+  const assessment = warCollapse(state, speaker)
+    ? "CAPITULATING: your state has broken (army spent, government barely functioning). You cannot refuse peace: accept any peace terms put to you, protesting if you must, and say so plainly."
+    : share >= 0.5 || (share >= 0.2 && enemy >= 3 * own) || exhaustion >= 70
       ? "COLLAPSING: your forces cannot retake the occupied land and every month costs more of what remains. Governments in this position sue for peace and sign terms that cede only land the enemy already holds, to save the rest."
       : share > 0 && enemy > own
         ? "LOSING: the enemy holds your land and has the stronger army. Settling on the current lines is a realistic option; giving up land it does not hold is not."
@@ -297,7 +350,7 @@ export function warSituation(state: GameState, map: MapIndex, speaker: string, o
             ? "HOLDING or WINNING: you have no reason to give up land."
             : "STALEMATE.";
   return `YOUR WAR SITUATION (${war.name}): ${lost} of your ${owned} regions are occupied by the enemy (${Math.round(share * 100)}%); ` +
-    `estimated divisions: your side ${own}, enemy side ${enemy}; allies fighting with you: ${allies.length ? allies.join(", ") : "none"}; ` +
+    `military balance: ${balance}; allies fighting with you: ${allies.length ? allies.join(", ") : "none"}; ` +
     `your war exhaustion ${exhaustion}. Assessment: ${assessment}`;
 }
 

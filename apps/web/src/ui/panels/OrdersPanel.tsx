@@ -3,7 +3,7 @@ import { MAX_HOLD_REGIONS, MAX_OFFENSIVE_POINTS, STANCE_LABELS, type Operation, 
 import { addOrder, brainstorm, deleteOrder, editOrder, polishOrder, updateOperation } from "../../game/actions.ts";
 import { toast, useGame, type DraftOrder, type OperationDraft } from "../../game/store.ts";
 import { fmtShortDate } from "../../game/format.ts";
-import { describeOperation, enemiesOf, planOdds, sideOf } from "../../game/operations.ts";
+import { describeOperation, enemiesOf, sideOf } from "../../game/operations.ts";
 import { countryMap } from "../../game/selectors.ts";
 import { getMap, setPickHandler } from "../../map/controller.ts";
 import { provinceName, useMap } from "../../store.ts";
@@ -148,7 +148,7 @@ function PlanButton() {
       icon="swords"
       className="mt-2 w-full"
       title="Draw an offensive or a hold line on the map"
-      onClick={() => useGame.setState({ opDraft: { kind: "offensive", regions: [], divisions: 0, stance: "balanced", name: "" } })}
+      onClick={() => useGame.setState({ opDraft: { kind: "offensive", regions: [], stance: "balanced", name: "" } })}
     >
       Plan operation
     </Button>
@@ -162,7 +162,7 @@ function PlanSummary({ op }: { op: Operation }) {
       <Badge tone={offensive ? "red" : "blue"}>{offensive ? "Offensive" : "Hold line"}</Badge>
       {offensive ? (
         <span className="text-parchment/60">
-          {op.divisions} divisions · {STANCE_LABELS[op.stance]} · {op.regions.length - 1} objective{op.regions.length === 2 ? "" : "s"}
+          {STANCE_LABELS[op.stance]} ·{op.regions.length - 1} objective{op.regions.length === 2 ? "" : "s"}
         </span>
       ) : (
         <span className="text-parchment/60">{op.regions.length} region{op.regions.length === 1 ? "" : "s"}</span>
@@ -177,7 +177,6 @@ const STANCES: OperationStance[] = ["cautious", "balanced", "allout"];
 function OperationComposer() {
   const view = useGame((s) => s.view)!;
   const draft = useGame((s) => s.opDraft)!;
-  const meta = useMap((s) => s.meta);
   const me = view.you.country!;
   const set = (patch: Partial<OperationDraft>) => useGame.setState((s) => ({ opDraft: s.opDraft && { ...s.opDraft, ...patch } }));
 
@@ -214,22 +213,12 @@ function OperationComposer() {
     return () => setPickHandler(null);
   }, [me]);
 
-  const odds = meta && draft.regions.length ? planOdds(view, meta, me, draft.regions.slice(0, 1)) : null;
-  const total = Math.max(1, odds?.total ?? 1);
-  // First jump-off point picked: commit about 60% of what holds that front.
-  useEffect(() => {
-    if (draft.kind === "offensive" && odds && draft.divisions === 0) set({ divisions: Math.max(1, Math.round((odds.own || odds.total * 0.3) * 0.6)) });
-  }, [draft.kind, draft.divisions, odds?.own, odds?.total]);
-
   const offensive = draft.kind === "offensive";
   const ready = offensive ? draft.regions.length >= 2 : draft.regions.length >= 1;
-  const ratio = odds && odds.enemy ? draft.divisions / odds.enemy : null;
-  const enemyName = odds?.enemyTag ? countryMap(view.countries).get(odds.enemyTag)?.name ?? odds.enemyTag : "the enemy";
 
   const submit = () => {
     const op: Operation = {
-      kind: draft.kind, regions: draft.regions, divisions: Math.max(1, Math.min(total, draft.divisions || 1)),
-      stance: draft.stance, ...(draft.name.trim() ? { name: draft.name.trim() } : {}),
+      kind: draft.kind, regions: draft.regions, stance: draft.stance, ...(draft.name.trim() ? { name: draft.name.trim() } : {}),
     };
     if (draft.orderId) updateOperation(draft.orderId, describeOperation(op), op);
     else addOrder(describeOperation(op), { operation: op });
@@ -247,7 +236,7 @@ function OperationComposer() {
           <button
             key={k}
             type="button"
-            onClick={() => set({ kind: k, regions: [], divisions: 0 })}
+            onClick={() => set({ kind: k, regions: [] })}
             className={`flex-1 px-2 py-1 text-[11.5px] ${draft.kind === k ? "bg-gold/20 text-parchment" : "text-parchment/50 hover:text-parchment"}`}
           >
             {k === "offensive" ? "Offensive" : "Hold line"}
@@ -280,29 +269,7 @@ function OperationComposer() {
       )}
       {offensive && draft.regions.length > 0 && (
         <>
-          <div className="mb-1 flex items-center justify-between text-[11px] text-parchment/65">
-            <span>Divisions committed</span>
-            <span className="tabular-nums text-parchment">
-              {draft.divisions} <span className="text-parchment/45">of {total}</span>
-            </span>
-          </div>
-          <input
-            type="range"
-            min={1}
-            max={total}
-            value={Math.min(total, Math.max(1, draft.divisions))}
-            onChange={(e) => set({ divisions: Number(e.target.value) })}
-            className="w-full accent-[#c9a45c]"
-          />
-          {odds && odds.enemy > 0 && (
-            <div className="mt-0.5 text-[11px] text-parchment/60">
-              vs ~{odds.enemy} divisions of {enemyName} on this front ·{" "}
-              <span style={{ color: ratio! >= 1.5 ? "#8fd18f" : ratio! >= 0.8 ? "#e2c46b" : "#e08a80" }}>
-                {ratio! >= 1.5 ? "favourable odds" : ratio! >= 0.8 ? "even odds" : "poor odds"}
-              </span>
-            </div>
-          )}
-          <div className="mt-2 flex gap-1">
+          <div className="flex gap-1">
             {STANCES.map((st) => (
               <button
                 key={st}
@@ -315,6 +282,9 @@ function OperationComposer() {
               </button>
             ))}
           </div>
+          <p className="mt-1.5 text-[10.5px] leading-snug text-parchment/45 italic">
+            How it goes is judged on strength, morale, supply, terrain and season, with the fortunes of war.
+          </p>
         </>
       )}
       <input

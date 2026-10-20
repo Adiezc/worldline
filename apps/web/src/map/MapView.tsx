@@ -250,6 +250,7 @@ export function MapView() {
         renderer.theme = t;
         labels.setTheme(t);
         capitals.setFont(t.labelFont);
+        operations.setFont(t.labelFont);
         dirty = true;
       },
       setHighlightOwner: (o) => {

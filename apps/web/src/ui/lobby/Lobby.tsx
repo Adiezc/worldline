@@ -1,11 +1,14 @@
 import { useState } from "react";
+import type { GameView } from "@worldline/shared";
 import { claimCountry, startGame } from "../../game/actions.ts";
 import { countryMap } from "../../game/selectors.ts";
 import { useGame } from "../../game/store.ts";
-import { fmtDate, fmtGdp, fmtPop } from "../../game/format.ts";
+import { fmtDate } from "../../game/format.ts";
 import { gameUrl, navigate } from "../../router.ts";
 import { Badge, Button, Panel, SectionTitle } from "../common/ui.tsx";
 import { Flag } from "../common/Flag.tsx";
+import { Government } from "../common/Government.tsx";
+import { NationStats } from "../common/NationStats.tsx";
 import { SettingsForm } from "./SettingsForm.tsx";
 
 export function Lobby() {
@@ -74,19 +77,14 @@ export function Lobby() {
             <div className="rounded border border-panel-edge/50 p-3" style={{ background: `linear-gradient(90deg, ${myCountry.color}33, transparent)` }}>
               <div className="flex items-center gap-2">
                 <Flag country={myCountry} size={40} className="ring-1 ring-gold/40" />
-                <div className="min-w-0">
-                  <div className="truncate font-display text-[15px] text-parchment">{myCountry.name}</div>
-                  <div className="truncate text-[11px] text-parchment/55">
-                    {myCountry.government} · {myCountry.leader}
-                  </div>
-                </div>
+                <div className="min-w-0 truncate font-display text-[15px] text-parchment" title={myCountry.name}>{myCountry.name}</div>
               </div>
-              <div className="mt-2 flex gap-4 text-[11.5px] text-parchment/70">
-                <span>GDP {fmtGdp(myCountry.gdp)}</span>
-                <span>Pop. {fmtPop(myCountry.population)}</span>
-                {myCountry.nuclear && <span className="text-partial">Nuclear power</span>}
+              <Government country={myCountry} className="mt-2.5" />
+              <NationTraits view={view} tag={myCountry.tag} />
+              <div className="mt-3">
+                <NationStats country={myCountry} rank={gdpRank(view, myCountry.tag)} />
               </div>
-              <p className="mt-2 text-[11.5px] leading-snug text-parchment/55 italic">{myCountry.agenda?.persona}</p>
+              <p className="mt-3 text-[11.5px] leading-snug text-parchment/55 italic">{myCountry.agenda?.persona}</p>
             </div>
           </>
         )}
@@ -146,6 +144,33 @@ function ShareLink({ id }: { id: string }) {
       <Button onClick={copy} variant={copied ? "success" : "secondary"} icon={copied ? "check" : "copy"}>
         {copied ? "Copied" : "Copy"}
       </Button>
+    </div>
+  );
+}
+
+/** Place among living nations by GDP (1 = largest economy). */
+const gdpRank = (view: GameView, tag: string) =>
+  view.countries.filter((c) => c.alive).sort((a, b) => b.gdp - a.gdp).findIndex((c) => c.tag === tag) + 1;
+
+/** What sets a nation apart before the first turn: the bomb, its wars, and the clubs it belongs to. */
+function NationTraits({ view, tag }: { view: GameView; tag: string }) {
+  const c = countryMap(view.countries).get(tag);
+  const wars = view.wars.filter((w) => w.attackers.includes(tag) || w.defenders.includes(tag));
+  const orgs = view.organizations.filter((o) => o.members.includes(tag));
+  if (!c?.nuclear && !wars.length && !orgs.length) return null;
+  const MAX_ORGS = 6;
+  return (
+    <div className="mt-2.5 flex flex-wrap gap-1">
+      {c?.nuclear && <Badge tone="amber">Nuclear power</Badge>}
+      {wars.map((w) => (
+        <Badge key={w.id} tone="red" className="max-w-full overflow-hidden" title={`${w.name}: ${w.goal}`}>
+          <span className="truncate">At war · {w.name}</span>
+        </Badge>
+      ))}
+      {orgs.slice(0, MAX_ORGS).map((o) => (
+        <Badge key={o.id} tone="grey" title={o.name}>{o.abbrev}</Badge>
+      ))}
+      {orgs.length > MAX_ORGS && <Badge tone="grey" title={orgs.slice(MAX_ORGS).map((o) => o.abbrev).join(", ")}>+{orgs.length - MAX_ORGS}</Badge>}
     </div>
   );
 }

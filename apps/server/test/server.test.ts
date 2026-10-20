@@ -1,7 +1,7 @@
-// End-to-end: accounts, cross-device resume, rewind, intervene, custom scenarios and group chats
-// against a real server process (mock AI, in-memory database).
+// End-to-end: accounts, cross-device resume, rewind, intervene, saved-game files, custom scenarios and
+// group chats against a real server process (mock AI, in-memory database).
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import type { AuthResponse, MeResponse, ScenarioInfo, ScenarioSeed, ServerMessage, TurnResult } from "@worldline/shared";
+import type { AuthResponse, GameBundle, MeResponse, ScenarioInfo, ScenarioSeed, ServerMessage, TurnResult } from "@worldline/shared";
 import { Client, startServer } from "./fixtures/server.ts";
 
 const PORT = 4000 + Math.floor(Math.random() * 90);
@@ -314,5 +314,110 @@ describe("group chats", () => {
     host.send({ t: "chat.send", chatId: chat.id, text: "Myself?", speaker: "FRA" });
     expect((await host.wait((m) => m.t === "error")).t).toBe("error");
     host.close();
+  });
+});
+
+describe("saved-game files", () => {
+  const exportGame = (gameId: string, player?: string) =>
+    fetch(`${BASE}/api/games/${gameId}/export`, { headers: player ? { "x-worldline-player": player } : {} });
+
+  test("only the host can export", async () => {
+    const gameId = await newGame({ name: "Export Me!" });
+    const host = await new Client(PORT).connect(gameId, "Host");
+    const guest = await new Client(PORT).connect(gameId, "Guest");
+    expect((await exportGame(gameId)).status).toBe(403);
+    expect((await exportGame(gameId, guest.playerId)).status).toBe(403);
+    expect((await exportGame(gameId, "not-a-player")).status).toBe(403);
+    expect((await exportGame("nosuchgame", host.playerId)).status).toBe(404);
+    // The seat secret is never accepted from the URL, where logs would keep it.
+    expect((await get(`/api/games/${gameId}/export?player=${encodeURIComponent(host.playerId)}`)).status).toBe(403);
+
+    const res = await exportGame(gameId, host.playerId);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-disposition")).toBe('attachment; filename="worldline-export-me-turn1.json"');
+    const bundle = (await res.json()) as GameBundle;
+    expect(bundle.format).toBe("worldline-game/1");
+    expect(bundle.game.id).toBe(gameId);
+    host.close();
+    guest.close();
+  });
+
+  test("export → import makes a new, playable game that can still rewind", async () => {
+    const gameId = await newGame({ name: "Round Trip" });
+    const host = await new Client(PORT).connect(gameId, "Host");
+    const guest = await new Client(PORT).connect(gameId, "Guest");
+    await playTurns(host, "FRA", 2);
+    const before = host.view;
+
+    const res = await exportGame(gameId, host.playerId);
+    const text = await res.text();
+    // Player ids resume seats: they never leave the server.
+    expect(text).not.toContain(host.playerId);
+    expect(text).not.toContain(guest.playerId);
+    const bundle = JSON.parse(text) as GameBundle;
+    expect(bundle.snapshots.map((s) => s.turn)).toEqual([1, 2]);
+    expect(bundle.game.players.map((p) => p.name)).toEqual(["Host", "Guest"]);
+    host.close();
+    guest.close();
+
+    const imp = await post("/api/games/import", { ...bundle, name: "Round Trip (copy)" });
+    expect(imp.status).toBe(200);
+    const { gameId: copyId } = (await imp.json()) as { gameId: string };
+    expect(copyId).not.toBe(gameId);
+
+    const c = await new Client(PORT).connect(copyId, "Importer");
+    const v = c.view;
+    expect(v.id).toBe(copyId);
+    expect(v.name).toBe("Round Trip (copy)");
+    expect(v.phase).toBe("lobby");
+    expect(v.players.length).toBe(1);
+    expect(v.you.isHost).toBe(true);
+    expect(v.you.country).toBeNull();
+    expect([v.turn, v.date]).toEqual([before.turn, before.date]);
+    expect(v.owners).toEqual(before.owners);
+    expect(v.eventCount).toBe(before.eventCount);
+    expect(v.snapshots.map((s) => s.turn)).toEqual([1, 2]);
+
+    // Pick a country mid-game, start, and play on.
+    const [r] = await playTurns(c, "DEU", 1);
+    expect(r.fromDate).toBe(before.date);
+    expect(c.view.turn).toBe(before.turn + 1);
+
+    c.send({ t: "rewind", turn: 1 });
+    expect((await c.until((x) => x.turn === 1)).date).toBe(bundle.snapshots[0].date);
+    c.close();
+
+    // The original is untouched.
+    expect(((await (await get(`/api/games/${gameId}`)).json()) as { turn: number }).turn).toBe(before.turn);
+  }, 30000);
+
+  test("malformed files are rejected", async () => {
+    const gameId = await newGame({ name: "Template" });
+    const host = await new Client(PORT).connect(gameId, "Host");
+    const good = (await (await exportGame(gameId, host.playerId)).json()) as GameBundle;
+    host.close();
+    const bad = async (patch: (b: Record<string, any>) => void, match: RegExp) => {
+      const b = structuredClone(good) as unknown as Record<string, any>;
+      patch(b);
+      const res = await post("/api/games/import", b);
+      expect(res.status).toBe(400);
+      expect(((await res.json()) as { error: string }).error).toMatch(match);
+    };
+
+    const raw = await fetch(`${BASE}/api/games/import`, { method: "POST", body: "{not json" });
+    expect(raw.status).toBe(400);
+    await bad((b) => (b.format = "worldline-game/0"), /format/);
+    await bad((b) => delete b.game, /game must be an object/);
+    await bad((b) => (b.game.countries = []), /countries is empty/);
+    await bad((b) => b.game.owners.pop(), /owners must have/);
+    await bad((b) => (b.game.controllers[7] = b.game.countries.length), /controllers\[7\]/);
+    await bad((b) => (b.game.turn = "3"), /turn/);
+    await bad((b) => (b.game.date = "2026-02-30"), /date/);
+    await bad((b) => (b.game.countries[2].tag = b.game.countries[0].tag), /tag/);
+    await bad((b) => (b.game.wars = [{ attackers: "FRA" }]), /attackers/);
+    await bad((b) => (b.game.scenarioId = "custom-missing1"), /scenario/);
+    await bad((b) => (b.snapshots = [{ ...b.game, turn: 5 }]), /after the game's turn/);
+    await bad((b) => (b.snapshots = [b.game, b.game]), /turn order/);
+    await bad((b) => (b.snapshots = { 0: b.game }), /snapshots must be an array/);
   });
 });

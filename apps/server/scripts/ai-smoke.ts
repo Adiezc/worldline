@@ -7,6 +7,7 @@
 //
 // Exit codes: 0 ok, 1 a step failed, 2 no API key.
 
+import "../src/env.ts";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { buildMapIndex, DEFAULT_SETTINGS, type GameState, type MapMeta, type ScenarioSeed } from "@worldline/shared";

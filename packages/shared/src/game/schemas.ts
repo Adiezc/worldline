@@ -48,6 +48,21 @@ export const EffectSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("updateAgenda"), country: tag, goals: trimmed(z.string(), 5) }),
   z.object({ type: z.literal("addClaim"), claimant: tag, provinces: ids.min(1), note: z.string().default("") }),
   z.object({ type: z.literal("dropClaim"), claimant: tag, provinces: ids.optional() }),
+  z.object({
+    type: z.literal("startProject"), country: tag, name: z.string().min(2), goal: z.string().default(""),
+    months: z.coerce.number().transform((m) => Math.max(1, Math.min(120, Math.round(m)))),
+    milestones: trimmed(z.string(), 5).default([]),
+  }),
+  z.object({
+    type: z.literal("advanceProject"), projectId: z.string(), progress: z.coerce.number(),
+    milestone: z.coerce.number().int().min(0).optional(), note: z.string().optional(),
+  }),
+  z.object({ type: z.literal("endProject"), projectId: z.string(), outcome: z.enum(["completed", "failed", "abandoned"]) }),
+  z.object({
+    type: z.literal("nuclearStrike"), by: tag, target: tag, province: z.coerce.number().int().positive().optional(),
+    // Models say "thermonuclear", "city", "low-yield"…: anything not clearly tactical is strategic.
+    scale: z.string().transform((v) => (/tactic|low|battlefield|limited/i.test(v) ? "tactical" : "strategic") as "tactical" | "strategic"),
+  }),
 ]);
 
 const EventSchema = z.object({
@@ -59,11 +74,30 @@ const EventSchema = z.object({
   effects: z.array(EffectSchema).default([]),
 });
 
+/** A deal an AI government puts on the table, in a chat reply or an unprompted message. */
+const ProposalOutSchema = z.object({
+  kind: z.enum(["treaty", "endWar", "joinOrg", "custom"]),
+  treatyType: treatyType.optional(),
+  peace: z.enum(["white", "keep_occupied"]).optional(),
+  members: z.array(tag).min(2),
+  terms: z.string(),
+});
+
+/** A message an AI government sends a player country on its own initiative. */
+export const OutreachSchema = z.object({
+  from: tag,
+  to: tag,
+  message: z.string().min(1),
+  proposal: ProposalOutSchema.optional(),
+});
+export type Outreach = z.infer<typeof OutreachSchema>;
+
 export const ResolverOutputSchema = z.object({
   orderVerdicts: z.array(z.object({ orderId: z.string(), outcome: z.enum(["success", "partial", "fail"]), reason: z.string() })).default([]),
   events: z.array(EventSchema).default([]),
   /** Only used for "until next major event" jumps. */
   stopDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  outreach: trimmed(OutreachSchema, 4).default([]),
 });
 export type ResolverOutput = z.infer<typeof ResolverOutputSchema>;
 
@@ -92,15 +126,11 @@ export const ChatOutputSchema = z.object({
   reply: z.string().min(1),
   tone: z.enum(["warm", "neutral", "cold", "hostile"]).default("neutral"),
   relationDelta: z.coerce.number().default(0).transform((v) => Math.max(-15, Math.min(15, v))),
-  proposal: z.object({
-    kind: z.enum(["treaty", "endWar", "joinOrg", "custom"]),
-    treatyType: treatyType.optional(),
-    peace: z.enum(["white", "keep_occupied"]).optional(),
-    members: z.array(tag).min(2),
-    terms: z.string(),
-  }).optional(),
+  proposal: ProposalOutSchema.optional(),
   /** Whether this AI nation accepts a proposal the player made in their last message. */
   acceptsPlayerProposal: z.boolean().optional(),
+  /** The updated running record of the conversation (see Chat.summary). */
+  memory: z.string().optional(),
 });
 export type ChatOutput = z.infer<typeof ChatOutputSchema>;
 
@@ -167,7 +197,7 @@ export function salvageModelOutput(raw: unknown): string[] {
       return ok.success;
     });
   };
-  const r = raw as { events?: unknown; intents?: unknown; proposal?: unknown };
+  const r = raw as { events?: unknown; intents?: unknown; proposal?: unknown; outreach?: unknown };
   if (Array.isArray(r.events)) {
     r.events.forEach((ev, i) => {
       if (ev && typeof ev === "object") (ev as { effects?: unknown }).effects = clean((ev as { effects?: unknown }).effects, `events.${i}.effects`);
@@ -178,12 +208,23 @@ export function salvageModelOutput(raw: unknown): string[] {
       if (it && typeof it === "object") (it as { selfEffects?: unknown }).selfEffects = clean((it as { selfEffects?: unknown }).selfEffects, `intents.${i}.selfEffects`);
     });
   }
-  // Chat proposals: an unknown treaty type becomes the closest one, or none.
-  const p = r.proposal as { treatyType?: unknown } | undefined;
-  if (p && typeof p === "object" && p.treatyType !== undefined) {
-    const t = normalizeTreatyType(p.treatyType);
-    if (t) p.treatyType = t;
-    else delete p.treatyType;
+  fixProposal(r.proposal);
+  // Unprompted messages are extras: a malformed one is dropped rather than failing the turn.
+  if (Array.isArray(r.outreach)) {
+    r.outreach = r.outreach.filter((o, i) => {
+      if (o && typeof o === "object") fixProposal((o as { proposal?: unknown }).proposal);
+      const ok = OutreachSchema.safeParse(o).success;
+      if (!ok) dropped.push(`outreach.${i}: invalid message`);
+      return ok;
+    });
   }
   return dropped;
+}
+
+/** Proposals: an unknown treaty type becomes the closest one, or none. */
+function fixProposal(p: unknown) {
+  if (!p || typeof p !== "object" || (p as { treatyType?: unknown }).treatyType === undefined) return;
+  const t = normalizeTreatyType((p as { treatyType?: unknown }).treatyType);
+  if (t) (p as { treatyType: string }).treatyType = t;
+  else delete (p as { treatyType?: unknown }).treatyType;
 }

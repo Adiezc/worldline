@@ -1,4 +1,6 @@
-// HOI4-style troop counters at the front anchors, drawn on the label canvas after the names.
+// Front counters at the front anchors, drawn on the label canvas after the names: a unit symbol
+// in each side's colour showing who holds the line. No troop numbers: how strong each side is,
+// is the narrator's judgement, not arithmetic.
 import type { Camera } from "./renderer.ts";
 
 export interface FrontCounter {
@@ -11,10 +13,8 @@ export interface FrontCounter {
   name: string;
   enemyName: string;
   color: string;
-  divisions: number;
-  enemyDivisions: number;
-  /** Contributing countries on this side, largest first. */
-  by: { name: string; divisions: number }[];
+  /** Countries fighting on this side of the front, main one first. */
+  by: string[];
   /** "the Ukrainian front" */
   label: string;
   /** Map px: this counter's anchor and the opposing one. */
@@ -110,10 +110,8 @@ export class CounterLayer {
 
   private drawCounter(c: FrontCounter, pa: number[], pb: number[], s: number, W: number, H: number) {
     const ctx = this.ctx;
-    const text = String(c.divisions);
-    ctx.font = `700 ${11 * s}px ${FONT}`;
     const h = 17 * s, g = 15 * s, pad = 3 * s;
-    const w = pad + g + 4 * s + ctx.measureText(text).width + 5 * s;
+    const w = pad + g + pad;
     // Keep the two sides of a front from overlapping: push apart along the line between them.
     let dx = pa[0] - pb[0], dy = pa[1] - pb[1];
     const d = Math.hypot(dx, dy);
@@ -157,30 +155,17 @@ export class CounterLayer {
     ctx.moveTo(gx + g, gy);
     ctx.lineTo(gx, gy + gh);
     ctx.stroke();
-
-    const light = luminance(c.color) > 0.55;
-    ctx.textAlign = "left";
-    ctx.textBaseline = "middle";
-    ctx.fillStyle = light ? "#1b130e" : "#fbf6ea";
-    if (!light) {
-      ctx.shadowColor = "rgba(0, 0, 0, 0.6)";
-      ctx.shadowBlur = 2;
-    }
-    ctx.fillText(text, gx + g + 4 * s, y + h / 2 + 0.5 * s);
-    ctx.shadowColor = "transparent";
-    ctx.shadowBlur = 0;
     this.hits.push({ x, y, w, h, counter: c });
   }
 
   private drawTooltip(c: FrontCounter, px: number, py: number, W: number, H: number) {
     const ctx = this.ctx;
     const lines: { text: string; font: string; color: string }[] = [
-      { text: `${c.name}: ~${c.divisions} division${c.divisions === 1 ? "" : "s"} on ${c.label} (est.)`, font: `600 12px ${FONT}`, color: "#efe6d0" },
+      { text: `${c.name} on ${c.label}`, font: `600 12px ${FONT}`, color: "#efe6d0" },
     ];
-    if (c.by.length > 1) {
-      lines.push({ text: c.by.map((b) => `${b.name} ${b.divisions}`).join(" · "), font: `400 11px ${FONT}`, color: "rgba(239, 230, 208, 0.7)" });
-    }
-    lines.push({ text: `Facing ~${c.enemyDivisions} (${c.enemyName})`, font: `400 11px ${FONT}`, color: "rgba(240, 160, 150, 0.9)" });
+    const others = c.by.filter((n) => n !== c.name);
+    if (others.length) lines.push({ text: `With ${others.join(", ")}`, font: `400 11px ${FONT}`, color: "rgba(239, 230, 208, 0.7)" });
+    lines.push({ text: `Facing ${c.enemyName}`, font: `400 11px ${FONT}`, color: "rgba(240, 160, 150, 0.9)" });
     let w = 0;
     for (const l of lines) {
       ctx.font = l.font;
@@ -205,7 +190,7 @@ export class CounterLayer {
   }
 }
 
-/** One counter per (war, own lead, enemy lead): length-weighted anchors, summed divisions. */
+/** One counter per (war, own lead, enemy lead): length-weighted anchors, every contributor. */
 function merge(counters: FrontCounter[], mapW: number) {
   const groups = new Map<string, FrontCounter[]>();
   for (const c of counters) {
@@ -223,7 +208,7 @@ function merge(counters: FrontCounter[], mapW: number) {
     const unwrap = (x: number) => ref + ((((x - ref + mapW / 2) % mapW) + mapW) % mapW) - mapW / 2;
     const wrap = (x: number) => ((x % mapW) + mapW) % mapW;
     let total = 0, ax = 0, ay = 0, ox = 0, oy = 0;
-    const by = new Map<string, number>();
+    const by = new Set<string>();
     for (const c of list) {
       const k = Math.max(1, c.length);
       total += k;
@@ -231,14 +216,12 @@ function merge(counters: FrontCounter[], mapW: number) {
       ay += c.anchor[1] * k;
       ox += unwrap(c.other[0]) * k;
       oy += c.other[1] * k;
-      for (const b of c.by) by.set(b.name, (by.get(b.name) ?? 0) + b.divisions);
+      for (const b of c.by) by.add(b);
     }
     out.push({
       ...list[0],
       frontId: list.map((c) => c.frontId).join(","),
-      divisions: list.reduce((s, c) => s + c.divisions, 0),
-      enemyDivisions: list.reduce((s, c) => s + c.enemyDivisions, 0),
-      by: [...by].map(([name, divisions]) => ({ name, divisions })).sort((p, q) => q.divisions - p.divisions),
+      by: [...by],
       anchor: [wrap(ax / total), ay / total],
       other: [wrap(ox / total), oy / total],
       length: list.reduce((s, c) => s + c.length, 0),
@@ -255,9 +238,4 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.arcTo(x, y + h, x, y, r);
   ctx.arcTo(x, y, x + w, y, r);
   ctx.closePath();
-}
-
-function luminance(hex: string) {
-  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
-  return 0.299 * r + 0.587 * g + 0.114 * b;
 }

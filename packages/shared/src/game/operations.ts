@@ -1,8 +1,8 @@
 // Battle plans (HOI4-style): players draw an offensive arrow or a hold line on the map. The plan
-// travels with an order; the resolver adjudicates it, and the rules engine keeps the result
-// inside the plan (only regions along the axis, at a pace set by the odds and the stance).
-// Military stays abstract: divisions are the display estimates from fronts.ts.
-import { computeFronts, estimateForces, type Front, type ForceEstimate } from "./fronts.ts";
+// travels with an order; the resolver judges how it goes from the situation, shaded by a
+// "fortune of war" the engine rolls, and the rules engine keeps the result inside the plan
+// (only regions along the axis, at a pace set by the stance and that roll). There is no
+// division arithmetic: how strong each side is, is the narrator's judgement.
 import type { MapIndex } from "./mapIndex.ts";
 import type { GameState, Order } from "./state.ts";
 
@@ -16,8 +16,6 @@ export interface Operation {
    * Hold: the regions your forces dig in on.
    */
   regions: number[];
-  /** Divisions committed to an offensive (a hold line uses the front's garrison). */
-  divisions: number;
   stance: OperationStance;
   name?: string;
 }
@@ -92,103 +90,113 @@ export function operationAxis(map: MapIndex, route: number[]): number[] {
 }
 
 /**
- * Most regions an offensive can take this turn. `occupy` is the engine's per-country cap; a
- * balanced push at even odds gets about 60% of it, better odds and an all-out stance more.
+ * The fortune of war: how a plan's period goes beyond what the situation alone would suggest.
+ * The engine rolls it (seeded, so replaying a turn rolls the same); the narrator must honour it.
+ * `pace` scales an offensive's ceiling; `hold` is how many regions a hold line can lose.
  */
-export function offensivePace(occupy: number, divisions: number, enemyDivisions: number, stance: OperationStance) {
-  const ratio = divisions / Math.max(1, enemyDivisions);
-  const pace = occupy * 0.6 * Math.min(2, Math.max(0.2, ratio)) ** 0.8 * STANCE_PACE[stance];
-  return Math.max(1, Math.round(pace));
+export type Fortune = "disastrous" | "poor" | "even" | "good" | "exceptional";
+export const FORTUNES: Record<Fortune, { p: number; pace: number; hold: number; text: string }> = {
+  disastrous: { p: 0.1, pace: 0.3, hold: 3, text: "things go badly wrong: a blunder, a collapse in supply, a defence or attack that surprises everyone" },
+  poor: { p: 0.2, pace: 0.65, hold: 2, text: "friction wins: weather, poor intelligence or stubborn resistance make it go worse than expected" },
+  even: { p: 0.4, pace: 1, hold: 1, text: "events follow the situation; no great luck either way" },
+  good: { p: 0.2, pace: 1.3, hold: 1, text: "things break your way: a weak point found, the enemy slow to react" },
+  exceptional: { p: 0.1, pace: 1.7, hold: 0, text: "a rare success: a breakthrough, a rout or an unbreakable defence" },
+};
+const FORTUNE_ORDER: Fortune[] = ["disastrous", "poor", "even", "good", "exceptional"];
+
+/** A uniform number in [0, 1) from a string (FNV-1a hash into a mulberry32 step). */
+function seeded(key: string) {
+  let h = 2166136261;
+  for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 16777619);
+  let t = (h += 0x6d2b79f5);
+  t = Math.imul(t ^ (t >>> 15), t | 1);
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 }
 
-/** Most hold-line regions the enemy can take this turn: one, two when it outnumbers you 2.5:1. */
-export function holdCap(ownDivisions: number, enemyDivisions: number) {
-  return enemyDivisions >= 2.5 * Math.max(1, ownDivisions) ? 2 : 1;
+/** The fortune for one plan in one turn: the same game, turn and order always roll the same. */
+export function rollFortune(key: string): Fortune {
+  let u = seeded(key);
+  for (const f of FORTUNE_ORDER) {
+    if (u < FORTUNES[f].p) return f;
+    u -= FORTUNES[f].p;
+  }
+  return "even";
 }
 
-/** A battle plan resolved against the current map and force estimates. */
+/**
+ * Most regions an offensive can take this turn. `occupy` is the engine's per-country cap; a
+ * balanced push with even fortune gets about 60% of it. Only a disastrous roll can mean none.
+ */
+export function offensivePace(occupy: number, stance: OperationStance, fortune: Fortune) {
+  const pace = Math.round(occupy * 0.6 * STANCE_PACE[stance] * FORTUNES[fortune].pace);
+  return fortune === "disastrous" ? Math.max(0, pace) : Math.max(1, pace);
+}
+
+/** A battle plan resolved against the current map. */
 export interface OperationPlan {
   orderId: string;
   country: string;
   kind: OperationKind;
   name: string;
   stance: OperationStance;
-  /** Divisions committed (offensive) or holding the line (hold). */
-  divisions: number;
+  /** The main country on the other side ("" when there is none). */
   enemyTag: string;
-  enemyDivisions: number;
   /** Offensive: the route (jump-off first). Hold: the held regions. */
   route: number[];
   /** Regions the plan may take (offensive) or protects (hold). */
   allowed: number[];
   /** Offensive: most regions it may take this turn. Hold: most regions the enemy may take. */
   cap: number;
+  fortune: Fortune;
 }
 
-type ForcesWorld = Pick<GameState, "owners" | "controllers" | "countries" | "wars">;
-
-/** Fronts and forces for a world; pass them in when already computed. */
-function forcesOf(world: ForcesWorld, map: MapIndex) {
-  const input = { owners: world.owners, controllers: world.controllers, countries: world.countries, wars: world.wars, map };
-  const fronts = computeFronts(input);
-  return { fronts, forces: estimateForces(input, fronts) };
+/** Country indices at war with `tag`. */
+function enemiesOf(state: GameState, tag: string) {
+  const out = new Set<number>();
+  for (const w of state.wars) {
+    const other = w.attackers.includes(tag) ? w.defenders : w.defenders.includes(tag) ? w.attackers : null;
+    for (const t of other ?? []) out.add(state.countries.findIndex((c) => c.tag === t));
+  }
+  return out;
 }
 
-/** The front a region sits on for `tag`'s side, with that side's and the enemy's divisions. */
-export function frontAt(
-  world: ForcesWorld, fronts: Front[], forces: ForceEstimate, tag: string, regions: number[],
-): { front: Front; own: number; enemy: number; enemyTag: string } | null {
+/** The enemy most of `regions` (or their neighbours) is held by. */
+function mainEnemy(state: GameState, map: MapIndex, tag: string, regions: number[], neighbours: boolean) {
+  const enemies = enemiesOf(state, tag);
+  const count = new Map<number, number>();
   for (const id of regions) {
-    for (const f of fronts) {
-      const war = world.wars.find((w) => w.id === f.warId);
-      if (!war) continue;
-      const mySide = war.attackers.includes(tag) ? 0 : war.defenders.includes(tag) ? 1 : -1;
-      if (mySide < 0) continue;
-      if (!f.pairs.some(([a, b]) => (mySide === 0 ? a : b) === id || (mySide === 0 ? b : a) === id)) continue;
-      const ff = forces.fronts[f.id];
-      if (!ff) continue;
-      const [own, enemy] = mySide === 0 ? [ff.a, ff.b] : [ff.b, ff.a];
-      return { front: f, own: own.divisions, enemy: enemy.divisions, enemyTag: enemy.tag };
+    for (const r of neighbours ? (map.neighbors[id] ?? []) : [id]) {
+      const c = state.controllers[r];
+      if (enemies.has(c)) count.set(c, (count.get(c) ?? 0) + 1);
     }
   }
-  return null;
+  const best = [...count].sort((a, b) => b[1] - a[1])[0];
+  return best ? state.countries[best[0]]?.tag ?? "" : "";
 }
 
-/** Turn this turn's orders with battle plans into enforceable plans. */
+/** Turn this turn's orders with battle plans into enforceable plans, rolling each one's fortune. */
 export function planOperations(state: GameState, map: MapIndex, orders: Order[], occupy: number): OperationPlan[] {
-  const withOps = orders.filter((o) => o.operation);
-  if (!withOps.length) return [];
-  const { fronts, forces } = forcesOf(state, map);
   const plans: OperationPlan[] = [];
-  for (const o of withOps) {
-    const op = o.operation!;
-    const total = forces.countries[o.country]?.total ?? 0;
+  for (const o of orders) {
+    const op = o.operation;
+    if (!op) continue;
     const name = op.name?.trim() || (op.kind === "hold" ? "Hold line" : "Offensive");
+    const fortune = rollFortune(`${state.id}:${state.turn}:${o.id}`);
     if (op.kind === "offensive") {
       const route = operationRoute(map, op.regions);
       if (route.length < 2) continue;
-      const at = frontAt(state, fronts, forces, o.country, route);
-      const target = state.countries[state.controllers[route[1]]]?.tag ?? "";
-      const enemyTag = at?.enemyTag ?? target;
-      // Without a front of their own, the defenders are whatever the target holds back home.
-      const enemyDivisions = at?.enemy ?? Math.max(1, Math.round(forces.countries[target]?.reserve ?? 1));
-      const divisions = Math.max(1, Math.min(Math.round(op.divisions), Math.max(1, total)));
+      const enemyTag = mainEnemy(state, map, o.country, route.slice(1), false) || (state.countries[state.controllers[route[1]]]?.tag ?? "");
       plans.push({
-        orderId: o.id, country: o.country, kind: "offensive", name, stance: op.stance,
-        divisions, enemyTag, enemyDivisions, route,
-        allowed: operationAxis(map, route),
-        cap: offensivePace(occupy, divisions, enemyDivisions, op.stance),
+        orderId: o.id, country: o.country, kind: "offensive", name, stance: op.stance, enemyTag, route,
+        allowed: operationAxis(map, route), cap: offensivePace(occupy, op.stance, fortune), fortune,
       });
     } else {
       const route = [...new Set(op.regions)].filter((id) => id >= 1 && id <= map.count);
       if (!route.length) continue;
-      const at = frontAt(state, fronts, forces, o.country, route);
-      const own = at?.own ?? Math.round(total * 0.5);
-      const enemy = at?.enemy ?? 0;
       plans.push({
         orderId: o.id, country: o.country, kind: "hold", name, stance: op.stance,
-        divisions: own, enemyTag: at?.enemyTag ?? "", enemyDivisions: enemy, route,
-        allowed: route, cap: holdCap(own, enemy),
+        enemyTag: mainEnemy(state, map, o.country, route, true), route, allowed: route, cap: FORTUNES[fortune].hold, fortune,
       });
     }
   }
@@ -221,7 +229,6 @@ export function sanitizeOperation(raw: unknown, state: GameState, map: MapIndex,
     regions = regions.filter((id) => state.controllers[id] === me).slice(0, MAX_HOLD_REGIONS);
     if (!regions.length) return undefined;
   }
-  const divisions = Math.max(1, Math.min(999, Math.round(Number(r.divisions) || 1)));
   const name = typeof r.name === "string" ? r.name.trim().slice(0, 40) || undefined : undefined;
-  return { kind, regions, divisions, stance, name };
+  return { kind, regions, stance, name };
 }

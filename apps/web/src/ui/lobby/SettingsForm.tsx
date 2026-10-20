@@ -78,7 +78,7 @@ export function SettingsForm() {
           <option value="high">High</option>
         </select>
       </Field>
-      <Field label="Model chain" hint="One model per line; later models are fallbacks.">
+      <Field label="Model chain" hint="One model per line; later models are fallbacks. Plain ids go to OpenRouter; prefix anthropic:, openai:, gemini: or local: to use a direct key set on the server (e.g. anthropic:claude-opus-5-5).">
         <textarea
           className="hud-input min-h-20 resize-y font-mono text-[11.5px] leading-relaxed"
           disabled={ro}

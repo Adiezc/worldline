@@ -80,7 +80,7 @@ class MinuteLimiter {
 interface OpenRouterBody {
   model?: string;
   choices?: { message?: { content?: string | { type: string; text?: string }[] | null }; finish_reason?: string }[];
-  usage?: { prompt_tokens?: number; completion_tokens?: number };
+  usage?: { prompt_tokens?: number; completion_tokens?: number; prompt_tokens_details?: { cached_tokens?: number } };
   error?: { code?: number | string; message?: string; metadata?: { raw?: string; provider_name?: string } };
 }
 
@@ -112,7 +112,7 @@ export class OpenRouterProvider implements AiProvider {
     };
     try {
       const res = await this.request(req, settings, tries);
-      record({ model: res.usage.model, promptTokens: res.usage.promptTokens, completionTokens: res.usage.completionTokens, ok: true });
+      record({ model: res.usage.model, promptTokens: res.usage.promptTokens, completionTokens: res.usage.completionTokens, cachedTokens: res.usage.cachedTokens, ok: true });
       return res;
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
@@ -215,6 +215,7 @@ export class OpenRouterProvider implements AiProvider {
           model: json?.model ?? chain[0],
           promptTokens: json?.usage?.prompt_tokens ?? 0,
           completionTokens: json?.usage?.completion_tokens ?? 0,
+          cachedTokens: json?.usage?.prompt_tokens_details?.cached_tokens,
         },
       };
     }
@@ -225,10 +226,7 @@ export class OpenRouterProvider implements AiProvider {
     return {
       model: chain[0],
       models: chain,
-      messages: [
-        { role: "system", content: req.system },
-        { role: "user", content: req.user },
-      ],
+      messages: cacheMarked(req, chain[0]),
       // With reasoning on, max_tokens covers the thinking too, so leave headroom for it.
       max_tokens: (req.maxTokens ?? 2000) + (REASONING_HEADROOM[effort] ?? 0),
       temperature: req.temperature ?? 0.7,
@@ -239,6 +237,21 @@ export class OpenRouterProvider implements AiProvider {
         : undefined,
     };
   }
+}
+
+/**
+ * Anthropic and Gemini models only cache prompt prefixes at explicit breakpoints: one after the
+ * system prompt, one after the stable head of the user prompt. Others (DeepSeek, OpenAI, …) cache
+ * prefixes automatically and get plain strings.
+ */
+function cacheMarked(req: AiRequest, model: string | undefined) {
+  if (!/^(anthropic|google)\//.test(model ?? "")) return [{ role: "system", content: req.system }, { role: "user", content: req.user }];
+  const mark = { type: "ephemeral" };
+  const cut = Math.max(0, Math.min(req.cacheUpto ?? 0, req.user.length));
+  const user = cut > 0 && cut < req.user.length
+    ? [{ type: "text", text: req.user.slice(0, cut), cache_control: mark }, { type: "text", text: req.user.slice(cut) }]
+    : [{ type: "text", text: req.user }];
+  return [{ role: "system", content: [{ type: "text", text: req.system, cache_control: mark }] }, { role: "user", content: user }];
 }
 
 /** Free models generate slowly; the two big turn calls write thousands of tokens. */

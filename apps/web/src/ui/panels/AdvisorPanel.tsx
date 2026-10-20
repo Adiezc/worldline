@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { splitChartBlocks } from "@worldline/shared";
 import { askAdvisor } from "../../game/actions.ts";
 import { fmtDate } from "../../game/format.ts";
 import { useGame } from "../../game/store.ts";
+import { MiniChart } from "../common/MiniChart.tsx";
 import { Button, Empty, Panel } from "../common/ui.tsx";
 
 /** Ask the chief advisor; replies are set as letters. */
@@ -62,6 +64,8 @@ function Letter({ reqId, question }: { reqId: string; question: string }) {
     const tag = s.view?.you.country;
     return s.view?.countries.find((c) => c.tag === tag)?.leader;
   });
+  // The server already sanitises; splitting here drops any block it missed rather than showing raw JSON.
+  const parts = useMemo(() => splitChartBlocks(reply?.text ?? ""), [reply?.text]);
 
   return (
     <article className="letter px-4 pt-3 pb-4 animate-hud-in">
@@ -75,11 +79,17 @@ function Letter({ reqId, question }: { reqId: string; question: string }) {
         <p className="mt-2 animate-hud-pulse text-[13px] text-[#5a4630] italic">Your advisor is composing a reply…</p>
       ) : reply.ok ? (
         <div className="mt-2 space-y-2 text-[13.5px] leading-relaxed select-text">
-          {(reply.text ?? "").split(/\n{2,}/).map((para, i) => (
-            <p key={i} className="whitespace-pre-line">
-              {para}
-            </p>
-          ))}
+          {parts.map((part, i) =>
+            part.kind === "chart" ? (
+              <MiniChart key={i} spec={part.spec} />
+            ) : (
+              part.text.split(/\n{2,}/).map((para, j) => (
+                <p key={`${i}-${j}`} className="whitespace-pre-line">
+                  {para}
+                </p>
+              ))
+            ),
+          )}
         </div>
       ) : (
         <p className="mt-2 text-[13px] text-[#8a2f26] italic">The letter never arrived. {reply.error}</p>

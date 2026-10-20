@@ -12,6 +12,7 @@
     "balance": "bun scripts/balance.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.135.0",
     "@worldline/mapdata": "workspace:*",
     "@worldline/scenarios": "workspace:*",
     "@worldline/shared": "workspace:*"

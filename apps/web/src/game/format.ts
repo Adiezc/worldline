@@ -55,3 +55,11 @@ export function fmtCountdown(ms: number) {
 
 export const uid = (prefix = "") =>
   prefix + (crypto.randomUUID?.() ?? Math.random().toString(36).slice(2) + Date.now().toString(36)).replace(/-/g, "").slice(0, 12);
+
+const BACKEND_LABEL: Record<string, string> = { openrouter: "OpenRouter", anthropic: "Anthropic", openai: "OpenAI", gemini: "Gemini", local: "Local" };
+
+/** "Mock AI", or the configured backends, e.g. "OpenRouter + Anthropic". */
+export function aiLabel(ai: { provider: string; backends?: string[] }) {
+  if (ai.provider === "mock") return "Mock AI";
+  return ai.backends?.length ? ai.backends.map((b) => BACKEND_LABEL[b] ?? b).join(" + ") : "OpenRouter";
+}

@@ -23,41 +23,44 @@
     },
     {
       "name": "server-mock",
-      "runtimeExecutable": "env",
+      "runtimeExecutable": "bun",
       "runtimeArgs": [
-        "WORLDLINE_AI=mock",
-        "bun",
         "--cwd",
         "apps/server",
         "dev"
       ],
+      "env": {
+        "WORLDLINE_AI": "mock"
+      },
       "port": 3001
     },
     {
       "name": "test-server",
-      "runtimeExecutable": "env",
+      "runtimeExecutable": "bun",
       "runtimeArgs": [
-        "WORLDLINE_AI=mock",
-        "PORT=3002",
-        "WORLDLINE_DB=/private/tmp/claude-501/-Users-gazarrillo-Documents-Programs-grand-strategy/22fa5413-4682-49b9-a57d-9fd219381012/scratchpad/test.sqlite",
-        "bun",
         "--cwd",
         "apps/server",
         "src/index.ts"
       ],
+      "env": {
+        "WORLDLINE_AI": "mock",
+        "PORT": "3002",
+        "WORLDLINE_DB": "data/test.sqlite"
+      },
       "port": 3002
     },
     {
       "name": "test-web",
-      "runtimeExecutable": "env",
+      "runtimeExecutable": "bun",
       "runtimeArgs": [
-        "WORLDLINE_SERVER=localhost:3002",
-        "WEB_PORT=5174",
-        "bun",
         "--cwd",
         "apps/web",
         "dev"
       ],
+      "env": {
+        "WORLDLINE_SERVER": "localhost:3002",
+        "WEB_PORT": "5174"
+      },
       "port": 5174
     }
   ]

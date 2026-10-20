@@ -154,6 +154,7 @@ function Message({ m, chatId, view, mine }: { m: ChatMessage; chatId: string; vi
         <div className="flex items-baseline gap-1.5 text-[10.5px] text-parchment/45">
           <span className="font-semibold text-parchment/70">{c?.name ?? m.from}</span>
           <span>{fmtAt(m.at)}</span>
+          {m.unprompted && <span className="italic text-gold/70">reached out</span>}
         </div>
         {m.text && (
           <div className={`mt-0.5 rounded px-2.5 py-1.5 text-left text-[12.5px] leading-snug whitespace-pre-line select-text ${mine ? "bg-gold/15 text-parchment" : "bg-black/30 text-parchment/90"}`}>

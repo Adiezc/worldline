@@ -1,5 +1,6 @@
 // Worldline game server: REST for games, scenarios and accounts, WebSocket for play.
 // Serves the built web client from apps/web/dist when it exists (production).
+import "./env.ts"; // first: the root .env must be in process.env before other modules read it
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
@@ -7,7 +8,10 @@ import {
   type HealthResponse, type MapMeta, type MeResponse, type Player,
 } from "@worldline/shared";
 import { createProvider } from "./ai/index.ts";
-import { createSession, createUser, deleteSession, findUser, gameSummaryRow, userForToken, userGames } from "./db.ts";
+import { BundleError, exportBundle, exportFilename, MAX_BUNDLE_BYTES, parseBundle } from "./bundle.ts";
+import {
+  createSession, createUser, deleteSession, findUser, gameSummaryRow, loadGame, snapshotJsonNewestFirst, userForToken, userGames,
+} from "./db.ts";
 import { RoomManager, errorText, type SocketData } from "./rooms.ts";
 import { ScenarioError, ScenarioRegistry } from "./scenarios.ts";
 
@@ -43,6 +47,8 @@ async function serveStatic(req: Request, file: ReturnType<typeof Bun.file>) {
   });
 }
 const MAX_SCENARIO_BYTES = 3 * 1024 * 1024;
+/** Saved games carry a full state per turn, so they are far larger than scenarios. */
+const MAX_GAME_BYTES = MAX_BUNDLE_BYTES;
 
 // ---- accounts ----
 
@@ -80,10 +86,13 @@ function summaryOf(id: string): GameSummary | null {
   };
 }
 
-async function readJsonLimited(req: Request, limit: number): Promise<{ ok: true; value: unknown } | { ok: false; status: number; error: string }> {
-  if (Number(req.headers.get("content-length") ?? 0) > limit) return { ok: false, status: 413, error: "Scenario too large (3 MB max)." };
+async function readJsonLimited(
+  req: Request, limit: number, what = "Scenario",
+): Promise<{ ok: true; value: unknown } | { ok: false; status: number; error: string }> {
+  const tooLarge = { ok: false, status: 413, error: `${what} too large (${limit / 1024 / 1024} MB max).` } as const;
+  if (Number(req.headers.get("content-length") ?? 0) > limit) return tooLarge;
   const text = await req.text();
-  if (text.length > limit) return { ok: false, status: 413, error: "Scenario too large (3 MB max)." };
+  if (text.length > limit) return tooLarge;
   try {
     return { ok: true, value: JSON.parse(text) };
   } catch {
@@ -93,6 +102,8 @@ async function readJsonLimited(req: Request, limit: number): Promise<{ ok: true;
 
 const server = Bun.serve<SocketData>({
   port,
+  // Just above the largest upload (a saved game), so oversized bodies stop before they are buffered.
+  maxRequestBodySize: MAX_GAME_BYTES + 4 * 1024 * 1024,
   async fetch(req, srv) {
     const url = new URL(req.url);
     const path = url.pathname;
@@ -104,7 +115,7 @@ const server = Bun.serve<SocketData>({
 
     if (path === "/api/health") {
       const q = ai.quota();
-      return json({ ok: true, ai: ai.name, dailyLimit: q.dailyLimit, usedToday: q.usedToday } satisfies HealthResponse);
+      return json({ ok: true, ai: ai.name, backends: [...(ai.configured ?? [])], dailyLimit: q.dailyLimit, usedToday: q.usedToday } satisfies HealthResponse);
     }
 
     if (path === "/api/games" && req.method === "POST") {
@@ -116,6 +127,44 @@ const server = Bun.serve<SocketData>({
         return json({ gameId: room.state.id });
       } catch (e) {
         return json({ error: errorText(e) }, 500);
+      }
+    }
+
+    if (path === "/api/games/import" && req.method === "POST") {
+      const body = await readJsonLimited(req, MAX_GAME_BYTES, "Saved game");
+      if (!body.ok) return json({ error: body.error }, body.status);
+      try {
+        const { game, snapshots } = parseBundle(body.value, { regions: map.count, hasScenario: (id) => !!scenarios.get(id) });
+        return json({ gameId: rooms.import(game, snapshots).state.id });
+      } catch (e) {
+        if (e instanceof BundleError) return json({ error: e.message }, 400);
+        return json({ error: errorText(e) }, 500);
+      }
+    }
+
+    // Host only: the player id is the secret the host's client keeps for this game. It comes in a
+    // header, not the URL, so it stays out of proxy, tunnel and access logs.
+    const ex = path.match(/^\/api\/games\/([a-z0-9]+)\/export$/);
+    if (ex && req.method === "GET") {
+      const room = rooms.peek(ex[1]);
+      const game = room?.state ?? loadGame(ex[1]);
+      if (!game) return json({ error: "Game not found" }, 404);
+      const player = req.headers.get("x-worldline-player");
+      if (!player || !game.players.some((p) => p.id === player && p.isHost)) return json({ error: "Only the host can export the game." }, 403);
+      // Mid-turn the state is half-applied; the turn's start is in the snapshots, but wait for its end.
+      if (room?.resolving) return json({ error: "Wait for the turn to resolve, then export." }, 409);
+      try {
+        const { text, dropped } = exportBundle(game, snapshotJsonNewestFirst(game.id));
+        return new Response(text, {
+          headers: {
+            "Content-Type": "application/json",
+            "Content-Disposition": `attachment; filename="${exportFilename(game)}"`,
+            "X-Worldline-Dropped-Turns": String(dropped),
+          },
+        });
+      } catch (e) {
+        if (e instanceof BundleError) return json({ error: e.message }, 413);
+        throw e;
       }
     }
 

@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { applyEvent, occupyCap } from "../src/game/engine.ts";
 import {
-  holdCap, offensivePace, operationAxis, operationRoute, planOperations, sanitizeOperation, type OperationPlan,
+  FORTUNES, offensivePace, operationAxis, operationRoute, planOperations, rollFortune, sanitizeOperation,
+  type Fortune, type OperationPlan,
 } from "../src/game/operations.ts";
 import type { GameState, Order } from "../src/game/state.ts";
 import { addHuman, ctx, ev, idx, MAP, makeState, prov, war } from "./fixtures.ts";
@@ -47,34 +48,41 @@ describe("routes and axes", () => {
     expect(axis).not.toContain(LVIV);
   });
 
-  test("pace grows with the odds and the stance; hold lines give at most one or two regions", () => {
-    expect(offensivePace(5, 40, 80, "balanced")).toBeLessThan(offensivePace(5, 80, 40, "balanced"));
-    expect(offensivePace(5, 60, 60, "cautious")).toBeLessThan(offensivePace(5, 60, 60, "allout"));
-    expect(offensivePace(5, 1, 500, "cautious")).toBe(1);
-    expect(holdCap(60, 80)).toBe(1);
-    expect(holdCap(20, 80)).toBe(2);
+  test("pace grows with the stance and the fortune; only a disaster can mean no ground at all", () => {
+    expect(offensivePace(5, "cautious", "even")).toBeLessThan(offensivePace(5, "allout", "even"));
+    expect(offensivePace(5, "balanced", "poor")).toBeLessThan(offensivePace(5, "balanced", "good"));
+    expect(offensivePace(1, "cautious", "poor")).toBe(1);
+    expect(offensivePace(1, "cautious", "disastrous")).toBe(0);
+  });
+
+  test("the fortune roll is seeded and lands in each band about as often as intended", () => {
+    expect(rollFortune("g1:3:o1")).toBe(rollFortune("g1:3:o1"));
+    const n = 20000;
+    const seen: Record<Fortune, number> = { disastrous: 0, poor: 0, even: 0, good: 0, exceptional: 0 };
+    for (let i = 0; i < n; i++) seen[rollFortune(`g:${i}:o1`)]++;
+    for (const f of Object.keys(FORTUNES) as Fortune[]) expect(Math.abs(seen[f] / n - FORTUNES[f].p)).toBeLessThan(0.02);
   });
 });
 
 describe("sanitizing plans", () => {
   test("an offensive must jump off from land its side controls", () => {
     const { s } = setup(undefined);
-    expect(sanitizeOperation({ kind: "offensive", regions: [KHARKIV, BELGOROD], divisions: 30, stance: "allout" }, s, MAP, "UKR"))
-      .toEqual({ kind: "offensive", regions: [KHARKIV, BELGOROD], divisions: 30, stance: "allout", name: undefined });
-    expect(sanitizeOperation({ kind: "offensive", regions: [BELGOROD, KURSK], divisions: 30, stance: "balanced" }, s, MAP, "UKR")).toBeUndefined();
+    expect(sanitizeOperation({ kind: "offensive", regions: [KHARKIV, BELGOROD], stance: "allout" }, s, MAP, "UKR"))
+      .toEqual({ kind: "offensive", regions: [KHARKIV, BELGOROD], stance: "allout", name: undefined });
+    expect(sanitizeOperation({ kind: "offensive", regions: [BELGOROD, KURSK], stance: "balanced" }, s, MAP, "UKR")).toBeUndefined();
     expect(sanitizeOperation({ kind: "bombard", regions: [KHARKIV, BELGOROD] }, s, MAP, "UKR")).toBeUndefined();
   });
 
   test("a hold line keeps only regions the player controls", () => {
     const { s } = setup(undefined);
-    const op = sanitizeOperation({ kind: "hold", regions: [KHARKIV, BELGOROD, SUMY], divisions: 5, stance: "balanced" }, s, MAP, "UKR");
+    const op = sanitizeOperation({ kind: "hold", regions: [KHARKIV, BELGOROD, SUMY], stance: "balanced" }, s, MAP, "UKR");
     expect(op?.regions).toEqual([KHARKIV, SUMY]);
   });
 });
 
 describe("enforcing plans", () => {
   test("an offensive's gains stay on its axis", () => {
-    const { s, order } = setup({ kind: "offensive", regions: [KHARKIV, BELGOROD], divisions: 60, stance: "balanced" });
+    const { s, order } = setup({ kind: "offensive", regions: [KHARKIV, BELGOROD], stance: "balanced" });
     const plans = planOperations(s, MAP, [order], occupyCap(s, 30));
     expect(plans).toHaveLength(1);
     const c = enforce(s, plans, [order]);
@@ -85,10 +93,10 @@ describe("enforcing plans", () => {
   });
 
   test("an offensive stops at its pace", () => {
-    const { s, order } = setup({ kind: "offensive", regions: [KHARKIV, VORONEZH], divisions: 5, stance: "cautious" });
+    const { s, order } = setup({ kind: "offensive", regions: [KHARKIV, VORONEZH], stance: "cautious" });
     const [plan] = planOperations(s, MAP, [order], occupyCap(s, 30));
-    expect(plan.cap).toBe(1);
-    const c = enforce(s, [plan], [order]);
+    expect(plan.cap).toBe(offensivePace(occupyCap(s, 30), "cautious", plan.fortune));
+    const c = enforce(s, [{ ...plan, cap: 1 }], [order]);
     const targets = plan.route.slice(1);
     const r = applyEvent(s, MAP, ev([{ type: "setController", provinces: targets, controller: "UKR" }], { causes: ["o1"] }), c);
     expect(targets.filter((id) => s.controllers[id] === idx(s, "UKR"))).toHaveLength(1);
@@ -96,9 +104,9 @@ describe("enforcing plans", () => {
   });
 
   test("a hold line limits how much the enemy can take of it", () => {
-    const { s, order } = setup({ kind: "hold", regions: [KHARKIV, SUMY], divisions: 0, stance: "balanced" });
+    const { s, order } = setup({ kind: "hold", regions: [KHARKIV, SUMY], stance: "balanced" });
     const plans = planOperations(s, MAP, [order], occupyCap(s, 30));
-    expect(plans[0].cap).toBeGreaterThanOrEqual(1);
+    expect(plans[0].cap).toBe(FORTUNES[plans[0].fortune].hold);
     const c = enforce(s, plans, [order]);
     c.operations![0].cap = 1;
     const r = applyEvent(s, MAP, ev([{ type: "setController", provinces: [KHARKIV, SUMY, DONETSK], controller: "RUS" }]), c);

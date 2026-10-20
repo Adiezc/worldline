@@ -166,6 +166,7 @@ export const respondProposal = (chatId: string, proposalId: string, accept: bool
 export const proposeResolution = (orgId: string, resolutionType: ResolutionType, text: string, target?: string) =>
   send({ t: "org.propose", orgId, resolutionType, text, target: target || undefined });
 export const voteResolution = (resolutionId: string, vote: "yes" | "no" | "abstain") => send({ t: "org.vote", resolutionId, vote });
+export const abandonProject = (projectId: string) => send({ t: "project.abandon", projectId });
 
 // --- Turn results & playback -----------------------------------------------------------------
 

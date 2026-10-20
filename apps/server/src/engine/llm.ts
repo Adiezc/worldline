@@ -59,6 +59,7 @@ async function complete(deps: EngineDeps, state: GameState, req: AiRequest): Pro
     state.usage.requests++;
     state.usage.promptTokens += res.usage.promptTokens || 0;
     state.usage.completionTokens += res.usage.completionTokens || 0;
+    if (res.usage.cachedTokens) state.usage.cachedTokens = (state.usage.cachedTokens ?? 0) + res.usage.cachedTokens;
     if (res.usage.model) state.usage.lastModel = res.usage.model;
     return res;
   } catch (err) {

@@ -1,5 +1,5 @@
-// Client glue for front lines and troop estimates: computes them from a view (or the map as
-// drawn during playback) and pushes the overlay to the map.
+// Client glue for front lines: computes them from a view (or the map as drawn during playback),
+// with who fights on each side, and pushes the overlay to the map.
 import {
   buildMapIndex, computeFronts, estimateForces, frontName,
   type Country, type ForceEstimate, type Front, type GameView, type MapIndex, type MapMeta, type War,
@@ -55,9 +55,7 @@ export function frontsOverlay({ fronts, forces }: FrontsResult, countries: Count
         name: name(mine.tag),
         enemyName: name(theirs.tag),
         color: byTag.get(mine.tag)?.color ?? "#888888",
-        divisions: mine.divisions,
-        enemyDivisions: theirs.divisions,
-        by: mine.by.map((b) => ({ name: name(b.tag), divisions: b.divisions })),
+        by: [mine.tag, ...mine.by.map((b) => b.tag).filter((t) => t !== mine.tag)].map(name),
         label: frontName(theirs.tag, name(theirs.tag)),
         anchor: [...anchor],
         other: [...other],

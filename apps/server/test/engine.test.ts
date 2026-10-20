@@ -5,8 +5,9 @@ import { describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import {
-  addDays, buildMapIndex, countryByTag, countryIndex, relKey,
-  type GameState, type MapMeta, type ScenarioSeed,
+  addDays, applyEvent, buildMapIndex, countryByTag, countryIndex, newTurnContext, projectPace, projectStatus, provincesOf, relKey,
+  splitChartBlocks,
+  type Effect, type GameState, type MapMeta, type ScenarioSeed,
 } from "@worldline/shared";
 import { MockProvider } from "../src/ai/mock.ts";
 import type { AiProvider, AiRequest, EngineDeps } from "../src/engine/api.ts";
@@ -34,6 +35,22 @@ class SpyProvider extends MockProvider {
     this.kinds.push(req.kind);
     this.prompts[req.kind] = req.user;
     return super.complete(req);
+  }
+}
+
+/** The mock's replies, except that every resolver reply is edited by `patch` first. */
+class ScriptedProvider extends MockProvider {
+  calls: AiRequest["kind"][] = [];
+  constructor(private patch: (out: any) => void) {
+    super();
+  }
+  override async complete(req: AiRequest) {
+    this.calls.push(req.kind);
+    const res = await super.complete(req);
+    if (req.kind !== "resolver") return res;
+    const out = JSON.parse(res.text);
+    this.patch(out);
+    return { ...res, text: JSON.stringify(out) };
   }
 }
 
@@ -234,6 +251,34 @@ for (const [label, seed] of seeds) {
       const ideas = await engine.brainstorm(state, deps, { country: "UKR" });
       expect(ideas.length).toBeGreaterThanOrEqual(4);
       expect(ideas.length).toBeLessThanOrEqual(6);
+    });
+
+    test("advisor replies carry at most one chart block, and only a valid one", async () => {
+      const state = newGame(seed, [["p1", "UKR"]]);
+      const deps = depsFor(seed);
+      let charts = 0;
+      for (const question of ["", "How strong are our neighbours?", "Can we afford a war?", "Who are our friends?", "What next?", "Trade?"]) {
+        const reply = await engine.advisor(state, deps, { country: "UKR", question });
+        const parts = splitChartBlocks(reply);
+        const n = parts.filter((p) => p.kind === "chart").length;
+        expect(n).toBeLessThanOrEqual(1);
+        expect(reply.split("```chart").length - 1).toBe(n);
+        charts += n;
+      }
+      expect(charts).toBeGreaterThan(0);
+
+      // A messy model reply: invalid and extra blocks are stripped, the first valid one kept compact.
+      const valid = { type: "line", title: "Relations", labels: ["POL", "RUS"], series: [{ name: "Relation", values: [60, -90] }] };
+      const messy: AiProvider = {
+        name: "mock",
+        quota: () => ({ usedToday: 0, dailyLimit: 0 }),
+        complete: async () => ({
+          text: `Intro.\n\n\`\`\`chart\n{"type":"pie"}\n\`\`\`\n\n\`\`\`chart\n${JSON.stringify(valid, null, 2).replace("]", ",]")}\n\`\`\`\n\nMore.\n\n\`\`\`chart\n${JSON.stringify(valid)}\n\`\`\``,
+          usage: { model: "mock", promptTokens: 1, completionTokens: 1 },
+        }),
+      };
+      const reply = await engine.advisor(state, depsFor(seed, messy), { country: "UKR" });
+      expect(reply).toBe(`Intro.\n\n\`\`\`chart\n${JSON.stringify(valid)}\n\`\`\`\n\nMore.`);
     });
 
     test("intervene stops the last turn at its 2nd event", async () => {
@@ -482,7 +527,7 @@ describe("battle plans", () => {
     // A Ukrainian-held region on the front and the Russian-held region across from it.
     const from = state.controllers.findIndex((c, id) => id > 0 && c === ukr && map.neighbors[id].some((n) => state.controllers[n] === rus));
     const target = map.neighbors[from].find((n) => state.controllers[n] === rus)!;
-    const operation = { kind: "offensive" as const, regions: [from, target], divisions: 60, stance: "allout" as const, name: "Operation Test" };
+    const operation = { kind: "offensive" as const, regions: [from, target], stance: "allout" as const, name: "Operation Test" };
     state.orders = { p1: [{ id: "o1", playerId: "p1", country: "UKR", text: "Operation Test", operation }] };
     const res = await engine.runTurn(state, depsFor(seed));
     expect(state.controllers[target]).toBe(ukr);
@@ -507,5 +552,146 @@ describe("diplomacy and turns", () => {
       expect(spy.prompts[kind]).toContain("We will never cede Kharkiv.");
     }
     expect(spy.prompts.resolver).toMatch(/PROPOSAL peace treaty \(white peace\) among UKR, RUS: (ACCEPTED|REJECTED)/);
+  });
+
+  test("effects the rules refused are reported to the next turn's resolver", async () => {
+    const state = newGame(seed, [["p1", "GBR"]]);
+    const region = provincesOf(state, "UKR")[0];
+    await engine.runTurn(state, depsFor(seed, new ScriptedProvider((out) => {
+      out.events.push({
+        date: state.date, headline: "Kyiv hands a region to Moscow", body: "", countries: ["UKR", "RUS"], causes: [],
+        effects: [{ type: "transferProvinces", provinces: [region], from: "UKR", to: "RUS" }],
+      });
+    })));
+    expect(state.owners[region]).toBe(countryIndex(state, "UKR"));
+    const spy = new SpyProvider();
+    await engine.runTurn(state, depsFor(seed, spy));
+    expect(spy.prompts.resolver).toContain("ENGINE RECEIPT");
+    expect(spy.prompts.resolver).toMatch(/REFUSED in "Kyiv hands a region to Moscow": \{"type":"transferProvinces"/);
+    // Only last turn's refusals: a quiet turn after that reports nothing.
+    await engine.runTurn(state, depsFor(seed, spy));
+    expect(spy.prompts.resolver).not.toContain('REFUSED in "Kyiv hands a region to Moscow"');
+  });
+
+  test("AI governments reach out to players unprompted, with a deal the player can accept", async () => {
+    const state = newGame(seed, [["p1", "GBR"]]);
+    state.treaties = state.treaties.filter((t) => !(t.type === "trade" && t.members.includes("GBR") && t.members.includes("DEU")));
+    await engine.runTurn(state, depsFor(seed, new ScriptedProvider((out) => {
+      out.outreach = [
+        { from: "DEU", to: "GBR", message: "Berlin would like to talk trade.", proposal: { kind: "treaty", treatyType: "free trade", members: ["DEU", "GBR", "FRA"], terms: "Zero tariffs." } },
+        { from: "DEU", to: "GBR", message: "A second note from the same sender is dropped." },
+        { from: "FRA", to: "RUS", message: "Not addressed to a player." },
+        { from: "GBR", to: "DEU", message: "Players speak for themselves." },
+      ];
+    })));
+    const chat = state.chats.find((c) => c.members.includes("DEU") && c.members.includes("GBR"))!;
+    expect(chat.messages.length).toBe(1);
+    const msg = chat.messages[0];
+    expect(msg).toMatchObject({ from: "DEU", unprompted: true, text: "Berlin would like to talk trade." });
+    expect(msg.proposal).toMatchObject({ kind: "treaty", treatyType: "trade", status: "open", awaiting: ["GBR"] });
+    // A third country the model named never agreed to anything: the deal is between the two in the channel.
+    expect(msg.proposal!.members).toEqual(["DEU", "GBR"]);
+    expect(chat.lastTurn).toBe(state.turn);
+    expect(state.chats.some((c) => c.members.includes("RUS"))).toBe(false);
+    const r = engine.respondProposal(state, { chatId: chat.id, proposalId: msg.proposal!.id, byTag: "GBR", accept: true, map });
+    expect(r.ok).toBe(true);
+    expect(state.treaties.some((t) => t.type === "trade" && t.members.includes("GBR") && t.members.includes("DEU"))).toBe(true);
+  });
+
+  test("a malformed outreach message is dropped without failing the turn", async () => {
+    const state = newGame(seed, [["p1", "GBR"]]);
+    const spy = new ScriptedProvider((out) => { out.outreach = [{ from: "DEU" }]; });
+    await engine.runTurn(state, depsFor(seed, spy));
+    expect(state.turn).toBe(2);
+    expect(spy.calls.filter((k) => k === "resolver").length).toBe(1);
+  });
+
+  test("each AI reply keeps a running record of the talks, which later prompts carry", async () => {
+    const state = newGame(seed, [["p1", "GBR"]]);
+    const chatId = engine.openChat(state, { from: "GBR", with: ["DEU"] });
+    await engine.sendChat(state, depsFor(seed), { chatId, playerId: "p1", text: "Shall we talk?" });
+    const chat = state.chats.find((c) => c.id === chatId)!;
+    expect(chat.summary).toBeTruthy();
+    const spy = new SpyProvider();
+    await engine.sendChat(state, depsFor(seed, spy), { chatId, playerId: "p1", text: "As promised, here we are." });
+    expect(spy.prompts.chat).toContain(`EARLIER IN THIS CONVERSATION (your running record):\n${chat.summary}`);
+    // Long after the talks went quiet, the turn prompts still see the record.
+    state.turn += 6;
+    await engine.runTurn(state, depsFor(seed, spy));
+    expect(spy.prompts.resolver).toContain("EARLIER TALKS (running records)");
+    expect(spy.prompts.resolver).toContain(chat.summary!);
+  });
+});
+
+describe("projects", () => {
+  const seed = seeds[0][1];
+  const event = (state: GameState, effects: Effect[], causes: string[] = []) =>
+    ({ id: "x", turn: state.turn, date: state.date, headline: "h", body: "", countries: [], causes, effects, scope: "world" as const });
+
+  test("an order launches a project that later turns advance, complete and report to the prompts", async () => {
+    const state = newGame(seed, [["p1", "GBR"]]);
+    state.orders.p1 = [{ id: "o1", playerId: "p1", country: "GBR", text: "Build a national high-speed rail network" }];
+    await engine.runTurn(state, depsFor(seed));
+    // runTurn commits a fresh copy of the state, so look the project up again after each turn.
+    const id = state.projects?.find((x) => x.country === "GBR")?.id;
+    const project = () => state.projects!.find((x) => x.id === id)!;
+    let p = project();
+    expect(p).toMatchObject({ status: "active", progress: 0 });
+    expect(state.events.find((e) => e.causes.includes("o1"))?.date).toBe(p!.started);
+    expect(p!.milestones.length).toBe(3);
+    const spy = new SpyProvider();
+    await engine.runTurn(state, depsFor(seed, spy));
+    expect(spy.prompts.resolver).toContain(`${p!.id} [GBR] "${p!.name}"`);
+    await engine.advisor(state, depsFor(seed, spy), { country: "GBR" });
+    expect(spy.prompts.advisor).toContain(`YOUR PROJECTS:\n${p!.id} [GBR]`);
+    p = project();
+    expect(p.progress).toBe(projectPace(state, 30));
+    expect(p!.milestones[0].done).toBeTruthy();
+    for (let i = 0; i < 10 && project().status === "active"; i++) await engine.runTurn(state, depsFor(seed));
+    p = project();
+    expect(p).toMatchObject({ status: "completed", progress: 100 });
+    expect(p!.milestones.every((m) => m.done)).toBe(true);
+  });
+
+  test("the validator guards who starts projects, the pace of progress, and completion", () => {
+    const state = newGame(seed, [["p1", "GBR"]]);
+    const ctx = newTurnContext(30, [{ id: "o1", country: "GBR" }]);
+    const start = (country: string, name: string): Effect => ({ type: "startProject", country, name, goal: "", months: 12, milestones: [] });
+    // A player's project needs the player's own order; AI nations start theirs freely, two a turn.
+    let r = applyEvent(state, map, event(state, [start("GBR", "Rail")]), ctx);
+    expect(r.rejected[0]?.reason).toMatch(/player-controlled/);
+    r = applyEvent(state, map, event(state, [start("GBR", "Rail")], ["o1"]), ctx);
+    expect(r.applied.length).toBe(1);
+    r = applyEvent(state, map, event(state, [start("DEU", "A"), start("DEU", "B"), start("DEU", "C")]), ctx);
+    expect(r.applied.length).toBe(2);
+    expect(r.rejected[0]?.reason).toMatch(/at most 2 new projects/);
+    const rail = state.projects!.find((p) => p.country === "GBR")!;
+    expect(rail.due).toBe(addDays(state.date, 365));
+    // Progress shares one allowance per project per turn; completion needs 80%.
+    const pace = projectPace(state, 30);
+    r = applyEvent(state, map, event(state, [{ type: "advanceProject", projectId: rail.id, progress: 90 }]), ctx);
+    expect(rail.progress).toBe(pace);
+    expect(r.clamped.length).toBe(1);
+    applyEvent(state, map, event(state, [{ type: "advanceProject", projectId: rail.id, progress: 10 }]), ctx);
+    expect(rail.progress).toBe(pace);
+    r = applyEvent(state, map, event(state, [{ type: "endProject", projectId: rail.id, outcome: "completed" }]), ctx);
+    expect(r.rejected[0]?.reason).toMatch(/completes from 80%/);
+    r = applyEvent(state, map, event(state, [{ type: "endProject", projectId: rail.id, outcome: "abandoned" }]), ctx);
+    expect(r.rejected[0]?.reason).toMatch(/only its own orders/);
+    // Overdue is derived from the date, not stored.
+    expect(projectStatus(rail, addDays(rail.due, 1))).toBe("overdue");
+    expect(projectStatus(rail, addDays(rail.due, -10))).toBe("dueSoon");
+  });
+
+  test("a player abandons its own project at once, and only its own", () => {
+    const state = newGame(seed, [["p1", "GBR"]]);
+    const ctx = newTurnContext(30, [{ id: "o1", country: "GBR" }]);
+    applyEvent(state, map, event(state, [{ type: "startProject", country: "GBR", name: "Rail", goal: "", months: 12, milestones: [] }], ["o1"]), ctx);
+    const id = state.projects![0].id;
+    expect(engine.abandonProject(state, { country: "DEU", projectId: id, map }).ok).toBe(false);
+    expect(engine.abandonProject(state, { country: "GBR", projectId: id, map }).ok).toBe(true);
+    expect(state.projects![0].status).toBe("abandoned");
+    expect(state.events.at(-1)?.headline).toMatch(/abandons Rail/);
+    expect(engine.abandonProject(state, { country: "GBR", projectId: id, map }).ok).toBe(false);
   });
 });

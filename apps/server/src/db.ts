@@ -101,6 +101,13 @@ export function loadSnapshot(id: string, turn: number): GameState | null {
   return row ? (JSON.parse(row.state) as GameState) : null;
 }
 
+/** A game's snapshots as stored JSON, newest first, one row at a time (export walks them under a size budget). */
+export function* snapshotJsonNewestFirst(id: string): Generator<string> {
+  for (const row of open().query("SELECT state FROM snapshots WHERE game_id = ?1 ORDER BY turn DESC").iterate(id) as Iterable<{ state: string }>) {
+    yield row.state;
+  }
+}
+
 /** Length of the event log in a snapshot (null when there is none), without parsing the state. */
 export function snapshotEventCount(id: string, turn: number): number | null {
   const row = open().query("SELECT json_array_length(state, '$.events') AS n FROM snapshots WHERE game_id = ?1 AND turn = ?2")

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { projectStatus } from "@worldline/shared";
 import { totalUnread } from "../../game/chatNotify.ts";
 import { useGame } from "../../game/store.ts";
 import { selectCountry, setLeftTab, toggleLeftTab } from "../../game/actions.ts";
@@ -11,6 +12,7 @@ import { OrdersPanel } from "../panels/OrdersPanel.tsx";
 import { AdvisorPanel } from "../panels/AdvisorPanel.tsx";
 import { OrgPanel } from "../panels/OrgPanel.tsx";
 import { FormationPanel } from "../panels/FormationPanel.tsx";
+import { ProjectsPanel } from "../panels/ProjectsPanel.tsx";
 import { HistoryPanel } from "../panels/HistoryPanel.tsx";
 import { CountryPanel } from "../panels/CountryPanel.tsx";
 import { EventFeed } from "../panels/EventFeed.tsx";
@@ -33,6 +35,9 @@ export function Hud() {
     return s.view.chats.filter((c) => c.messages.some((m) => m.proposal?.status === "open" && m.proposal.awaiting.includes(me))).length;
   });
   const unreadChats = useGame((s) => totalUnread(s.unread));
+  const activeProjects = useGame((s) => (s.view?.projects ?? []).filter((p) => p.country === s.view?.you.country && p.status === "active").length);
+  // Overdue projects of yours, as a badge that asks for attention.
+  const overdueProjects = useGame((s) => (s.view?.projects ?? []).filter((p) => p.country === s.view?.you.country && projectStatus(p, s.view.date) === "overdue").length);
   const [chatList, setChatList] = useState(false);
   const isHost = useGame((s) => !!s.view?.you.isHost);
   const snapshotCount = useGame((s) => s.view?.snapshots?.length ?? 0);
@@ -54,6 +59,7 @@ export function Hud() {
         <IconButton icon="scroll" label={`Orders${orderCount ? ` (${orderCount})` : ""}`} active={tab === "orders"} onClick={() => toggleLeftTab("orders")} />
         <IconButton icon="quill" label="Advisor" active={tab === "advisor"} onClick={() => toggleLeftTab("advisor")} />
         <IconButton icon="columns" label="Organisations" active={tab === "orgs"} onClick={() => toggleLeftTab("orgs")} badge={pendingVotes} />
+        <IconButton icon="project" label={`Projects${activeProjects ? ` (${activeProjects})` : ""}`} active={tab === "projects"} onClick={() => toggleLeftTab("projects")} badge={overdueProjects} />
         <IconButton icon="crown" label="Form a nation" active={tab === "formation"} onClick={() => toggleLeftTab("formation")} />
         {isHost && <IconButton icon="history" label={`History${snapshotCount ? ` (${snapshotCount} saved turns)` : ""} — rewind`} active={tab === "history"} onClick={() => toggleLeftTab("history")} />}
         <div className="gilt-rule my-1 w-7" />
@@ -68,6 +74,7 @@ export function Hud() {
           {tab === "advisor" && <AdvisorPanel onClose={() => setLeftTab(null)} />}
           {tab === "orgs" && <OrgPanel onClose={() => setLeftTab(null)} />}
           {tab === "formation" && <FormationPanel onClose={() => setLeftTab(null)} />}
+          {tab === "projects" && <ProjectsPanel onClose={() => setLeftTab(null)} />}
           {tab === "history" && <HistoryPanel onClose={() => setLeftTab(null)} />}
         </div>
       )}

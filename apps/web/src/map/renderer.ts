@@ -15,11 +15,11 @@ const PALETTE_W = 1024;
 const NONE = 0xffff;
 const MESH_MAGIC = 0x314d4c57; // "WLM1"
 /** Front lines: maroon casing, red core, slowly marching lighter dashes. */
-const FRONT_STYLE = { casing: [0.27, 0.04, 0.05], core: [0.78, 0.13, 0.11], dash: [0.93, 0.36, 0.26], dashK: 0.55, speed: 8, width: 1, casingPass: true, gaps: false, period: 0 };
+const FRONT_STYLE = { casing: [0.27, 0.04, 0.05], core: [0.78, 0.13, 0.11], dash: [0.93, 0.36, 0.26], dashK: 0.55, speed: 8, width: 1, casingPass: true, gaps: false, period: 0, alpha: 1 };
 /** Hold lines: navy casing, steel-blue core with still, pale dashes (dug in, not moving). */
-const HOLD_STYLE = { casing: [0.05, 0.11, 0.24], core: [0.26, 0.5, 0.86], dash: [0.78, 0.89, 1], dashK: 0.6, speed: 0, width: 0.9, casingPass: true, gaps: false, period: 0 };
-/** Claim lines: thin dark dashes with pale gaps, under fronts and hold lines. */
-const CLAIM_STYLE = { casing: [0, 0, 0], core: [0.2, 0.17, 0.15], dash: [0.93, 0.9, 0.82], dashK: 0.75, speed: 0, width: 0.75, casingPass: false, gaps: true, period: 9 };
+const HOLD_STYLE = { casing: [0.05, 0.11, 0.24], core: [0.26, 0.5, 0.86], dash: [0.78, 0.89, 1], dashK: 0.6, speed: 0, width: 0.9, casingPass: true, gaps: false, period: 0, alpha: 1 };
+/** Claim lines: hairline, half-clear ink dashes with faint pale gaps, under fronts and hold lines (context, not a border). */
+const CLAIM_STYLE = { casing: [0, 0, 0], core: [0.24, 0.2, 0.17], dash: [0.95, 0.92, 0.85], dashK: 0.35, speed: 0, width: 0.45, casingPass: false, gaps: true, period: 7, alpha: 0.6 };
 /** Device px per map px from which the vector mesh replaces the raster land fill. */
 const MESH_ZOOM = 1.25;
 
@@ -415,6 +415,7 @@ export class MapRenderer {
       gl.uniform1f(this.loc(p, "uWidthK"), set.style.width);
       gl.uniform1f(this.loc(p, "uGaps"), set.style.gaps ? 1 : 0);
       gl.uniform1f(this.loc(p, "uPeriodPx"), set.style.period);
+      gl.uniform1f(this.loc(p, "uAlpha"), set.style.alpha);
       gl.bindVertexArray(set.vao);
       for (const pass of set.style.casingPass ? [0, 1] : [1]) {
         gl.uniform1i(this.loc(p, "uPass"), pass);
