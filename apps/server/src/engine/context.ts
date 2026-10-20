@@ -267,13 +267,46 @@ function abridge(text: string, n: number) {
 }
 
 /** Headlines of the last two turns (and anything already dated in the current one). */
-export function recentEventsBlock(state: GameState, opts: { involving?: Set<string>; max?: number } = {}) {
+/** `bodies`: add each event's text (clipped), so a speaker knows what actually happened. */
+export function recentEventsBlock(state: GameState, opts: { involving?: Set<string>; max?: number; bodies?: boolean } = {}) {
   const max = opts.max ?? 40;
   let list = state.events.filter((e) => e.turn >= state.turn - 2);
   if (opts.involving) list = list.filter((e) => e.countries.some((t) => opts.involving!.has(t)));
   if (!list.length) return "";
-  const lines = list.slice(-max).map((e) => `${e.date} ${e.headline} [${e.countries.join(",")}]`);
+  const lines = list.slice(-max).map((e) =>
+    `${e.date} ${e.headline} [${e.countries.join(",")}]${opts.bodies && e.body ? ` — ${clip(e.body.replace(/\s+/g, " "), 240)}` : ""}`);
   return `RECENT EVENTS:\n${lines.join("\n")}`;
+}
+
+const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
+
+/**
+ * What governments told each other in diplomatic talks recently: the last few statements and
+ * every proposal with its outcome, per conversation. Turn prompts use it so the news stays
+ * consistent with what was said at the table.
+ */
+export function diplomacyBlock(state: GameState, opts: { involving?: Set<string>; maxChats?: number } = {}) {
+  const recent = state.chats
+    .filter((c) => c.messages.length && c.lastTurn >= state.turn - 2)
+    .filter((c) => !opts.involving || c.members.some((t) => opts.involving!.has(t)))
+    .sort((a, b) => b.lastTurn - a.lastTurn)
+    .slice(0, opts.maxChats ?? 8);
+  if (!recent.length) return "";
+  const blocks = recent.map((c) => {
+    const lines = c.messages.slice(-6).map((m) => {
+      let line = `  ${m.at} ${m.from}: ${m.text ? `"${clip(m.text.replace(/\s+/g, " "), 260)}"` : "(proposal only)"}`;
+      const p = m.proposal;
+      if (p) {
+        const what = p.kind === "endWar"
+          ? `peace treaty${p.cessions?.length ? ` (${p.cessions.map((x) => `${x.from} cedes ${x.provinces.length} region(s) to ${x.to}`).join("; ")})` : p.peace === "keep_occupied" ? " (each side keeps what it holds)" : " (white peace)"}`
+          : p.kind === "treaty" ? `${p.treatyType ?? "treaty"}` : p.kind;
+        line += `\n    PROPOSAL ${what} among ${p.members.join(", ")}: ${p.status.toUpperCase()}${p.status === "open" && p.awaiting.length ? ` (awaiting ${p.awaiting.join(", ")})` : ""}`;
+      }
+      return line;
+    });
+    return `${c.members.join(" / ")}:\n${lines.join("\n")}`;
+  });
+  return `DIPLOMACY (recent talks between governments, latest last; accepted proposals have already taken effect):\n${blocks.join("\n")}`;
 }
 
 export function calendarIn(seed: ScenarioSeed, from: string, to: string) {
@@ -321,6 +354,7 @@ export function worldContext(state: GameState, deps: { map: MapIndex; seed: Scen
     regionsBlock(state, map),
     formationsBlock(state),
     recentEventsBlock(state),
+    diplomacyBlock(state),
     calendarBlock(seed, state.date, end),
   ].filter(Boolean).join("\n\n");
   return { text, tiers, end, front };

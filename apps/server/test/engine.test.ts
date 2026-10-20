@@ -482,3 +482,21 @@ describe("peace treaties from diplomacy", () => {
     }
   });
 });
+
+describe("battle plans", () => {
+  const seed = seeds[0][1];
+
+  test("an offensive drawn on the map takes ground along its axis and its verdict keeps the plan", async () => {
+    const state = newGame(seed, [["p1", "UKR"]]);
+    const map = depsFor(seed).map;
+    const ukr = state.countries.findIndex((c) => c.tag === "UKR"), rus = state.countries.findIndex((c) => c.tag === "RUS");
+    // A Ukrainian-held region on the front and the Russian-held region across from it.
+    const from = state.controllers.findIndex((c, id) => id > 0 && c === ukr && map.neighbors[id].some((n) => state.controllers[n] === rus));
+    const target = map.neighbors[from].find((n) => state.controllers[n] === rus)!;
+    const operation = { kind: "offensive" as const, regions: [from, target], divisions: 60, stance: "allout" as const, name: "Operation Test" };
+    state.orders = { p1: [{ id: "o1", playerId: "p1", country: "UKR", text: "Operation Test", operation }] };
+    const res = await engine.runTurn(state, depsFor(seed));
+    expect(state.controllers[target]).toBe(ukr);
+    expect(res.verdicts.find((v) => v.orderId === "o1")?.operation).toEqual(operation);
+  });
+});

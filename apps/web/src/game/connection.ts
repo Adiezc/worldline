@@ -51,7 +51,7 @@ export function flushOrders() {
   window.clearTimeout(ordersTimer);
   const { orders, ordersDirty } = useGame.getState();
   if (!ordersDirty) return;
-  send({ t: "orders", orders: orders.filter((o) => o.text.trim()).map((o) => ({ id: o.id, text: o.text })) });
+  send({ t: "orders", orders: orders.filter((o) => o.text.trim()).map((o) => ({ id: o.id, text: o.text, operation: o.operation })) });
   useGame.setState({ ordersDirty: false });
 }
 

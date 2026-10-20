@@ -1,5 +1,6 @@
 // Authoritative game state. Countries are addressed by tag in anything the AI sees and by
 // index in map arrays (owners/controllers), so the renderer can stay index-based.
+import type { Operation } from "./operations.ts";
 
 export type Difficulty = "easy" | "normal" | "hard" | "realistic";
 export type AiBehaviour = "plausible" | "dynamic";
@@ -163,6 +164,8 @@ export interface Order {
   playerId: string;
   country: string;
   text: string;
+  /** A battle plan drawn on the map (offensive arrow or hold line). */
+  operation?: Operation;
 }
 
 export interface OrderVerdict {
@@ -172,6 +175,8 @@ export interface OrderVerdict {
   /** Filled by the server: who gave the order and what it said, so verdicts survive reloads. */
   country?: string;
   text?: string;
+  /** The order's battle plan, so the map can show how far it got. */
+  operation?: Operation;
 }
 
 export interface Player {

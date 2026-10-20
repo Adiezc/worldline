@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { getMap } from "../map/controller.ts";
 import { useMap } from "../store.ts";
 import { pushFronts } from "./fronts.ts";
+import { pushOperations } from "./operations.ts";
 import { computePalette } from "./mapModes.ts";
 import { focusTag } from "./selectors.ts";
 import { useGame } from "./store.ts";
@@ -79,6 +80,13 @@ export function MapSync() {
   useEffect(() => {
     if (ready) pushFronts();
   }, [ready, editing, owners, controllers, hold, countries, wars, showFronts, meta]);
+
+  // Battle plans: your orders, the plan being drawn, allies' plans and last turn's results.
+  const orders = useGame((s) => s.orders);
+  const opDraft = useGame((s) => s.opDraft);
+  useEffect(() => {
+    if (ready) pushOperations();
+  }, [ready, editing, orders, opDraft, view, meta]);
 
   const forgetLabels = useCallback(() => {
     labelled.current.owners = null;

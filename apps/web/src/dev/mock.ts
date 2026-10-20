@@ -108,6 +108,7 @@ function mockView(phase: GameView["phase"] = "orders", theme: EraTheme = "modern
       { turn: 3, date: "2026-03-01" },
     ],
     intervenable: ["e1", "e2"],
+    allyOperations: [],
     ai: { provider: "mock", usedToday: 140, dailyLimit: 1000 },
   };
 }

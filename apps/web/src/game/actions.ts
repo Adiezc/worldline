@@ -1,25 +1,28 @@
 // User intents → store updates + client messages.
-import type { FormationRequest, GameSettings, ProposalDraft, ResolutionType } from "@worldline/shared";
+import type { FormationRequest, GameSettings, Operation, ProposalDraft, ResolutionType } from "@worldline/shared";
 import { getMap, getPickHandler } from "../map/controller.ts";
 import { useMap } from "../store.ts";
 import { flushOrders, scheduleOrdersSync, send } from "./connection.ts";
 import { countryMap } from "./selectors.ts";
-import { openWindow, sameMembers, toast, useGame, type AiKind, type LeftTab } from "./store.ts";
+import { openWindow, sameMembers, toast, useGame, type AiKind, type DraftOrder, type LeftTab } from "./store.ts";
 import type { MapMode } from "./mapModes.ts";
 import { uid } from "./format.ts";
 
 // --- Orders ----------------------------------------------------------------------------------
 
-function setOrders(fn: (o: { id: string; text: string }[]) => { id: string; text: string }[]) {
+function setOrders(fn: (o: DraftOrder[]) => DraftOrder[]) {
   useGame.setState((s) => ({ orders: fn(s.orders), ordersDirty: true }));
   scheduleOrdersSync();
 }
 
-export const addOrder = (text: string) => {
+export const addOrder = (text: string, operation?: Operation) => {
   const t = text.trim();
   if (!t) return;
-  setOrders((o) => [...o, { id: uid("o"), text: t }]);
+  setOrders((o) => [...o, { id: uid("o"), text: t, ...(operation ? { operation } : {}) }]);
 };
+/** Replace an order's battle plan (and its text) after it was redrawn. */
+export const updateOperation = (id: string, text: string, operation: Operation) =>
+  setOrders((o) => o.map((x) => (x.id === id ? { ...x, text, operation } : x)));
 export const editOrder = (id: string, text: string) => setOrders((o) => o.map((x) => (x.id === id ? { ...x, text } : x)));
 export const deleteOrder = (id: string) => setOrders((o) => o.filter((x) => x.id !== id));
 

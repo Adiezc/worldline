@@ -359,8 +359,8 @@ void main() {
   outColor = vec4(c.rgb * c.a, c.a); // premultiplied
 }`;
 
-// Front lines: crisp capsules drawn in two passes — a dark maroon casing, then a red core with
-// slowly marching lighter dashes — so the core runs unbroken through every joint.
+// Front lines (and hold lines): crisp capsules drawn in two passes — a dark casing, then a core
+// with optional marching dashes — so the core runs unbroken through every joint.
 export const frontVert = common + /* glsl */ `
 in vec2 aCorner;
 in vec2 aA;
@@ -368,6 +368,7 @@ in vec2 aB;
 in float aDist;    // map px along the arc at the segment start
 uniform float uOffsetX;
 uniform int uPass; // 0 casing, 1 core
+uniform float uWidthK; // line width relative to a front line
 out vec2 vLocal;
 out float vAlong;  // device px along the arc
 flat out float vLen;
@@ -375,7 +376,7 @@ flat out float vWidth;
 
 void main() {
   float zoomCss = uZoom / uDpr;
-  float casing = mix(3.2, 6.5, smoothstep(0.25, 3.0, zoomCss)) * uDpr;
+  float casing = mix(3.2, 6.5, smoothstep(0.25, 3.0, zoomCss)) * uDpr * uWidthK;
   float w = uPass == 0 ? casing : casing * 0.52;
   vec2 a = (aA + vec2(uOffsetX, 0.0) - uCenter) * uZoom;
   vec2 b = (aB + vec2(uOffsetX, 0.0) - uCenter) * uZoom;
@@ -399,6 +400,11 @@ precision highp int;
 uniform float uTime;  // seconds
 uniform float uDpr;
 uniform int uPass;
+uniform vec3 uCasing;
+uniform vec3 uCore;
+uniform vec3 uDash;
+uniform float uDashK; // 0 = no dashes
+uniform float uSpeed; // dash march, CSS px per second
 in vec2 vLocal;
 in float vAlong;
 flat in float vLen;
@@ -408,13 +414,13 @@ void main() {
   float d = length(vec2(max(0.0, max(-vLocal.x, vLocal.x - vLen)), vLocal.y));
   if (d > vWidth * 0.5) discard;
   if (uPass == 0) {
-    outColor = vec4(0.27, 0.04, 0.05, 1.0);
+    outColor = vec4(uCasing, 1.0);
     return;
   }
   float period = max(vWidth * 4.0, 16.0 * uDpr);
-  float u = fract((vAlong - uTime * 8.0 * uDpr) / period);
+  float u = fract((vAlong - uTime * uSpeed * uDpr) / period);
   float e = 1.2 * uDpr / period;
   float dash = smoothstep(0.0, e, u) * (1.0 - smoothstep(0.45, 0.45 + e, u));
-  vec3 c = mix(vec3(0.78, 0.13, 0.11), vec3(0.93, 0.36, 0.26), dash * 0.55);
+  vec3 c = mix(uCore, uDash, dash * uDashK);
   outColor = vec4(c, 1.0);
 }`;

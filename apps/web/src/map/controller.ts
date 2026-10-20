@@ -1,8 +1,9 @@
 // Imperative handle onto the live map, published by MapView once the renderer is ready.
 import type { EraTheme } from "@worldline/shared";
 import type { FrontCounter, FrontsOverlay } from "./counterLayer.ts";
+import type { OperationArrow } from "./operationLayer.ts";
 
-export type { FrontCounter, FrontsOverlay };
+export type { FrontCounter, FrontsOverlay, OperationArrow };
 
 export type FocusTarget =
   | number // province id
@@ -42,6 +43,8 @@ export interface MapController {
   setHighlightOwner(owner: number | null): void;
   /** Gold-hatch these provinces (e.g. regions picked for a peace deal); empty clears. */
   setMarked(ids: ArrayLike<number>): void;
+  /** Battle plans: offensive arrows and hold lines (province pairs along the held border). */
+  setOperations(arrows: OperationArrow[], holdPairs: [number, number][] | null): void;
 }
 
 /**

@@ -1,6 +1,6 @@
 // Client game state: connection, the latest GameView, AI requests, playback and HUD layout.
 import { create } from "zustand";
-import type { GameEvent, GameView, TurnResult } from "@worldline/shared";
+import type { GameEvent, GameView, Operation, OperationKind, OperationStance, TurnResult } from "@worldline/shared";
 import type { SocketStatus } from "../net/socket.ts";
 import type { MapMode } from "./mapModes.ts";
 
@@ -36,6 +36,18 @@ export interface Toast {
 export interface DraftOrder {
   id: string;
   text: string;
+  operation?: Operation;
+}
+
+/** A battle plan being drawn on the map (before it becomes an order). */
+export interface OperationDraft {
+  kind: OperationKind;
+  regions: number[];
+  divisions: number;
+  stance: OperationStance;
+  name: string;
+  /** Order being edited, if any. */
+  orderId?: string;
 }
 
 export interface ChatWindowState {
@@ -81,6 +93,8 @@ export interface GameStore {
   activeFormationId: string | null;
 
   orders: DraftOrder[];
+  /** Battle plan being drawn (the map picks regions into it). */
+  opDraft: OperationDraft | null;
   ordersDirty: boolean;
   /** Text of last turn's orders by id, so verdicts can quote them. */
   prevOrders: Record<string, string>;
@@ -134,6 +148,7 @@ const initial: GameStore = {
   formationReq: null,
   activeFormationId: null,
   orders: [],
+  opDraft: null,
   ordersDirty: false,
   prevOrders: {},
   toasts: [],
@@ -193,7 +208,7 @@ export function applyView(view: GameView) {
         mapHold: false,
         playback: null,
         progress: null,
-        orders: view.orders.map((o) => ({ id: o.id, text: o.text })),
+        orders: view.orders.map((o) => ({ id: o.id, text: o.text, operation: o.operation })),
         ordersDirty: false,
       } satisfies Partial<GameStore>);
       // A rewind makes the last results meaningless; an intervention keeps them (trimmed by a `turn`).
@@ -209,7 +224,7 @@ export function applyView(view: GameView) {
     }
     // Orders: adopt the server's list unless we have local edits waiting to sync.
     if (!wentBack && (!prev || turnChanged || !s.ordersDirty)) {
-      patch.orders = view.orders.map((o) => ({ id: o.id, text: o.text }));
+      patch.orders = view.orders.map((o) => ({ id: o.id, text: o.text, operation: o.operation }));
       if (turnChanged) patch.ordersDirty = false;
     }
     if (view.phase !== "resolving" && s.progress) patch.progress = null;

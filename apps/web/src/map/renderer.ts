@@ -14,6 +14,10 @@ const PROV_TEX_W = 64;
 const PALETTE_W = 1024;
 const NONE = 0xffff;
 const MESH_MAGIC = 0x314d4c57; // "WLM1"
+/** Front lines: maroon casing, red core, slowly marching lighter dashes. */
+const FRONT_STYLE = { casing: [0.27, 0.04, 0.05], core: [0.78, 0.13, 0.11], dash: [0.93, 0.36, 0.26], dashK: 0.55, speed: 8, width: 1 };
+/** Hold lines: navy casing, steel-blue core with still, pale dashes (dug in, not moving). */
+const HOLD_STYLE = { casing: [0.05, 0.11, 0.24], core: [0.26, 0.5, 0.86], dash: [0.78, 0.89, 1], dashK: 0.6, speed: 0, width: 0.9 };
 /** Device px per map px from which the vector mesh replaces the raster land fill. */
 const MESH_ZOOM = 1.25;
 
@@ -32,6 +36,9 @@ export class MapRenderer {
   private frontVao!: WebGLVertexArrayObject;
   private frontBuf!: WebGLBuffer;
   private frontCount = 0;
+  private holdVao!: WebGLVertexArrayObject;
+  private holdBuf!: WebGLBuffer;
+  private holdCount = 0;
   private meshProg!: WebGLProgram;
   private meshVao: WebGLVertexArrayObject | null = null;
   private meshIndexCount = 0;
@@ -139,6 +146,12 @@ export class MapRenderer {
   }
 
   private buildFrontVao() {
+    [this.frontVao, this.frontBuf] = this.segmentVao();
+    [this.holdVao, this.holdBuf] = this.segmentVao();
+  }
+
+  /** VAO for instanced line segments (A, B, distance along the arc) drawn with the front program. */
+  private segmentVao(): [WebGLVertexArrayObject, WebGLBuffer] {
     const gl = this.gl, prog = this.frontProg;
     const vao = gl.createVertexArray()!;
     gl.bindVertexArray(vao);
@@ -148,8 +161,8 @@ export class MapRenderer {
     const locCorner = gl.getAttribLocation(prog, "aCorner");
     gl.enableVertexAttribArray(locCorner);
     gl.vertexAttribPointer(locCorner, 2, gl.FLOAT, false, 0, 0);
-    this.frontBuf = gl.createBuffer()!;
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.frontBuf);
+    const buf = gl.createBuffer()!;
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
     gl.bufferData(gl.ARRAY_BUFFER, 0, gl.DYNAMIC_DRAW);
     // Per segment: A.xy, B.xy, distance along the arc at A.
     for (const [name, size, offset] of [["aA", 2, 0], ["aB", 2, 8], ["aDist", 1, 16]] as const) {
@@ -159,11 +172,20 @@ export class MapRenderer {
       gl.vertexAttribDivisor(loc, 1);
     }
     gl.bindVertexArray(null);
-    this.frontVao = vao;
+    return [vao, buf];
   }
 
   /** Front lines along the border arcs between these province pairs (null/empty = none). */
   setFronts(pairs: ArrayLike<readonly [number, number]> | null) {
+    this.frontCount = this.uploadSegments(this.frontBuf, pairs);
+  }
+
+  /** Hold lines (blue) along the border arcs between these province pairs. */
+  setHoldLines(pairs: ArrayLike<readonly [number, number]> | null) {
+    this.holdCount = this.uploadSegments(this.holdBuf, pairs);
+  }
+
+  private uploadSegments(buf: WebGLBuffer, pairs: ArrayLike<readonly [number, number]> | null) {
     const gl = this.gl;
     if (!this.arcsByPair) {
       this.arcsByPair = new Map();
@@ -194,9 +216,9 @@ export class MapRenderer {
         dist += Math.hypot(bx - ax, by - ay);
       }
     }
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.frontBuf);
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
     gl.bufferData(gl.ARRAY_BUFFER, data, gl.DYNAMIC_DRAW);
-    this.frontCount = segs;
+    return segs;
   }
 
   /** Instanced quads: one instance per border segment, tagged with the provinces on each side. */
@@ -345,17 +367,30 @@ export class MapRenderer {
     }
     gl.disable(gl.DEPTH_TEST);
 
-    // Front lines above the borders: the casing first, then the core over every joint.
-    if (this.frontCount > 0) {
-      gl.useProgram(this.frontProg);
-      this.bindCommon(this.frontProg, dpr);
-      gl.uniform1f(this.loc(this.frontProg, "uTime"), this.time);
-      gl.bindVertexArray(this.frontVao);
+    // Front lines above the borders, hold lines above those: each casing first, then the core
+    // over every joint.
+    const lineSets = [
+      { vao: this.frontVao, count: this.frontCount, style: FRONT_STYLE },
+      { vao: this.holdVao, count: this.holdCount, style: HOLD_STYLE },
+    ];
+    for (const set of lineSets) {
+      if (set.count <= 0) continue;
+      const p = this.frontProg;
+      gl.useProgram(p);
+      this.bindCommon(p, dpr);
+      gl.uniform1f(this.loc(p, "uTime"), this.time);
+      gl.uniform3fv(this.loc(p, "uCasing"), set.style.casing);
+      gl.uniform3fv(this.loc(p, "uCore"), set.style.core);
+      gl.uniform3fv(this.loc(p, "uDash"), set.style.dash);
+      gl.uniform1f(this.loc(p, "uDashK"), set.style.dashK);
+      gl.uniform1f(this.loc(p, "uSpeed"), set.style.speed);
+      gl.uniform1f(this.loc(p, "uWidthK"), set.style.width);
+      gl.bindVertexArray(set.vao);
       for (const pass of [0, 1]) {
-        gl.uniform1i(this.loc(this.frontProg, "uPass"), pass);
+        gl.uniform1i(this.loc(p, "uPass"), pass);
         for (const off of offsets) {
-          gl.uniform1f(this.loc(this.frontProg, "uOffsetX"), off);
-          gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this.frontCount);
+          gl.uniform1f(this.loc(p, "uOffsetX"), off);
+          gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, set.count);
         }
       }
     }

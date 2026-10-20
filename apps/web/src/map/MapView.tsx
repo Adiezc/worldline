@@ -5,6 +5,7 @@ import start from "@worldline/scenarios/modern-2026/start.json";
 import { MapRenderer, type Camera } from "./renderer.ts";
 import { LabelLayer } from "./labelLayer.ts";
 import { CounterLayer } from "./counterLayer.ts";
+import { OperationLayer } from "./operationLayer.ts";
 import { getTheme, theme } from "./theme.ts";
 import type { WorkerRequest, WorkerResponse } from "./map.worker.ts";
 import { emitMapClick, getPaintHandler, getPickHandler, publishMap, type FocusOptions, type FocusTarget, type MapController } from "./controller.ts";
@@ -31,6 +32,7 @@ export function MapView() {
     let renderer: MapRenderer;
     const labels = new LabelLayer(labelCanvas, theme);
     const counters = new CounterLayer(labelCanvas);
+    const operations = new OperationLayer(labelCanvas);
     let ids: Uint16Array | null = null;
     let meta: MapMeta | null = null;
     let dirty = true;
@@ -107,6 +109,7 @@ export function MapView() {
       if (dirty || tick) renderer.render();
       if (dirty || overlayDirty) {
         labels.draw(renderer.camera, renderer.mapW);
+        operations.draw(renderer.camera);
         counters.draw(renderer.camera);
       }
       dirty = overlayDirty = false;
@@ -251,6 +254,11 @@ export function MapView() {
       },
       setMarked: (ids) => {
         renderer.setMarked(ids);
+        dirty = true;
+      },
+      setOperations: (arrows, holdPairs) => {
+        operations.set(arrows, renderer.mapW);
+        renderer.setHoldLines(holdPairs);
         dirty = true;
       },
     };

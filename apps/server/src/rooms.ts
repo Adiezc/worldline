@@ -4,7 +4,7 @@
 
 import type { ServerWebSocket } from "bun";
 import {
-  DEFAULT_SETTINGS, countryByTag, type ClientMessage, type GameSettings, type GameState, type GameView,
+  DEFAULT_SETTINGS, countryByTag, sanitizeOperation, type ClientMessage, type GameSettings, type GameState, type GameView,
   type MapIndex, type ScenarioSeed, type ServerMessage,
 } from "@worldline/shared";
 import { engine, jumpDays, turnEvents } from "./engine/index.ts";
@@ -112,7 +112,20 @@ export class Room {
       snapshots: me?.isHost ? listSnapshots(s.id) : [],
       intervenable: me?.isHost ? this.intervenable() : [],
       ai: { provider: this.deps.ai.name, usedToday: quota.usedToday, dailyLimit: quota.dailyLimit },
+      allyOperations: tag ? this.allyOperations(playerId, tag) : [],
     };
+  }
+
+  /** Other human players' battle plans when they fight on `tag`'s side of a war. */
+  private allyOperations(playerId: string, tag: string): GameView["allyOperations"] {
+    const s = this.state;
+    const sides = s.wars.map((w) => (w.attackers.includes(tag) ? w.attackers : w.defenders.includes(tag) ? w.defenders : []));
+    const out: GameView["allyOperations"] = [];
+    for (const p of s.players) {
+      if (p.id === playerId || !p.country || p.country === tag || !sides.some((side) => side.includes(p.country!))) continue;
+      for (const o of s.orders[p.id] ?? []) if (o.operation) out.push({ country: p.country, orderId: o.id, operation: o.operation });
+    }
+    return out;
   }
 
   /** Events of the last resolved turn the host may stop time at; empty once anything new has happened. */
@@ -279,7 +292,11 @@ export class Room {
         s.orders[me.id] = msg.orders
           .filter((o) => o.text.trim())
           .slice(0, 12)
-          .map((o) => ({ id: o.id.slice(0, 40), playerId: me.id, country: myTag, text: o.text.slice(0, 1200) }));
+          .map((o) => {
+            // A battle plan that doesn't survive the checks is dropped; the order text stays.
+            const operation = sanitizeOperation(o.operation, s, this.deps.map, myTag);
+            return { id: o.id.slice(0, 40), playerId: me.id, country: myTag, text: o.text.slice(0, 1200), ...(operation ? { operation } : {}) };
+          });
         this.scheduleSave();
         return;
       }

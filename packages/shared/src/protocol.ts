@@ -14,6 +14,7 @@
 // Authorization header: `Bearer <token>`.
 // WebSocket: /ws   (first client message must be `join`)
 
+import type { Operation } from "./game/operations.ts";
 import type { CalendarEntry, EraTheme, Formable, ScenarioSeed } from "./game/scenario.ts";
 import type {
   Chat, GameEvent, GameSettings, GameState, Order, OrderVerdict, Proposal, ResolutionType, TreatyType,
@@ -95,6 +96,8 @@ export type GameView = Omit<GameState, "orders" | "chats" | "events" | "jumpVote
   /** Event ids of the last resolved turn the host may intervene at (empty once new orders exist). */
   intervenable: string[];
   ai: { provider: "openrouter" | "mock"; usedToday: number; dailyLimit: number };
+  /** Battle plans of human allies (same side of a war) for this turn; enemies' stay hidden. */
+  allyOperations: { country: string; orderId: string; operation: Operation }[];
 };
 
 export interface ResolutionResult {
@@ -134,7 +137,7 @@ export type ClientMessage =
   | { t: "claim"; tag: string | null }
   | { t: "settings"; settings: Partial<GameSettings> }
   | { t: "start" }
-  | { t: "orders"; orders: { id: string; text: string }[] }
+  | { t: "orders"; orders: { id: string; text: string; operation?: Operation }[] }
   | { t: "ready"; ready: boolean }
   | { t: "jump"; days: number }
   | { t: "ai"; reqId: string; kind: "advisor" | "polish" | "brainstorm"; text?: string }

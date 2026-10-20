@@ -7,7 +7,7 @@ import {
 } from "@worldline/shared";
 import type { EngineDeps } from "./api.ts";
 import {
-  calendarBlock, calendarIn, countriesBlock, memoryBlock, nameOf, orgsBlock, recentEventsBlock, relationsBlock,
+  calendarBlock, calendarIn, countriesBlock, diplomacyBlock, memoryBlock, nameOf, orgsBlock, recentEventsBlock, relationsBlock,
   sanctionsBlock, treatiesBlock, warsBlock, windowEnd, windowLine,
 } from "./context.ts";
 import { makeEvent, spreadDate } from "./game.ts";
@@ -69,6 +69,7 @@ export async function planDirector(state: GameState, deps: EngineDeps, opts: { d
     sanctionsBlock(state, 15),
     orgsBlock(state, { maxMembers: 12 }),
     recentEventsBlock(state, { max: 30 }),
+    diplomacyBlock(state, { involving: scope }),
     calendarBlock(deps.seed, state.date, end),
     `TASK: Decide what the ${acting.length} acting governments do between ${state.date} and ${end}. Return the JSON object.`,
   ].filter(Boolean).join("\n\n");

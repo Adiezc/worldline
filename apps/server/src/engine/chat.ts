@@ -2,7 +2,8 @@
 // once through the validator, with the chat standing in for a player order.
 
 import {
-  applyEvent, atWar, ChatOutputSchema, connectedTransfer, countryByTag, countryIndex, getRelation, humanTags, newTurnContext,
+  applyEvent, atWar, ChatOutputSchema, computeFronts, connectedTransfer, countryByTag, countryIndex, estimateForces, getRelation,
+  humanTags, newTurnContext,
   nextId, relKey, type Chat, type ChatMessage, type Effect, type GameEvent, type GameState, type MapIndex, type Proposal,
   type ProposalCession, type ProposalDraft, type TreatyType, type War,
 } from "@worldline/shared";
@@ -251,12 +252,52 @@ function chatPrompt(state: GameState, map: MapIndex, chat: Chat, speaker: string
     `YOUR RELATIONS (-100..100): ${relationList(state, speaker, others)}${shared.length ? `; shared memberships: ${shared.join(" ")}` : ""}`,
     treatiesBlock(state, focus, 15),
     wars.length ? `WARS:\n${wars.join("\n")}` : "",
+    ...others.map((t) => warSituation(state, map, speaker, t)).filter(Boolean),
     sanctions.length ? `SANCTIONS:\n${sanctions.join("\n")}` : "",
-    recentEventsBlock(state, { involving: focus, max: 12 }),
+    recentEventsBlock(state, { involving: focus, max: 14, bodies: true }),
     `CONVERSATION (latest last):\n${lines.join("\n")}`,
     `TASK: Reply as ${me.name} to ${them.name}'s last message${group ? ", speaking for your delegation before everyone present; you may address other delegations by name" : ""}.` +
       `${history.at(-1)?.proposal ? " It contains a PROPOSAL: set acceptsPlayerProposal." : ""}`,
   ].filter(Boolean).join("\n\n");
+}
+
+/**
+ * The speaker's military position in its war with `other`, spelled out so the model weighs peace
+ * on facts (land lost, the odds, who is helping) rather than on bravado.
+ */
+export function warSituation(state: GameState, map: MapIndex, speaker: string, other: string): string {
+  const war = warBetween(state, [speaker, other]);
+  if (!war || !(war.attackers.includes(speaker) ? war.defenders : war.attackers).includes(other)) return "";
+  const mySide = war.attackers.includes(speaker) ? war.attackers : war.defenders;
+  const enemySide = mySide === war.attackers ? war.defenders : war.attackers;
+  const me = countryIndex(state, speaker);
+  const enemyIdx = new Set(enemySide.map((t) => countryIndex(state, t)));
+  let owned = 0, lost = 0;
+  for (let id = 1; id < state.owners.length; id++) {
+    if (state.owners[id] !== me) continue;
+    owned++;
+    if (enemyIdx.has(state.controllers[id])) lost++;
+  }
+  const input = { owners: state.owners, controllers: state.controllers, countries: state.countries, wars: state.wars, map };
+  const forces = estimateForces(input, computeFronts(input));
+  const total = (tags: string[]) => tags.reduce((n, t) => n + (forces.countries[t]?.total ?? 0), 0);
+  const own = total(mySide), enemy = total(enemySide);
+  const allies = mySide.filter((t) => t !== speaker && countryByTag(state, t)?.alive);
+  const share = owned ? lost / owned : 0;
+  const exhaustion = Math.round(countryByTag(state, speaker)?.warExhaustion ?? 0);
+  const assessment =
+    share >= 0.5 || (share >= 0.2 && enemy >= 3 * own) || exhaustion >= 70
+      ? "COLLAPSING: your forces cannot retake the occupied land and every month costs more of what remains. Governments in this position sue for peace and sign terms that cede only land the enemy already holds, to save the rest."
+      : share > 0 && enemy > own
+        ? "LOSING: the enemy holds your land and has the stronger army. Settling on the current lines is a realistic option; giving up land it does not hold is not."
+        : enemy > 1.5 * own
+          ? "OUTMATCHED but holding your ground."
+          : share === 0 && lost === 0 && own >= enemy
+            ? "HOLDING or WINNING: you have no reason to give up land."
+            : "STALEMATE.";
+  return `YOUR WAR SITUATION (${war.name}): ${lost} of your ${owned} regions are occupied by the enemy (${Math.round(share * 100)}%); ` +
+    `estimated divisions: your side ${own}, enemy side ${enemy}; allies fighting with you: ${allies.length ? allies.join(", ") : "none"}; ` +
+    `your war exhaustion ${exhaustion}. Assessment: ${assessment}`;
 }
 
 const TREATY_LABEL: Record<TreatyType, string> = {

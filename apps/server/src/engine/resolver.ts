@@ -3,8 +3,9 @@
 
 import {
   atWar,
-  addDays, applyEvent, countryByTag, daysBetween, humanTags, ResolverOutputSchema,
-  type Effect, type GameEvent, type GameState, type Order, type OrderVerdict, type Tiers, type TurnContext,
+  addDays, applyEvent, countryByTag, daysBetween, humanTags, occupyCap, planOperations, ResolverOutputSchema, STANCE_LABELS,
+  type Effect, type GameEvent, type GameState, type MapIndex, type OperationPlan, type Order, type OrderVerdict, type Tiers,
+  type TurnContext,
 } from "@worldline/shared";
 import type { EngineDeps } from "./api.ts";
 import { nameOf, worldContext } from "./context.ts";
@@ -34,12 +35,16 @@ export async function runResolver(
   const economy = state.settings.economyMode;
   // The Director's own-country actions and vote results are already in the log for this turn.
   const reported = state.events.filter((e) => e.turn === state.turn);
+  // Battle plans are sized against the map as it stands now (after the AI governments moved).
+  const plans = planOperations(state, deps.map, orders, occupyCap(state, opts.ctx.days));
+  opts.ctx.operations = plans.map((p) => ({ orderId: p.orderId, country: p.country, kind: p.kind, allowed: new Set(p.allowed), cap: p.cap, used: 0 }));
 
   const sections = [
     world.text,
     orders.length
-      ? `ORDERS (from players; give each a verdict):\n${orders.map((o) => `${o.id} [${o.country}] ${o.text}`).join("\n")}`
+      ? `ORDERS (from players; give each a verdict):\n${orders.map((o) => `${o.id} [${o.country}] ${o.operation ? "(battle plan, see OPERATIONS) " : ""}${o.text}`).join("\n")}`
       : "ORDERS: none this turn.",
+    plans.length ? operationsBlock(state, deps.map, plans) : "",
     opts.intents.length ? `NPC INTENTS (AI governments' plans this period):\n${opts.intents.map((i) => `- ${i.country}: ${i.summary}`).join("\n")}` : "",
     reported.length
       ? `ALREADY REPORTED THIS PERIOD (these happened; do not repeat or re-narrate them, build on them instead):\n${reported.map((e) => `- ${e.date} ${e.headline}`).join("\n")}`
@@ -62,6 +67,7 @@ export async function runResolver(
       end: world.end,
       days,
       orders: orders.map((o) => ({ id: o.id, country: o.country, text: o.text })),
+      operations: plans.map((p) => ({ orderId: p.orderId, country: p.country, kind: p.kind, route: p.route, cap: p.cap })),
       humans: [...humans],
       tiers: world.tiers,
       names: Object.fromEntries([...world.tiers.engaged, ...world.tiers.movers].map((t) => [t, nameOf(state, t)])),
@@ -126,9 +132,29 @@ export async function runResolver(
   // Attach the order text so clients can show "what you ordered → what happened" after a reload.
   for (const v of verdicts) {
     const o = orders.find((x) => x.id === v.orderId);
-    if (o) Object.assign(v, { country: o.country, text: o.text });
+    if (o) Object.assign(v, { country: o.country, text: o.text }, o.operation ? { operation: o.operation } : {});
   }
   return { verdicts, events, end };
+}
+
+/** Battle plans for the prompt: odds, axis by name and id, and the limits the engine enforces. */
+function operationsBlock(state: GameState, map: MapIndex, plans: OperationPlan[]) {
+  const region = (id: number) => `${map.names[id] ?? "region"} (${id})`;
+  const lines = plans.map((p) => {
+    const enemy = p.enemyTag ? `${nameOf(state, p.enemyTag)} (${p.enemyTag})` : "the enemy";
+    if (p.kind === "hold") {
+      return `${p.orderId} [${p.country}] HOLD LINE "${p.name}": ${p.divisions} divisions dig in on ${p.route.map(region).join(", ")}` +
+        `${p.enemyDivisions ? ` facing ~${p.enemyDivisions} enemy divisions of ${enemy}` : ""}. Whatever else happens, the enemy can take at most ${p.cap} of these regions this period; prepared defences make attacks on them costly.`;
+    }
+    const odds = p.divisions / Math.max(1, p.enemyDivisions);
+    const outlook = odds >= 1.5 ? "favourable odds" : odds >= 0.8 ? "roughly even odds" : "poor odds";
+    return `${p.orderId} [${p.country}] OFFENSIVE "${p.name}": ${p.divisions} divisions vs ~${p.enemyDivisions} of ${enemy} (${outlook}), stance ${STANCE_LABELS[p.stance].toLowerCase()}.\n` +
+      `  Axis: ${p.route.map(region).join(" → ")}.\n` +
+      `  It may take ONLY these regions (the axis and its flanks): ${p.allowed.join(", ")}. At most ${p.cap} this period, nearest the jump-off first; ` +
+      `with ${outlook} a realistic result is often fewer, or none against a prepared defence. Record gains as setController (controller ${p.country}) with cause ${p.orderId}; ` +
+      `report losses, and add warExhaustion for ${p.country}${p.stance === "allout" ? " (heavier for an all-out push)" : ""}.`;
+  });
+  return `OPERATIONS (battle plans players drew on the map; adjudicate each like a war correspondent with a staff map):\n${lines.join("\n")}`;
 }
 
 /** A turn with no news is a failed generation (seen with some fast models), not a quiet month. */

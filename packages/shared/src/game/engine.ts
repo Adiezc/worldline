@@ -48,6 +48,11 @@ export interface TurnContext {
    * cessions may include land the receiver does not occupy. AI-written events never set it.
    */
   negotiated?: boolean;
+  /**
+   * Players' battle plans this turn. An offensive's gains must lie on its axis and stay within its
+   * pace; a hold line limits how many of its regions the enemy can take.
+   */
+  operations?: { orderId: string; country: string; kind: "offensive" | "hold"; allowed: Set<number>; cap: number; used: number }[];
 }
 
 export function newTurnContext(days: number, orders: { id: string; country: string }[]): TurnContext {
@@ -62,7 +67,12 @@ export function newTurnContext(days: number, orders: { id: string; country: stri
   };
 }
 
-function caps(state: GameState, ctx: TurnContext) {
+/** Regions one country may occupy per turn of `days` (the base pace for battle plans). */
+export function occupyCap(state: GameState, days: number) {
+  return caps(state, { days } as TurnContext).occupy;
+}
+
+function caps(state: GameState, ctx: Pick<TurnContext, "days">) {
   const months = Math.max(0.25, ctx.days / 30);
   const f = DIFFICULTY[state.settings.difficulty].stat;
   const o = DIFFICULTY[state.settings.difficulty].occupy;
@@ -185,6 +195,9 @@ export function applyEvent(state: GameState, map: MapIndex, event: GameEvent, ct
         const ctrlIdx = countryIndex(state, effect.controller);
         if (ctrlIdx < 0 || !alive(effect.controller)) { reject("unknown country"); break; }
         const used = ctx.occupyUsed.get(effect.controller) ?? 0;
+        // Offensives this event carries out (an order with a battle plan among its causes).
+        const offensives = (ctx.operations ?? []).filter((op) =>
+          op.kind === "offensive" && op.country === effect.controller && event.causes.includes(op.orderId));
         const coalition = new Set<number>([ctrlIdx]);
         for (const w of warsOf(state, effect.controller)) {
           const side = w.attackers.includes(effect.controller) ? w.attackers : w.defenders;
@@ -218,7 +231,21 @@ export function applyEvent(state: GameState, map: MapIndex, event: GameEvent, ct
           const adjacent = map.neighbors[id].some((n) => coalition.has(state.controllers[n]));
           const naval = map.coastal[id] && navalReach(id);
           if (!adjacent && !naval && !liberation) { reasons.add("not adjacent to territory it controls"); continue; }
-          if (used + moved >= c.occupy) { reasons.add(`occupation pace capped at ${c.occupy} regions per turn`); break; }
+          // Battle plans set their own pace; everything else keeps the general one.
+          if (!offensives.length && used + moved >= c.occupy) { reasons.add(`occupation pace capped at ${c.occupy} regions per turn`); break; }
+          // A defender's hold line gives up only so much ground per turn.
+          const hold = ctx.operations?.find((op) => op.kind === "hold" && op.allowed.has(id) && countryIndex(state, op.country) === current);
+          if (hold && hold.used >= hold.cap) { reasons.add(`${currentTag}'s hold line held`); continue; }
+          // An offensive drawn on the map: gains stay on its axis and within its pace.
+          if (offensives.length) {
+            const op = offensives.find((x) => x.allowed.has(id) && x.used < x.cap);
+            if (!op) {
+              reasons.add(offensives.some((x) => x.allowed.has(id)) ? "the offensive has reached its pace for this turn" : "outside the offensive's axis of advance");
+              continue;
+            }
+            op.used++;
+          }
+          if (hold) hold.used++;
           state.controllers[id] = ctrlIdx;
           touch(id);
           movedIds.push(id);

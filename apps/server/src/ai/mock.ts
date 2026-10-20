@@ -54,6 +54,7 @@ interface ResolverCtx {
   names: Record<string, string>;
   front: { warId: string; province: number; by: string; controller: string; name?: string }[];
   intents: { country: string; summary: string }[];
+  operations?: { orderId: string; country: string; kind: "offensive" | "hold"; route: number[]; cap: number }[];
 }
 
 function resolver(c: ResolverCtx, rng: Rng) {
@@ -89,6 +90,21 @@ function resolver(c: ResolverCtx, rng: Rng) {
       effects,
     });
   });
+
+  // Battle plans: offensives take the first regions along their route (the engine drops any the
+  // attacker already holds or can't reach); hold lines just dig in.
+  for (const op of c.operations ?? []) {
+    if (op.kind !== "offensive") continue;
+    const gains = op.route.slice(1, 1 + Math.min(op.cap, 2));
+    events.push({
+      date: date(),
+      headline: `${name(op.country)} launches an offensive`,
+      body: `${name(op.country)} forces pushed along the planned axis.`,
+      countries: [op.country],
+      causes: [op.orderId],
+      effects: [{ type: "setController", provinces: gains, controller: op.country }, { type: "statDelta", country: op.country, stat: "warExhaustion", delta: 2 }],
+    });
+  }
 
   for (const intent of c.intents ?? []) {
     events.push({ date: date(), headline: intent.summary.replace(/\.$/, ""), body: intent.summary, countries: [intent.country], causes: [], effects: [] });
