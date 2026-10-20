@@ -173,7 +173,8 @@ export function salvageModelOutput(raw: unknown): string[] {
       const ok = EffectSchema.safeParse(e);
       if (!ok.success) {
         const issue = ok.error.issues[0];
-        dropped.push(`${where}.${i} (${(e as { type?: string })?.type ?? "?"}): ${issue ? `${issue.path.join(".") || "(root)"}: ${issue.message}` : "invalid"}`);
+        const bad = issue?.path.length ? (issue.path as PropertyKey[]).reduce<unknown>((v, k) => (v as Record<PropertyKey, unknown>)?.[k], e) : undefined;
+        dropped.push(`${where}.${i} (${(e as { type?: string })?.type ?? "?"}): ${issue ? `${issue.path.join(".") || "(root)"}: ${issue.message}` : "invalid"}${bad !== undefined ? ` (got ${JSON.stringify(bad)?.slice(0, 40)})` : ""}`);
       }
       return ok.success;
     });

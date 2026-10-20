@@ -29,8 +29,10 @@ if (existsSync(seedPath)) {
 /** Records request kinds so tests can assert which calls were made. */
 class SpyProvider extends MockProvider {
   kinds: AiRequest["kind"][] = [];
+  prompts: Partial<Record<AiRequest["kind"], string>> = {};
   override async complete(req: AiRequest) {
     this.kinds.push(req.kind);
+    this.prompts[req.kind] = req.user;
     return super.complete(req);
   }
 }
@@ -498,5 +500,25 @@ describe("battle plans", () => {
     const res = await engine.runTurn(state, depsFor(seed));
     expect(state.controllers[target]).toBe(ukr);
     expect(res.verdicts.find((v) => v.orderId === "o1")?.operation).toEqual(operation);
+  });
+});
+
+describe("diplomacy and turns", () => {
+  const seed = seeds[0][1];
+
+  test("what governments said in talks reaches the director and the resolver", async () => {
+    const state = newGame(seed, [["p1", "UKR"]]);
+    const chatId = engine.openChat(state, { from: "UKR", with: ["RUS"] });
+    await engine.sendChat(state, depsFor(seed), {
+      chatId, playerId: "p1", text: "We will never cede Kharkiv.",
+      proposal: { kind: "endWar", peace: "white", members: ["UKR", "RUS"], terms: "White peace." },
+    });
+    const spy = new SpyProvider();
+    await engine.runTurn(state, depsFor(seed, spy));
+    for (const kind of ["director", "resolver"] as const) {
+      expect(spy.prompts[kind]).toContain("DIPLOMACY");
+      expect(spy.prompts[kind]).toContain("We will never cede Kharkiv.");
+    }
+    expect(spy.prompts.resolver).toMatch(/PROPOSAL peace treaty \(white peace\) among UKR, RUS: (ACCEPTED|REJECTED)/);
   });
 });
