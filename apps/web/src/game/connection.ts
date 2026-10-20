@@ -115,11 +115,12 @@ function handleMessage(msg: ServerMessage) {
       handleAi(msg);
       break;
     case "chat.typing":
+      // A stop without a reply means the message did not get through.
       if (msg.stop) {
         useGame.setState((st) => {
           const typing = { ...st.typing };
           delete typing[msg.chatId];
-          return { typing };
+          return { typing, chatFailed: { ...st.chatFailed, [msg.chatId]: Date.now() } };
         });
         break;
       }

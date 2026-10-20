@@ -110,6 +110,8 @@ export interface GameStore {
   pendingChat: { members: string[]; builder: boolean; preset?: "peace" } | null;
   /** `count` = messages in the chat when typing began; a newer reply from `from` clears it. */
   typing: Record<string, { from: string; until: number; count: number }>;
+  /** When a message to each chat last failed to get through, so its composer can give the text back. */
+  chatFailed: Record<string, number>;
   /** Front lines and troop counters on the map (persisted in localStorage). */
   showFronts: boolean;
   /** Unread diplomatic messages per chat id. */
@@ -159,6 +161,7 @@ const initial: GameStore = {
   chats: [],
   pendingChat: null,
   typing: {},
+  chatFailed: {},
   unread: {},
   showFronts: storedShowFronts(),
 };
