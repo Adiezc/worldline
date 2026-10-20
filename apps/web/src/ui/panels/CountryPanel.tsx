@@ -1,7 +1,7 @@
 import type { Country, GameView } from "@worldline/shared";
 import { claimCountry, openDiplomacy, selectCountry, selectOrg, setLeftTab } from "../../game/actions.ts";
 import { fmtGdp, fmtPop, fmtRelation, fmtShortDate, relationWord } from "../../game/format.ts";
-import { relationColor } from "../../game/mapModes.ts";
+import { relationColor, SHOW_DISPUTES } from "../../game/mapModes.ts";
 import { countryMap, focusTag, relationBetween, TREATY_LABELS } from "../../game/selectors.ts";
 import { useGame } from "../../game/store.ts";
 import { getMap } from "../../map/controller.ts";
@@ -173,7 +173,7 @@ function CountryDetails({ view, c }: { view: GameView; c: Country }) {
 
       <ForcesSection tag={c.tag} />
 
-      <DisputesSection view={view} tag={c.tag} />
+      {SHOW_DISPUTES && <DisputesSection view={view} tag={c.tag} />}
 
       <SectionTitle>Treaties</SectionTitle>
       {treaties.length === 0 && <Empty>No treaties.</Empty>}
