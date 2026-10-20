@@ -18,6 +18,7 @@ export function connectGame(gameId: string) {
       t: "join",
       gameId,
       playerId: useGame.getState().playerId ?? storage.playerId(gameId),
+      secret: useGame.getState().secret ?? storage.secret(gameId),
       name: storage.name() || "Anonymous",
       token: auth.token() ?? undefined,
     }),
@@ -61,8 +62,9 @@ function handleMessage(msg: ServerMessage) {
     case "welcome": {
       const gameId = s.gameId ?? msg.view.id;
       storage.setPlayerId(gameId, msg.playerId);
+      storage.setSecret(gameId, msg.secret);
       storage.touchRecent({ id: gameId, name: msg.view.name });
-      useGame.setState({ playerId: msg.playerId });
+      useGame.setState({ playerId: msg.playerId, secret: msg.secret });
       applyView(msg.view);
       // Edits made while offline go out again.
       if (useGame.getState().ordersDirty) scheduleOrdersSync(50);

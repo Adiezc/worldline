@@ -68,6 +68,8 @@ export interface GameStore {
   status: SocketStatus | "idle";
   statusDetail?: string;
   playerId: string | null;
+  /** The seat's secret from `welcome`, kept here too for when storage is unavailable. */
+  secret: string | null;
   view: GameView | null;
   /** Ownership before the most recent turn change, for playback. */
   preTurn: { turn: number; owners: number[]; controllers: number[] } | null;
@@ -127,6 +129,7 @@ const initial: GameStore = {
   gameId: null,
   status: "idle",
   playerId: null,
+  secret: null,
   view: null,
   preTurn: null,
   turnBase: null,

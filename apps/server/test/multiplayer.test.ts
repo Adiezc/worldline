@@ -71,7 +71,7 @@ test("two players play a turn together", async () => {
   const bobId = bob.playerId;
   bob.ws.close();
   await alice.until((v) => v.players.find((p) => p.id === bobId)?.connected === false);
-  const bob2 = await new Client().connect(created.gameId, "Bob", bobId);
+  const bob2 = await new Client().connect(created.gameId, "Bob", bobId, undefined, bob.secret);
   expect(bob2.view.you.country).toBe("DEU");
 
   // Diplomacy with an AI nation.

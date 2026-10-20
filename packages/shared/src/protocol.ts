@@ -133,7 +133,8 @@ export type ProposalDraft = Pick<Proposal, "kind" | "treatyType" | "members" | "
 
 
 export type ClientMessage =
-  | { t: "join"; gameId: string; playerId?: string; name: string; token?: string }
+  /** `secret` (from `welcome`) resumes the seat `playerId`; without it the client joins as someone new. */
+  | { t: "join"; gameId: string; playerId?: string; secret?: string; name: string; token?: string }
   | { t: "claim"; tag: string | null }
   | { t: "settings"; settings: Partial<GameSettings> }
   | { t: "start" }
@@ -153,7 +154,7 @@ export type ClientMessage =
   | { t: "intervene"; eventId: string };
 
 export type ServerMessage =
-  | { t: "welcome"; playerId: string; view: GameView }
+  | { t: "welcome"; playerId: string; secret: string; view: GameView }
   | { t: "view"; view: GameView }
   | { t: "progress"; stage: "director" | "votes" | "resolver" | "applying" | "consolidating" | "done"; detail?: string }
   | { t: "turn"; result: TurnResult }

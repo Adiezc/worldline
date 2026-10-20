@@ -28,6 +28,9 @@ function write(key: string, value: string | null) {
 export const storage = {
   playerId: (gameId: string) => read(`worldline:player:${gameId}`) ?? undefined,
   setPlayerId: (gameId: string, id: string) => write(`worldline:player:${gameId}`, id),
+  /** Proof that the stored player id is ours (ids are public within a game). */
+  secret: (gameId: string) => read(`worldline:secret:${gameId}`) ?? undefined,
+  setSecret: (gameId: string, secret: string) => write(`worldline:secret:${gameId}`, secret),
 
   name: () => read("worldline:name") ?? "",
   setName: (name: string) => write("worldline:name", name.trim() || null),

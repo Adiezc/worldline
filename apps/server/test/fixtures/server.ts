@@ -23,23 +23,24 @@ export class Client {
   ws!: WebSocket;
   view!: GameView;
   playerId = "";
+  secret = "";
   inbox: ServerMessage[] = [];
   private waiters: { pred: (m: ServerMessage) => boolean; resolve: (m: ServerMessage) => void }[] = [];
 
   constructor(private port: number) {}
 
-  async connect(gameId: string, name: string, playerId?: string, token?: string) {
+  async connect(gameId: string, name: string, playerId?: string, token?: string, secret?: string) {
     this.ws = new WebSocket(`ws://localhost:${this.port}/ws`);
     await new Promise((r) => (this.ws.onopen = r));
     this.ws.onmessage = (e) => {
       const msg = JSON.parse(String(e.data)) as ServerMessage;
-      if (msg.t === "welcome") { this.view = msg.view; this.playerId = msg.playerId; }
+      if (msg.t === "welcome") { this.view = msg.view; this.playerId = msg.playerId; this.secret = msg.secret; }
       if (msg.t === "view") this.view = msg.view;
       this.inbox.push(msg);
       this.waiters = this.waiters.filter((w) => (w.pred(msg) ? (w.resolve(msg), false) : true));
     };
     const welcome = this.wait((m) => m.t === "welcome");
-    this.send({ t: "join", gameId, name, playerId, token });
+    this.send({ t: "join", gameId, name, playerId, token, secret });
     await welcome;
     return this;
   }

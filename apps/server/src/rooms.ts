@@ -97,6 +97,7 @@ export class Room {
     const quota = this.deps.ai.quota();
     return {
       ...rest,
+      players: s.players.map(({ secret: _secret, ...p }) => p),
       orders: orders[playerId] ?? [],
       // Orders are private, and verdicts quote them: only your own.
       lastVerdicts: s.lastVerdicts.filter((v) => !v.country || v.country === tag),
@@ -181,11 +182,14 @@ export class Room {
     const s = this.state;
     const linked = user ? linkedPlayer(user.id, s.id) : null;
     let player = linked ? s.players.find((p) => p.id === linked) : undefined;
-    player ??= msg.playerId ? s.players.find((p) => p.id === msg.playerId) : undefined;
+    // Every view lists player ids, so resuming a seat takes its secret too. Seats saved before
+    // secrets existed have none; the first client to resume one is given it.
+    player ??= msg.playerId ? s.players.find((p) => p.id === msg.playerId && (!p.secret || p.secret === msg.secret)) : undefined;
+    const name = typeof msg.name === "string" ? msg.name.trim().slice(0, 32) : "";
     if (!player) {
       player = {
         id: crypto.randomUUID(),
-        name: (msg.name || "Player").slice(0, 32),
+        name: name || "Player",
         country: null,
         isHost: s.players.length === 0,
         connected: true,
@@ -194,15 +198,16 @@ export class Room {
       s.players.push(player);
     } else {
       player.connected = true;
-      if (msg.name) player.name = msg.name.slice(0, 32);
+      if (name) player.name = name;
     }
+    player.secret ??= crypto.randomUUID();
     if (!s.players.some((p) => p.isHost)) player.isHost = true;
     ws.data.gameId = s.id;
     ws.data.playerId = player.id;
     ws.data.userId = user?.id;
     if (user) linkUserGame(user.id, s.id, player.id);
     this.sockets.add(ws);
-    this.send(ws, { t: "welcome", playerId: player.id, view: this.view(player.id) });
+    this.send(ws, { t: "welcome", playerId: player.id, secret: player.secret, view: this.view(player.id) });
     this.changed();
   }
 

@@ -218,32 +218,35 @@ const server = Bun.serve<SocketData>({
       try {
         msg = JSON.parse(String(raw)) as ClientMessage;
       } catch {
+        msg = null as unknown as ClientMessage;
+      }
+      // Anything but an object with a string type is refused: a throw in this handler would take
+      // the whole server, and every game on it, down.
+      if (!msg || typeof msg !== "object" || typeof msg.t !== "string") {
         ws.send(JSON.stringify({ t: "error", message: "Malformed message" }));
         return;
       }
-      if (msg.t === "join") {
-        let room;
-        try {
-          room = typeof msg.gameId === "string" ? rooms.get(msg.gameId) : null;
-        } catch (e) {
-          ws.send(JSON.stringify({ t: "error", message: errorText(e) }));
+      try {
+        if (msg.t === "join") {
+          const room = typeof msg.gameId === "string" ? rooms.get(msg.gameId) : null;
+          if (!room) {
+            ws.send(JSON.stringify({ t: "error", message: "Game not found" }));
+            return;
+          }
+          // An invalid or expired token just joins anonymously.
+          const user = typeof msg.token === "string" ? userForToken(msg.token) : null;
+          room.join(ws, msg, user);
           return;
         }
+        const room = ws.data.gameId ? rooms.get(ws.data.gameId) : null;
         if (!room) {
-          ws.send(JSON.stringify({ t: "error", message: "Game not found" }));
+          ws.send(JSON.stringify({ t: "error", message: "Join a game first" }));
           return;
         }
-        // An invalid or expired token just joins anonymously.
-        const user = typeof msg.token === "string" ? userForToken(msg.token) : null;
-        room.join(ws, msg, user);
-        return;
+        room.handle(ws, msg).catch((e) => ws.send(JSON.stringify({ t: "error", message: errorText(e) })));
+      } catch (e) {
+        ws.send(JSON.stringify({ t: "error", message: errorText(e) }));
       }
-      const room = ws.data.gameId ? rooms.get(ws.data.gameId) : null;
-      if (!room) {
-        ws.send(JSON.stringify({ t: "error", message: "Join a game first" }));
-        return;
-      }
-      room.handle(ws, msg).catch((e) => ws.send(JSON.stringify({ t: "error", message: errorText(e) })));
     },
     close(ws) {
       const room = ws.data.gameId ? rooms.get(ws.data.gameId) : null;
