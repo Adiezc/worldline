@@ -512,8 +512,9 @@ export class Room {
     this.resolving = true;
     s.phase = "resolving";
     s.turnDeadline = undefined;
-    this.pushViews();
     try {
+      // Inside the try: anything thrown from here on must still put the game back to orders.
+      this.pushViews();
       saveSnapshot(s);
       this.snapEvents = undefined;
       const started = Date.now();
