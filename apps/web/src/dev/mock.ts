@@ -135,6 +135,8 @@ function mockTurn() {
   const bel = v.countries.findIndex((c) => c.tag === "BEL");
   const belProvs: number[] = [];
   v.owners.forEach((o, id) => o === bel && belProvs.push(id));
+  const f = v.countries[fra];
+  const owned = v.owners.filter((o) => o === fra).length;
   const result: TurnResult = {
     turn: v.turn,
     fromDate: v.date,
@@ -142,9 +144,30 @@ function mockTurn() {
     verdicts: [{ orderId: "o1", outcome: "success", reason: "Germany and Belgium signed on." }],
     votes: [{ resolutionId: "r1", orgAbbrev: "EU", status: "passed", summary: "Energy sanctions on Russia extended.", text: "" }],
     events: [
-      { id: "x1", turn: v.turn, date: "2026-03-09", headline: "Brussels votes to join a union with France", body: "In a surprise referendum Belgium opts for union.", countries: ["BEL", "FRA"], causes: ["o1"], effects: [], scope: "player", mapDiff: belProvs.map((p) => ({ province: p, owner: fra, controller: fra })) },
-      { id: "x2", turn: v.turn, date: "2026-03-20", headline: "Oil prices spike after Gulf incident", body: "Brent tops $110.", countries: ["IRN", "SAU"], causes: [], effects: [], scope: "world" },
+      {
+        id: "x1", turn: v.turn, date: "2026-03-09", headline: "Brussels votes to join a union with France", body: "In a surprise referendum Belgium opts for union.", countries: ["BEL", "FRA"], causes: ["o1"],
+        effects: [
+          { type: "transferProvinces", provinces: belProvs, from: "BEL", to: "FRA" },
+          { type: "statDelta", country: "FRA", stat: "stability", delta: -2 },
+          { type: "relationDelta", a: "FRA", b: "DEU", delta: -6 },
+        ],
+        scope: "player", mapDiff: belProvs.map((p) => ({ province: p, owner: fra, controller: fra })),
+      },
+      {
+        id: "x2", turn: v.turn, date: "2026-03-20", headline: "Oil prices spike after Gulf incident", body: "Brent tops $110.", countries: ["IRN", "SAU"], causes: [],
+        effects: [{ type: "statDelta", country: "SAU", stat: "gdp", delta: 0.8 }, { type: "imposeSanctions", target: "IRN", by: ["USA", "GBR"] }],
+        scope: "world",
+      },
     ],
+    nations: [{
+      tag: "FRA",
+      stats: {
+        gdp: [f.gdp, f.gdp * 1.012], population: [f.population, f.population * 1.0004], stability: [f.stability, f.stability - 2],
+        military: [f.military, f.military + 1.5], warExhaustion: [f.warExhaustion, f.warExhaustion],
+      },
+      regions: { owned: [owned, owned + belProvs.length], occupied: [0, 0], occupying: [0, 0] },
+      relations: [{ tag: "BEL", from: 22, to: 48 }, { tag: "DEU", from: 31, to: 25 }],
+    }],
   };
   useGame.setState({ lastResult: result, resultOpen: true, mapHold: true, playback: null, turnBase: null, viewAdvanced: false });
   const owners = v.owners.slice();

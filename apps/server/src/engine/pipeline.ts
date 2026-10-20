@@ -3,8 +3,8 @@
 // game exactly as it was.
 
 import {
-  addDays, computeTiers, countryByTag, daysBetween, expireCalls, newTurnContext, simTick,
-  type GameState, type TurnResult,
+  addDays, computeTiers, countryByTag, countryIndex, daysBetween, expireCalls, getRelation, humanTags, newTurnContext, simTick,
+  type GameState, type NationChange, type StatKey, type TurnResult,
 } from "@worldline/shared";
 import type { EngineDeps } from "./api.ts";
 import { consolidate, needsConsolidation } from "./consolidate.ts";
@@ -16,11 +16,46 @@ import { runVotes } from "./votes.ts";
 
 export async function runTurn(state: GameState, deps: EngineDeps): Promise<TurnResult> {
   const work = structuredClone(state);
-  const result = await resolveTurn(work, deps);
+  const result = { ...(await resolveTurn(work, deps)), nations: nationChanges(state, work) };
   for (const key of Object.keys(state)) delete (state as unknown as Record<string, unknown>)[key];
   Object.assign(state, work);
   deps.onProgress?.("done");
   return result;
+}
+
+const STATS: StatKey[] = ["gdp", "population", "stability", "military", "warExhaustion"];
+
+/** How each player nation's numbers, land and relations moved between two states of the game. */
+export function nationChanges(before: GameState, after: GameState): NationChange[] {
+  return [...humanTags(before)].flatMap((tag) => {
+    const b = countryByTag(before, tag), a = countryByTag(after, tag);
+    if (!b || !a) return [];
+    const land = (s: GameState) => {
+      const me = countryIndex(s, tag);
+      let owned = 0, occupied = 0, occupying = 0;
+      for (let id = 1; id < s.owners.length; id++) {
+        if (s.owners[id] === me) {
+          owned++;
+          if (s.controllers[id] !== me) occupied++;
+        } else if (s.controllers[id] === me) occupying++;
+      }
+      return { owned, occupied, occupying };
+    };
+    const lb = land(before), la = land(after);
+    const relations = after.countries
+      .filter((c) => c.alive && c.tag !== tag)
+      .map((c) => ({ tag: c.tag, from: getRelation(before, tag, c.tag), to: getRelation(after, tag, c.tag) }))
+      // Small moves are mostly the monthly drift towards neutral.
+      .filter((r) => Math.abs(r.to - r.from) >= 3)
+      .sort((x, y) => Math.abs(y.to - y.from) - Math.abs(x.to - x.from))
+      .slice(0, 6);
+    return [{
+      tag,
+      stats: Object.fromEntries(STATS.map((k) => [k, [b[k], a[k]]])) as NationChange["stats"],
+      regions: { owned: [lb.owned, la.owned], occupied: [lb.occupied, la.occupied], occupying: [lb.occupying, la.occupying] },
+      relations,
+    }];
+  });
 }
 
 /**
@@ -44,7 +79,7 @@ export function jumpDays(state: GameState) {
   return votes.length % 2 ? votes[mid] : Math.round((votes[mid - 1] + votes[mid]) / 2);
 }
 
-async function resolveTurn(state: GameState, deps: EngineDeps): Promise<TurnResult> {
+async function resolveTurn(state: GameState, deps: EngineDeps): Promise<Omit<TurnResult, "nations">> {
   const progress = deps.onProgress ?? (() => {});
   const turn = state.turn, fromDate = state.date;
   const days = jumpDays(state);

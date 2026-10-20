@@ -126,6 +126,25 @@ for (const [label, seed] of seeds) {
       expect(state.orders).toEqual({});
     });
 
+    test("the turn report gives each player nation's stats, land and relations at the start and end", async () => {
+      const state = newGame(seed, [["p1", "UKR"]]);
+      const before = structuredClone(state);
+      const res = await engine.runTurn(state, depsFor(seed));
+      expect(res.nations.map((n) => n.tag)).toEqual(["UKR"]);
+      const [n] = res.nations;
+      const b = countryByTag(before, "UKR")!, a = countryByTag(state, "UKR")!;
+      for (const k of ["gdp", "population", "stability", "military", "warExhaustion"] as const) expect(n.stats[k]).toEqual([b[k], a[k]]);
+      const ukr = countryIndex(state, "UKR");
+      const count = (s: GameState, f: (o: number, c: number) => boolean) => s.owners.filter((o, id) => id > 0 && f(o, s.controllers[id])).length;
+      expect(n.regions.owned).toEqual([count(before, (o) => o === ukr), count(state, (o) => o === ukr)]);
+      expect(n.regions.occupied).toEqual([count(before, (o, c) => o === ukr && c !== ukr), count(state, (o, c) => o === ukr && c !== ukr)]);
+      expect(n.regions.occupying[1]).toBe(count(state, (o, c) => o !== ukr && c === ukr));
+      const moves = n.relations.map((r) => Math.abs(r.to - r.from));
+      expect(moves.every((m) => m >= 3)).toBe(true);
+      expect(moves).toEqual([...moves].sort((x, y) => y - x));
+      for (const r of n.relations) expect(r.to).toBe(state.relations[relKey("UKR", r.tag)] ?? 0);
+    });
+
     test("economy mode skips the director", async () => {
       const state = newGame(seed, [["p1", "FRA"]]);
       state.settings.economyMode = true;

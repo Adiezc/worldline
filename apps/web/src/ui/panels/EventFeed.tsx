@@ -1,4 +1,6 @@
-import type { CalendarEntry, GameEvent, GameView } from "@worldline/shared";
+import { useMemo } from "react";
+import type { CalendarEntry, Effect, GameEvent, GameView } from "@worldline/shared";
+import { describeEffects, type EffectTone } from "../../game/effects.ts";
 import { fmtShortDate } from "../../game/format.ts";
 import { useGame } from "../../game/store.ts";
 import { CountryChip, Empty } from "../common/ui.tsx";
@@ -113,6 +115,34 @@ function Tab({ active, onClick, children }: { active: boolean; onClick: () => vo
   );
 }
 
+const TONES: Record<EffectTone, string> = {
+  up: "border-success/45 text-[#bfe6c0]",
+  down: "border-fail/45 text-[#f0b2aa]",
+  neutral: "border-gold/35 text-parchment/75",
+};
+
+/** What an event changed under the rules, as small chips: the first few, then a count. */
+export function EffectChips({ effects, max = 6 }: { effects: Effect[]; max?: number }) {
+  const countries = useGame((s) => s.view?.countries);
+  const organizations = useGame((s) => s.view?.organizations);
+  const notes = useMemo(() => (countries && organizations ? describeEffects(effects, { countries, organizations }) : []), [effects, countries, organizations]);
+  if (!notes.length) return null;
+  return (
+    <div className="mt-1.5 flex flex-wrap gap-1">
+      {notes.slice(0, max).map((n, i) => (
+        <span key={i} className={`rounded-sm border bg-black/20 px-1.5 text-[10.5px] leading-[18px] ${TONES[n.tone]}`}>
+          {n.text}
+        </span>
+      ))}
+      {notes.length > max && (
+        <span className="px-1 text-[10.5px] leading-[18px] text-parchment/45" title={notes.slice(max).map((n) => n.text).join("\n")}>
+          +{notes.length - max} more
+        </span>
+      )}
+    </div>
+  );
+}
+
 export function EventCard({ e, compact }: { e: GameEvent; compact?: boolean }) {
   return (
     <article className="rounded border border-panel-edge/35 bg-black/20 px-3 py-2">
@@ -121,6 +151,7 @@ export function EventCard({ e, compact }: { e: GameEvent; compact?: boolean }) {
         <h4 className="font-display text-[13px] leading-snug text-parchment">{e.headline}</h4>
       </div>
       {!compact && e.body && <p className="mt-1 text-[12px] leading-relaxed text-parchment/65 select-text">{e.body}</p>}
+      {!compact && <EffectChips effects={e.effects} />}
       {e.countries.length > 0 && (
         <div className="mt-1.5 flex flex-wrap gap-1">
           {e.countries.slice(0, 8).map((t) => (

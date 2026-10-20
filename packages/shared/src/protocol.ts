@@ -17,7 +17,7 @@
 import type { Operation } from "./game/operations.ts";
 import type { CalendarEntry, EraTheme, Formable, ScenarioSeed } from "./game/scenario.ts";
 import type {
-  Chat, GameEvent, GameSettings, GameState, Order, OrderVerdict, Proposal, ResolutionType, TreatyType,
+  Chat, GameEvent, GameSettings, GameState, Order, OrderVerdict, Proposal, ResolutionType, StatKey, TreatyType,
 } from "./game/state.ts";
 
 export const SERVER_PORT = 3001;
@@ -108,6 +108,16 @@ export interface ResolutionResult {
   text: string;
 }
 
+/** How a player's nation changed over a turn, as [start, end] pairs (for the results screen). */
+export interface NationChange {
+  tag: string;
+  stats: Record<StatKey, [number, number]>;
+  /** Regions it owns, its own regions held by others, and others' regions it holds. */
+  regions: { owned: [number, number]; occupied: [number, number]; occupying: [number, number] };
+  /** The largest relation changes, biggest first. */
+  relations: { tag: string; from: number; to: number }[];
+}
+
 export interface TurnResult {
   turn: number;
   fromDate: string;
@@ -115,6 +125,8 @@ export interface TurnResult {
   events: GameEvent[];
   verdicts: OrderVerdict[];
   votes: ResolutionResult[];
+  /** Player nations' changes over the turn (each player receives only their own). */
+  nations: NationChange[];
 }
 
 export type ProposalDraft = Pick<Proposal, "kind" | "treatyType" | "members" | "terms" | "peace" | "cessions">;

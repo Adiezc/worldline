@@ -510,7 +510,10 @@ export class Room {
       this.ensureDirectorPlan();
       for (const ws of this.sockets) {
         const tag = s.players.find((p) => p.id === ws.data.playerId)?.country;
-        this.send(ws, { t: "turn", result: { ...result, verdicts: result.verdicts.filter((v) => !v.country || v.country === tag) } });
+        this.send(ws, {
+          t: "turn",
+          result: { ...result, verdicts: result.verdicts.filter((v) => !v.country || v.country === tag), nations: result.nations.filter((n) => n.tag === tag) },
+        });
       }
     } catch (e) {
       this.log("error", `turn ${s.turn} failed: ${e instanceof Error ? e.stack ?? e.message : String(e)}`);

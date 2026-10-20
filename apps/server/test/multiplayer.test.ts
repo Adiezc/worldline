@@ -59,6 +59,9 @@ test("two players play a turn together", async () => {
   expect(ra.result.verdicts.map((v) => v.orderId)).toEqual(["o1"]);
   expect(rb.result.verdicts.map((v) => v.orderId)).toEqual(["o2"]);
   expect(ra.result.verdicts[0].text).toContain("defence procurement");
+  // ...and only their own nation's turn report.
+  expect(ra.result.nations.map((n) => n.tag)).toEqual(["FRA"]);
+  expect(rb.result.nations.map((n) => n.tag)).toEqual(["DEU"]);
 
   const after = await alice.until((v) => v.turn === 2 && v.phase === "orders");
   expect(after.date).toBe("2026-04-01");
