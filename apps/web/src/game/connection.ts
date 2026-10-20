@@ -64,7 +64,9 @@ function handleMessage(msg: ServerMessage) {
       storage.setPlayerId(gameId, msg.playerId);
       storage.setSecret(gameId, msg.secret);
       storage.touchRecent({ id: gameId, name: msg.view.name });
-      useGame.setState({ playerId: msg.playerId, secret: msg.secret });
+      // Answers to requests made before a reconnect went to the old connection: stop waiting.
+      const lost = Object.keys(s.requests).map((id) => [id, { ok: false, error: "The connection dropped before it came; ask again." }]);
+      useGame.setState({ playerId: msg.playerId, secret: msg.secret, requests: {}, replies: { ...s.replies, ...Object.fromEntries(lost) } });
       applyView(msg.view);
       // Edits made while offline go out again.
       if (useGame.getState().ordersDirty) scheduleOrdersSync(50);

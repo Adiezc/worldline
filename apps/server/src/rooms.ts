@@ -336,7 +336,8 @@ export class Room {
       }
 
       case "ai": {
-        if (!myTag) return fail("Pick a country first.");
+        // Answered as a failed request (not a bare error) so the client stops waiting for it.
+        if (!myTag) return this.send(ws, { t: "ai", reqId: msg.reqId, kind: msg.kind, ok: false, error: "Pick a country first." });
         try {
           if (msg.kind === "advisor") {
             const text = await engine.advisor(s, deps, { country: myTag, question: msg.text });

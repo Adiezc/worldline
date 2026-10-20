@@ -106,6 +106,14 @@ test("a timed turn waits for someone to play it, and the timer restarts when the
   expect(room.state.turn).toBe(1);
 });
 
+test("a spectator's request to the adviser is answered as a failed request, so the client stops waiting", async () => {
+  const { room } = await startedRoom(slowAi({}));
+  const watcher = socket();
+  room.join(watcher as never, { t: "join", gameId: room.state.id, name: "Watcher" });
+  await room.handle(watcher as never, { t: "ai", reqId: "q1", kind: "advisor" });
+  expect(watcher.got.at(-1)).toEqual({ t: "ai", reqId: "q1", kind: "advisor", ok: false, error: "Pick a country first." });
+});
+
 test("after the lobby a nation can't be dropped or swapped, unless it no longer exists", async () => {
   const { room, a, b } = await startedRoom(slowAi({}));
   for (const tag of [null, "ITA"]) {

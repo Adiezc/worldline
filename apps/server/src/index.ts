@@ -230,7 +230,9 @@ const server = Bun.serve<SocketData>({
         if (msg.t === "join") {
           const room = typeof msg.gameId === "string" ? rooms.get(msg.gameId) : null;
           if (!room) {
+            // Closing is what tells the client to stop waiting and show why it could not join.
             ws.send(JSON.stringify({ t: "error", message: "Game not found" }));
+            ws.close();
             return;
           }
           // An invalid or expired token just joins anonymously.

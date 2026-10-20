@@ -2,9 +2,12 @@
 // for the votes that matter (veto holders, unanimity bodies, swing states). Counting is always
 // done here, exactly, never by the LLM.
 
-import { countryByTag, getRelation, nextId, relKey, type GameState, type Organization, type OrgBody, type Resolution } from "./state.ts";
+import { countryByTag, getRelation, nextId, relKey, type GameState, type Organization, type OrgBody, type Resolution, type ResolutionType } from "./state.ts";
 
 export type Vote = "yes" | "no" | "abstain";
+
+/** Resolution types a player can only table against a named country. */
+export const NEEDS_TARGET: readonly ResolutionType[] = ["sanction", "condemn", "admitMember", "suspendMember", "expelMember", "authorizeForce"];
 
 export function bodyOf(org: Organization, bodyId: string): OrgBody {
   return org.bodies.find((b) => b.id === bodyId) ?? org.bodies[0];

@@ -122,6 +122,17 @@ describe("accounts", () => {
     ws.close();
   });
 
+  test("joining a game that does not exist is answered and the socket closed, so the client stops waiting", async () => {
+    const ws = new WebSocket(`ws://localhost:${PORT}/ws`);
+    const got: ServerMessage[] = [];
+    ws.onmessage = (e) => got.push(JSON.parse(String(e.data)));
+    await new Promise((r) => (ws.onopen = r));
+    const closed = new Promise((r) => (ws.onclose = r));
+    ws.send(JSON.stringify({ t: "join", gameId: "nosuchgame", name: "Lost" }));
+    await closed;
+    expect(got).toEqual([{ t: "error", message: "Game not found" }]);
+  });
+
   test("a token restores the same player on a second device", async () => {
     const { token } = (await (await post("/api/auth/register", { username: "grace", password: "hopper1906" })).json()) as AuthResponse;
     const gameId = await newGame({ name: "Resume" });
