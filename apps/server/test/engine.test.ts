@@ -486,6 +486,40 @@ describe("peace treaties from diplomacy", () => {
     expect(state.chats[0].messages).toHaveLength(0);
   });
 
+  test("a proposal cannot bind a government that is not in the conversation", async () => {
+    const state = newGame(seed, [["p1", "RUS"], ["p2", "UKR"]]);
+    const before = state.owners.slice();
+    const chatId = engine.openChat(state, { from: "RUS", with: ["POL"] });
+    await expect(engine.sendChat(state, depsFor(seed), {
+      chatId, playerId: "p1", text: "",
+      proposal: { kind: "endWar", peace: "keep_occupied", members: ["UKR"], terms: "Ukraine yields." },
+    })).rejects.toThrow(/Ukraine is not part of this conversation/);
+    expect(state.owners).toEqual(before);
+    expect(state.wars.some((w) => w.attackers.includes("RUS") && w.defenders.includes("UKR"))).toBe(true);
+  });
+
+  test("in a conference only the human parties to a deal must sign it", async () => {
+    const state = newGame(seed, [["p1", "USA"], ["p2", "GBR"]]);
+    state.relations[relKey("USA", "FRA")] = 60;
+    const chatId = engine.openChat(state, { from: "USA", with: ["GBR", "FRA"] });
+    // GBR is present but not a party: the deal with France goes through on France's word.
+    await engine.sendChat(state, depsFor(seed), {
+      chatId, playerId: "p1", text: "A bilateral pact, if Paris agrees.", speaker: "FRA",
+      proposal: { kind: "treaty", treatyType: "trade", members: ["USA", "FRA"], terms: "Lower tariffs." },
+    });
+    const first = state.chats[0].messages.find((m) => m.proposal)!.proposal!;
+    expect(first.awaiting).toEqual([]);
+    expect(first.status).toBe("accepted");
+    // A deal naming GBR waits for GBR.
+    await engine.sendChat(state, depsFor(seed), {
+      chatId, playerId: "p1", text: "And one with London.", speaker: "FRA",
+      proposal: { kind: "treaty", treatyType: "defensive", members: ["USA", "GBR"], terms: "Mutual defence." },
+    });
+    const second = state.chats[0].messages.filter((m) => m.proposal).at(-1)!.proposal!;
+    expect(second.awaiting).toEqual(["GBR"]);
+    expect(second.status).toBe("open");
+  });
+
   test("a white peace returns occupied land to its owner", async () => {
     const state = newGame(seed, [["p1", "UKR"]]);
     const held = occupiedBy(state, "UKR", "RUS");
