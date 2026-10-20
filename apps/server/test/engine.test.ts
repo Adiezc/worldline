@@ -5,12 +5,13 @@ import { describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import {
-  addDays, buildMapIndex, countryByTag, countryIndex, relKey,
+  addDays, buildMapIndex, countryByTag, countryIndex, EffectSchema, relKey,
   type GameState, type MapMeta, type ScenarioSeed,
 } from "@worldline/shared";
 import { MockProvider } from "../src/ai/mock.ts";
 import type { AiProvider, AiRequest, EngineDeps } from "../src/engine/api.ts";
 import { engine, extractJson, INTERRUPTED } from "../src/engine/index.ts";
+import { effectReference } from "../src/engine/prompts.ts";
 import { buildFixtureSeed, ROOT } from "./fixtures/seed.ts";
 
 const meta = (await Bun.file(join(ROOT, "packages", "mapdata", "public", "map", "provinces.json")).json()) as MapMeta;
@@ -73,6 +74,16 @@ test("extractJson handles fences, prose and trailing commas", () => {
   expect(extractJson("I will fill {orderVerdicts} first. {\"a\":1}")).toEqual({ a: 1 });
 });
 
+test("the effect reference in the prompts matches the effect schema both ways", () => {
+  const ref = effectReference(newGame(seeds[0][1]), 30);
+  const examples = (ref.match(/\{"type":[^{}]*\}/g) ?? []).map((s) => JSON.parse(s) as { type: string });
+  // Every example the model is shown must parse; an effect the schema dropped would be discarded.
+  for (const e of examples) expect([e.type, EffectSchema.safeParse(e).success]).toEqual([e.type, true]);
+  // And every effect the rules engine accepts is documented.
+  const documented = new Set(examples.map((e) => e.type));
+  expect(EffectSchema.options.map((o) => o.shape.type.value).filter((t) => !documented.has(t))).toEqual([]);
+});
+
 for (const [label, seed] of seeds) {
   describe(label, () => {
     test("createGame deep-clones the seed", () => {
@@ -113,6 +124,25 @@ for (const [label, seed] of seeds) {
       expect(state.lastVerdicts.map((v) => v.orderId)).toContain("o1");
       expect(res.events.some((e) => e.causes.includes("o1") && e.scope === "player")).toBe(true);
       expect(state.orders).toEqual({});
+    });
+
+    test("the turn report gives each player nation's stats, land and relations at the start and end", async () => {
+      const state = newGame(seed, [["p1", "UKR"]]);
+      const before = structuredClone(state);
+      const res = await engine.runTurn(state, depsFor(seed));
+      expect(res.nations.map((n) => n.tag)).toEqual(["UKR"]);
+      const [n] = res.nations;
+      const b = countryByTag(before, "UKR")!, a = countryByTag(state, "UKR")!;
+      for (const k of ["gdp", "population", "stability", "military", "warExhaustion"] as const) expect(n.stats[k]).toEqual([b[k], a[k]]);
+      const ukr = countryIndex(state, "UKR");
+      const count = (s: GameState, f: (o: number, c: number) => boolean) => s.owners.filter((o, id) => id > 0 && f(o, s.controllers[id])).length;
+      expect(n.regions.owned).toEqual([count(before, (o) => o === ukr), count(state, (o) => o === ukr)]);
+      expect(n.regions.occupied).toEqual([count(before, (o, c) => o === ukr && c !== ukr), count(state, (o, c) => o === ukr && c !== ukr)]);
+      expect(n.regions.occupying[1]).toBe(count(state, (o, c) => o !== ukr && c === ukr));
+      const moves = n.relations.map((r) => Math.abs(r.to - r.from));
+      expect(moves.every((m) => m >= 3)).toBe(true);
+      expect(moves).toEqual([...moves].sort((x, y) => y - x));
+      for (const r of n.relations) expect(r.to).toBe(state.relations[relKey("UKR", r.tag)] ?? 0);
     });
 
     test("economy mode skips the director", async () => {
@@ -456,6 +486,40 @@ describe("peace treaties from diplomacy", () => {
     expect(state.chats[0].messages).toHaveLength(0);
   });
 
+  test("a proposal cannot bind a government that is not in the conversation", async () => {
+    const state = newGame(seed, [["p1", "RUS"], ["p2", "UKR"]]);
+    const before = state.owners.slice();
+    const chatId = engine.openChat(state, { from: "RUS", with: ["POL"] });
+    await expect(engine.sendChat(state, depsFor(seed), {
+      chatId, playerId: "p1", text: "",
+      proposal: { kind: "endWar", peace: "keep_occupied", members: ["UKR"], terms: "Ukraine yields." },
+    })).rejects.toThrow(/Ukraine is not part of this conversation/);
+    expect(state.owners).toEqual(before);
+    expect(state.wars.some((w) => w.attackers.includes("RUS") && w.defenders.includes("UKR"))).toBe(true);
+  });
+
+  test("in a conference only the human parties to a deal must sign it", async () => {
+    const state = newGame(seed, [["p1", "USA"], ["p2", "GBR"]]);
+    state.relations[relKey("USA", "FRA")] = 60;
+    const chatId = engine.openChat(state, { from: "USA", with: ["GBR", "FRA"] });
+    // GBR is present but not a party: the deal with France goes through on France's word.
+    await engine.sendChat(state, depsFor(seed), {
+      chatId, playerId: "p1", text: "A bilateral pact, if Paris agrees.", speaker: "FRA",
+      proposal: { kind: "treaty", treatyType: "trade", members: ["USA", "FRA"], terms: "Lower tariffs." },
+    });
+    const first = state.chats[0].messages.find((m) => m.proposal)!.proposal!;
+    expect(first.awaiting).toEqual([]);
+    expect(first.status).toBe("accepted");
+    // A deal naming GBR waits for GBR.
+    await engine.sendChat(state, depsFor(seed), {
+      chatId, playerId: "p1", text: "And one with London.", speaker: "FRA",
+      proposal: { kind: "treaty", treatyType: "defensive", members: ["USA", "GBR"], terms: "Mutual defence." },
+    });
+    const second = state.chats[0].messages.filter((m) => m.proposal).at(-1)!.proposal!;
+    expect(second.awaiting).toEqual(["GBR"]);
+    expect(second.status).toBe("open");
+  });
+
   test("a white peace returns occupied land to its owner", async () => {
     const state = newGame(seed, [["p1", "UKR"]]);
     const held = occupiedBy(state, "UKR", "RUS");
@@ -507,5 +571,21 @@ describe("diplomacy and turns", () => {
       expect(spy.prompts[kind]).toContain("We will never cede Kharkiv.");
     }
     expect(spy.prompts.resolver).toMatch(/PROPOSAL peace treaty \(white peace\) among UKR, RUS: (ACCEPTED|REJECTED)/);
+  });
+
+  test("players' earlier orders and verdicts reach the next resolver, and each adviser sees only its own", async () => {
+    const state = newGame(seed, [["p1", "FRA"], ["p2", "DEU"]]);
+    state.orders = {
+      p1: [{ id: "o1", playerId: "p1", country: "FRA", text: "Fund a new generation of nuclear reactors." }],
+      p2: [{ id: "o2", playerId: "p2", country: "DEU", text: "Rebuild ammunition stocks." }],
+    };
+    await engine.runTurn(state, depsFor(seed));
+    const spy = new SpyProvider();
+    await engine.runTurn(state, depsFor(seed, spy));
+    expect(spy.prompts.resolver).toMatch(/PLAYERS' EARLIER ORDERS[^\n]*\n(- .*\n)*- 2026-01-01 FRA: "Fund a new generation of nuclear reactors\." → (SUCCESS|PARTIAL|FAIL): \S/);
+    expect(spy.prompts.resolver).toContain(`DEU: "Rebuild ammunition stocks." →`);
+    await engine.advisor(state, depsFor(seed, spy), { country: "FRA" });
+    expect(spy.prompts.advisor).toContain(`YOUR RECENT ORDERS (last 2 turns and how they went):\n- 2026-01-01 FRA: "Fund a new generation`);
+    expect(spy.prompts.advisor).not.toContain(`DEU: "Rebuild ammunition stocks."`);
   });
 });

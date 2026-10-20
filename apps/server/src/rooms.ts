@@ -22,6 +22,8 @@ type Socket = ServerWebSocket<SocketData>;
 
 const MAX_PLAYERS = 8;
 const VIEW_EVENTS = 150;
+/** How long a changed jump or AI setting must stand before the AI governments plan again. */
+const PLAN_SETTLE_MS = 1500;
 
 export interface RoomDeps {
   map: MapIndex;
@@ -38,26 +40,35 @@ export class Room {
 
   constructor(public state: GameState, private deps: RoomDeps) {}
 
-  /** AI governments' plan for the open turn, computed while players write their orders. */
-  private directorPlan?: NonNullable<EngineDeps["directorPlan"]> & { key: string };
+  /** AI governments' plans for the open turn by planKey, computed while players write their orders. */
+  private plans = new Map<string, NonNullable<EngineDeps["directorPlan"]>>();
+  private planTimer: ReturnType<typeof setTimeout> | undefined;
 
   private planKey() {
     const s = this.state;
     return JSON.stringify([s.turn, s.date, jumpDays(s), s.settings.modelChain, s.settings.aiBehaviour, s.settings.economyMode]);
   }
 
-  /** Start (or restart) the advance plan whenever the open turn or its AI settings change. */
-  private ensureDirectorPlan() {
+  /** Start an advance plan for the open turn and its AI settings, unless one exists already. */
+  private ensureDirectorPlan(settled = false) {
     const s = this.state;
     if (s.phase !== "orders" || this.resolving || s.settings.economyMode) return;
     if (!s.players.some((p) => p.connected && p.country)) return;
     const key = this.planKey();
-    if (this.directorPlan?.key === key) return;
+    if (this.plans.has(key)) return;
+    for (const [k, p] of this.plans) if (p.turn !== s.turn || p.date !== s.date) this.plans.delete(k);
+    // The turn's first plan starts at once. After a change of jump or AI settings, wait for the
+    // choice to settle: each plan is an AI request, and one abandoned midway still runs to the end.
+    clearTimeout(this.planTimer);
+    if (this.plans.size && !settled) {
+      this.planTimer = setTimeout(() => this.ensureDirectorPlan(true), PLAN_SETTLE_MS);
+      return;
+    }
     const started = Date.now();
     const pre = engine.planDirector(s, { map: this.deps.map, seed: this.deps.seed(s.scenarioId), ai: this.deps.ai });
-    this.directorPlan = { ...pre, key };
+    this.plans.set(key, pre);
     void pre.plan.then((p) => {
-      if (this.directorPlan?.plan === pre.plan) {
+      if (this.plans.get(this.planKey()) === pre) {
         this.log("info", `turn ${pre.turn}: AI governments planned ahead in ${Math.round((Date.now() - started) / 1000)}s${p ? "" : " (no plan; the turn will plan live)"}`);
       }
     });
@@ -68,7 +79,7 @@ export class Room {
       map: this.deps.map,
       seed: this.deps.seed(this.state.scenarioId),
       ai: this.deps.ai,
-      directorPlan: this.directorPlan,
+      directorPlan: this.plans.get(this.planKey()),
       onProgress: (stage, detail) => {
         this.log("info", `turn ${this.state.turn}: ${stage}${detail ? ` (${detail})` : ""}`);
         this.broadcast({ t: "progress", stage, detail });
@@ -97,6 +108,7 @@ export class Room {
     const quota = this.deps.ai.quota();
     return {
       ...rest,
+      players: s.players.map(({ secret: _secret, ...p }) => p),
       orders: orders[playerId] ?? [],
       // Orders are private, and verdicts quote them: only your own.
       lastVerdicts: s.lastVerdicts.filter((v) => !v.country || v.country === tag),
@@ -181,11 +193,14 @@ export class Room {
     const s = this.state;
     const linked = user ? linkedPlayer(user.id, s.id) : null;
     let player = linked ? s.players.find((p) => p.id === linked) : undefined;
-    player ??= msg.playerId ? s.players.find((p) => p.id === msg.playerId) : undefined;
+    // Every view lists player ids, so resuming a seat takes its secret too. Seats saved before
+    // secrets existed have none; the first client to resume one is given it.
+    player ??= msg.playerId ? s.players.find((p) => p.id === msg.playerId && (!p.secret || p.secret === msg.secret)) : undefined;
+    const name = typeof msg.name === "string" ? msg.name.trim().slice(0, 32) : "";
     if (!player) {
       player = {
         id: crypto.randomUUID(),
-        name: (msg.name || "Player").slice(0, 32),
+        name: name || "Player",
         country: null,
         isHost: s.players.length === 0,
         connected: true,
@@ -194,15 +209,18 @@ export class Room {
       s.players.push(player);
     } else {
       player.connected = true;
-      if (msg.name) player.name = msg.name.slice(0, 32);
+      if (name) player.name = name;
     }
+    player.secret ??= crypto.randomUUID();
     if (!s.players.some((p) => p.isHost)) player.isHost = true;
+    // A turn timer that ran out while nobody was there to play starts afresh.
+    if (s.phase === "orders" && s.turnDeadline && s.turnDeadline <= Date.now()) this.armTimer();
     ws.data.gameId = s.id;
     ws.data.playerId = player.id;
     ws.data.userId = user?.id;
     if (user) linkUserGame(user.id, s.id, player.id);
     this.sockets.add(ws);
-    this.send(ws, { t: "welcome", playerId: player.id, view: this.view(player.id) });
+    this.send(ws, { t: "welcome", playerId: player.id, secret: player.secret, view: this.view(player.id) });
     this.changed();
   }
 
@@ -219,7 +237,8 @@ export class Room {
   // Messages
 
   /** Messages that change game state. They are serialised and refused mid-resolution, because a
-   * turn commits a whole new state and would silently drop anything changed meanwhile. */
+   * turn commits a whole new state and would silently drop anything changed meanwhile. Ones
+   * already queued when a turn is called still run: the turn waits for them. */
   private static MUTATING = new Set<ClientMessage["t"]>([
     "claim", "settings", "start", "orders", "jump", "chat.open", "chat.send", "proposal.respond",
     "org.propose", "org.vote",
@@ -239,7 +258,7 @@ export class Room {
       this.send(ws, { t: "error", message: "The world is turning; try again once the turn resolves." });
       return;
     }
-    return this.exclusive(() => (this.resolving ? Promise.resolve() : this.dispatch(ws, msg)));
+    return this.exclusive(() => this.dispatch(ws, msg));
   }
 
   private async dispatch(ws: Socket, msg: ClientMessage) {
@@ -258,6 +277,9 @@ export class Room {
         return;
 
       case "claim": {
+        // After the lobby a nation is yours for good, unless it has ceased to exist. Spectators
+        // may still take one that nobody leads.
+        if (s.phase !== "lobby" && myTag && countryByTag(s, myTag)?.alive) return fail("You can only change country in the lobby.");
         if (msg.tag === null) {
           me.country = null;
           return this.changed();
@@ -266,7 +288,6 @@ export class Room {
         if (!k?.alive) return fail("That country does not exist.");
         if (s.players.some((p) => p.country === msg.tag && p.id !== me.id)) return fail(`${k.name} is already taken.`);
         if (!me.country && s.players.filter((p) => p.country).length >= MAX_PLAYERS) return fail("This game is full.");
-        if (s.phase !== "lobby" && me.country) return fail("You can only change country in the lobby.");
         me.country = msg.tag;
         return this.changed();
       }
@@ -319,14 +340,17 @@ export class Room {
       case "jump": {
         if (s.phase === "resolving") return;
         const days = [0, 7, 30, 90, 180, 365].includes(msg.days) ? msg.days : 30;
-        if (s.settings.jumpVoting) s.jumpVotes[me.id] = days;
-        else if (me.isHost) s.settings.jumpDays = days;
+        if (s.settings.jumpVoting) {
+          if (!myTag) return fail("Only players leading a nation vote on the jump.");
+          s.jumpVotes[me.id] = days;
+        } else if (me.isHost) s.settings.jumpDays = days;
         else return fail("Only the host sets the jump length.");
         return this.changed();
       }
 
       case "ai": {
-        if (!myTag) return fail("Pick a country first.");
+        // Answered as a failed request (not a bare error) so the client stops waiting for it.
+        if (!myTag) return this.send(ws, { t: "ai", reqId: msg.reqId, kind: msg.kind, ok: false, error: "Pick a country first." });
         try {
           if (msg.kind === "advisor") {
             const text = await engine.advisor(s, deps, { country: myTag, question: msg.text });
@@ -473,17 +497,26 @@ export class Room {
     this.state.turnDeadline = this.state.phase === "orders" && t > 0 ? Date.now() + t * 1000 : undefined;
   }
 
-  /** Resolve when every connected player with a country is ready, or when the timer runs out. */
-  async maybeResolve(force = false) {
+  /** Every connected player with a country is ready, or the timer ran out with someone there to play. */
+  private turnDue() {
     const s = this.state;
-    if (s.phase !== "orders" || this.resolving) return;
-    const active = s.players.filter((p) => p.country && p.connected);
-    const allReady = active.length > 0 && active.every((p) => p.ready);
-    const timedOut = !!s.turnDeadline && Date.now() >= s.turnDeadline;
-    if (!allReady && !timedOut && !force) return;
-    // Wait for in-flight chats/formations to land before the turn snapshots the state.
+    // A player whose nation is gone gives no orders, so the turn does not wait for them.
+    const active = s.players.filter((p) => p.country && p.connected && countryByTag(s, p.country)?.alive);
+    if (s.phase !== "orders" || !active.length) return false;
+    return active.every((p) => p.ready) || (!!s.turnDeadline && Date.now() >= s.turnDeadline);
+  }
+
+  async maybeResolve() {
+    if (this.resolving || !this.turnDue()) return;
+    // Wait for in-flight chats/formations and queued orders to land before the turn snapshots
+    // the state; new changes are refused from here on.
     this.resolving = true;
     await this.lock;
+    // Someone may have un-readied or left meanwhile.
+    if (!this.turnDue()) {
+      this.resolving = false;
+      return;
+    }
     await this.resolveTurn();
   }
 
@@ -492,14 +525,19 @@ export class Room {
     this.resolving = true;
     s.phase = "resolving";
     s.turnDeadline = undefined;
-    this.pushViews();
     try {
+      // Inside the try: anything thrown from here on must still put the game back to orders.
+      this.pushViews();
       saveSnapshot(s);
       this.snapEvents = undefined;
       const started = Date.now();
       const orderCount = Object.values(s.orders).flat().length;
       this.log("info", `resolving turn ${s.turn} (${s.date}, ${orderCount} orders, jump ${s.settings.jumpDays}d, reasoning ${s.settings.reasoningEffort})`);
+      // Joins and departures during the turn land on this list, which the commit would replace
+      // with its copy from the start (leaving someone who left "connected" for good).
+      const players = s.players;
       const result = await engine.runTurn(s, this.engineDeps());
+      s.players = players.map((p) => ({ ...p, ready: false }));
       const rejected = result.events.reduce((n, e) => n + (e.rejected?.length ?? 0), 0);
       const clamped = result.events.reduce((n, e) => n + (e.clamped?.length ?? 0), 0);
       this.log("info", `turn done in ${Math.round((Date.now() - started) / 1000)}s: ${result.events.length} events, ${result.verdicts.map((v) => `${v.orderId.slice(0, 6)}=${v.outcome}`).join(" ")}, ${rejected} effects rejected, ${clamped} clamped`);
@@ -510,7 +548,10 @@ export class Room {
       this.ensureDirectorPlan();
       for (const ws of this.sockets) {
         const tag = s.players.find((p) => p.id === ws.data.playerId)?.country;
-        this.send(ws, { t: "turn", result: { ...result, verdicts: result.verdicts.filter((v) => !v.country || v.country === tag) } });
+        this.send(ws, {
+          t: "turn",
+          result: { ...result, verdicts: result.verdicts.filter((v) => !v.country || v.country === tag), nations: result.nations.filter((n) => n.tag === tag) },
+        });
       }
     } catch (e) {
       this.log("error", `turn ${s.turn} failed: ${e instanceof Error ? e.stack ?? e.message : String(e)}`);

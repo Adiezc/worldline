@@ -2,7 +2,7 @@
 // (veto holders, consensus bodies, swing states) through one batched LLM call. Counting is exact.
 
 import {
-  bodyOf, countryByTag, enactResolution, getRelation, heuristicVote, humanTags, keyVoters, nextId, pickBody, tally,
+  bodyOf, countryByTag, enactResolution, getRelation, heuristicVote, humanTags, keyVoters, NEEDS_TARGET, nextId, pickBody, tally,
   votersOf, VotesOutputSchema,
   type GameEvent, type GameState, type Organization, type Resolution, type ResolutionResult, type ResolutionType, type Vote,
 } from "@worldline/shared";
@@ -142,8 +142,6 @@ async function askKeyVoters(state: GameState, deps: EngineDeps, plans: Plan[]) {
 }
 
 // ---- player actions ----
-
-const NEEDS_TARGET: ResolutionType[] = ["sanction", "condemn", "admitMember", "suspendMember", "expelMember", "authorizeForce"];
 
 export function proposeResolution(
   state: GameState,

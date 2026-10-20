@@ -18,6 +18,7 @@ export function connectGame(gameId: string) {
       t: "join",
       gameId,
       playerId: useGame.getState().playerId ?? storage.playerId(gameId),
+      secret: useGame.getState().secret ?? storage.secret(gameId),
       name: storage.name() || "Anonymous",
       token: auth.token() ?? undefined,
     }),
@@ -61,8 +62,11 @@ function handleMessage(msg: ServerMessage) {
     case "welcome": {
       const gameId = s.gameId ?? msg.view.id;
       storage.setPlayerId(gameId, msg.playerId);
+      storage.setSecret(gameId, msg.secret);
       storage.touchRecent({ id: gameId, name: msg.view.name });
-      useGame.setState({ playerId: msg.playerId });
+      // Answers to requests made before a reconnect went to the old connection: stop waiting.
+      const lost = Object.keys(s.requests).map((id) => [id, { ok: false, error: "The connection dropped before it came; ask again." }]);
+      useGame.setState({ playerId: msg.playerId, secret: msg.secret, requests: {}, replies: { ...s.replies, ...Object.fromEntries(lost) } });
       applyView(msg.view);
       // Edits made while offline go out again.
       if (useGame.getState().ordersDirty) scheduleOrdersSync(50);
@@ -91,13 +95,16 @@ function handleMessage(msg: ServerMessage) {
       // After an intervention the server may resend the kept part of the turn: keep it for
       // reference but don't reopen the results or hold the map.
       if (s.timeTravel && Date.now() - s.timeTravel.at < 20_000) {
-        useGame.setState({ lastResult: msg.result, timeTravel: null, resultOpen: false, mapHold: false, playback: null, turnBase: null, viewAdvanced: false, progress: null });
+        useGame.setState({ lastResult: msg.result, timeTravel: null, resultOpen: false, mapHold: false, playback: null, turnBase: null, progress: null });
         break;
       }
       useGame.setState({
         lastResult: msg.result,
-        turnBase: s.viewAdvanced && s.preTurn ? { owners: s.preTurn.owners, controllers: s.preTurn.controllers } : null,
-        viewAdvanced: false,
+        // The server sends this before the post-turn view. If that view got here first, the map
+        // already shows the new borders, so playback must start from the ones it replaced.
+        turnBase: s.view && s.view.turn > msg.result.turn && s.preTurn?.turn === msg.result.turn
+          ? { owners: s.preTurn.owners, controllers: s.preTurn.controllers }
+          : null,
         resultOpen: true,
         mapHold: true,
         playback: null,
@@ -108,11 +115,12 @@ function handleMessage(msg: ServerMessage) {
       handleAi(msg);
       break;
     case "chat.typing":
+      // A stop without a reply means the message did not get through.
       if (msg.stop) {
         useGame.setState((st) => {
           const typing = { ...st.typing };
           delete typing[msg.chatId];
-          return { typing };
+          return { typing, chatFailed: { ...st.chatFailed, [msg.chatId]: Date.now() } };
         });
         break;
       }

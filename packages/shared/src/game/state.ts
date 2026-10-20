@@ -191,6 +191,8 @@ export interface Player {
   isHost: boolean;
   connected: boolean;
   ready: boolean;
+  /** Proves a returning client owns this seat (ids are public). Server-side; only its owner gets it. */
+  secret?: string;
 }
 
 export interface ChatMessage {

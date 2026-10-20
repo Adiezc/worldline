@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import type { GameView, Organization, OrgBody, Resolution, ResolutionType } from "@worldline/shared";
+import { NEEDS_TARGET, type GameView, type Organization, type OrgBody, type Resolution, type ResolutionType } from "@worldline/shared";
 import { proposeResolution, selectOrg, setMapMode, voteResolution } from "../../game/actions.ts";
 import { fmtShortDate } from "../../game/format.ts";
 import { countryMap, ORG_KIND_LABELS, RESOLUTION_LABELS, RULE_LABELS } from "../../game/selectors.ts";
@@ -114,7 +114,7 @@ function OrgDetail({ view, org, onClose }: { view: GameView; org: Organization; 
         ))}
       </ul>
 
-      {me && org.members.includes(me) && !org.suspended.includes(me) && <ProposeForm view={view} org={org} />}
+      {me && org.members.includes(me) && !org.suspended.includes(me) && org.powers.length > 0 && <ProposeForm view={view} org={org} />}
 
       <SectionTitle>Bodies</SectionTitle>
       <ul className="space-y-2">
@@ -279,11 +279,17 @@ function PastResolution({ r }: { r: Resolution }) {
 
 function ProposeForm({ view, org }: { view: GameView; org: Organization }) {
   const [open, setOpen] = useState(false);
-  const [type, setType] = useState<ResolutionType>(org.powers[0] ?? "custom");
+  const [type, setType] = useState<ResolutionType>(org.powers[0]);
   const [target, setTarget] = useState("");
   const [text, setText] = useState("");
   const countries = useMemo(() => view.countries.filter((c) => c.alive !== false).sort((a, b) => a.name.localeCompare(b.name)), [view.countries]);
-  const powers = org.powers.length ? org.powers : (["custom"] as ResolutionType[]);
+  // The server refuses these without a target, so ask for one up front (and only offer sensible ones).
+  const needsTarget = NEEDS_TARGET.includes(type);
+  const targets = type === "admitMember" ? countries.filter((c) => !org.members.includes(c.tag))
+    : type === "suspendMember" || type === "expelMember" ? countries.filter((c) => org.members.includes(c.tag))
+    : countries;
+  const chosen = targets.some((c) => c.tag === target) ? target : "";
+  const canTable = !!text.trim() && (!needsTarget || !!chosen);
 
   if (!open) {
     return (
@@ -297,8 +303,8 @@ function ProposeForm({ view, org }: { view: GameView; org: Organization }) {
       className="mt-3 space-y-2.5 rounded border border-gold/40 bg-gold/[0.04] p-3"
       onSubmit={(e) => {
         e.preventDefault();
-        if (!text.trim()) return;
-        proposeResolution(org.id, type, text.trim(), target || undefined);
+        if (!canTable) return;
+        proposeResolution(org.id, type, text.trim(), chosen || undefined);
         setText("");
         setTarget("");
         setOpen(false);
@@ -307,17 +313,17 @@ function ProposeForm({ view, org }: { view: GameView; org: Organization }) {
       <div className="font-display text-[12.5px] tracking-wide text-gold-bright">New resolution — {org.abbrev}</div>
       <Field label="Type">
         <select className="hud-input" value={type} onChange={(e) => setType(e.target.value as ResolutionType)}>
-          {powers.map((p) => (
+          {org.powers.map((p) => (
             <option key={p} value={p}>
               {RESOLUTION_LABELS[p] ?? p}
             </option>
           ))}
         </select>
       </Field>
-      <Field label="Target (optional)">
-        <select className="hud-input" value={target} onChange={(e) => setTarget(e.target.value)}>
-          <option value="">— None —</option>
-          {countries.map((c) => (
+      <Field label={needsTarget ? "Target" : "Target (optional)"}>
+        <select className="hud-input" value={chosen} onChange={(e) => setTarget(e.target.value)}>
+          <option value="">{needsTarget ? "— Choose a country —" : "— None —"}</option>
+          {targets.map((c) => (
             <option key={c.tag} value={c.tag}>
               {c.name}
             </option>
@@ -331,7 +337,7 @@ function ProposeForm({ view, org }: { view: GameView; org: Organization }) {
         <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
           Cancel
         </Button>
-        <Button type="submit" size="sm" variant="primary" disabled={!text.trim()}>
+        <Button type="submit" size="sm" variant="primary" disabled={!canTable}>
           Table resolution
         </Button>
       </div>

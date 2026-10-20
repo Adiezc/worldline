@@ -2,6 +2,7 @@ import { skipPlayback } from "../../game/actions.ts";
 import { fmtDate } from "../../game/format.ts";
 import { useGame } from "../../game/store.ts";
 import { Button, CountryChip } from "../common/ui.tsx";
+import { EffectChips } from "../panels/EventFeed.tsx";
 import { InterveneButton } from "./Intervene.tsx";
 
 /** Headline card shown while the turn's events replay on the map. */
@@ -28,6 +29,7 @@ export function PlaybackCard() {
             <>
               <h3 className="mt-1 font-display text-[15px] leading-snug text-parchment">{e.headline}</h3>
               {e.body && <p className="mt-1 line-clamp-2 text-[12px] leading-snug text-parchment/60">{e.body}</p>}
+              <EffectChips effects={e.effects} max={4} />
               {e.countries.length > 0 && (
                 <div className="mt-1.5 flex flex-wrap gap-1">
                   {e.countries.slice(0, 6).map((t) => (

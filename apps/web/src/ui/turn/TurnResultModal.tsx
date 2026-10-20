@@ -1,8 +1,8 @@
-import { closeResults, startPlayback } from "../../game/actions.ts";
-import { fmtDate, fmtShortDate } from "../../game/format.ts";
+import { closeResults, countryName, startPlayback } from "../../game/actions.ts";
+import { fmtDate, fmtGdp, fmtPop, fmtRelation, fmtShortDate } from "../../game/format.ts";
 import { useGame } from "../../game/store.ts";
-import type { GameEvent } from "@worldline/shared";
-import { Badge, Button, Modal, SectionTitle, outcomeColor, outcomeTone } from "../common/ui.tsx";
+import type { GameEvent, NationChange, StatKey } from "@worldline/shared";
+import { Badge, Button, Modal, SectionTitle, TagFlag, outcomeColor, outcomeTone } from "../common/ui.tsx";
 import { InterveneButton } from "./Intervene.tsx";
 
 export function TurnResultModal() {
@@ -11,7 +11,9 @@ export function TurnResultModal() {
   const prevOrders = useGame((s) => s.prevOrders);
   const orders = useGame((s) => s.orders);
   const canIntervene = useGame((s) => !!s.view?.you.isHost && (s.view.intervenable?.length ?? 0) > 0);
+  const myTag = useGame((s) => s.view?.you.country);
   if (!open || !r) return null;
+  const mineNation = r.nations.find((n) => n.tag === myTag);
   const textOf = (id: string) => prevOrders[id] ?? orders.find((o) => o.id === id)?.text;
   const events = [...r.events].sort((a, b) => a.date.localeCompare(b.date));
   const mine = events.filter((e) => e.scope === "player");
@@ -43,6 +45,7 @@ export function TurnResultModal() {
             </ul>
           </>
         )}
+        {mineNation && <NationReport n={mineNation} />}
         {r.votes.length > 0 && (
           <>
             <SectionTitle>Votes</SectionTitle>
@@ -77,6 +80,94 @@ export function TurnResultModal() {
         )}
       </footer>
     </Modal>
+  );
+}
+
+const STAT_TILES: { key: StatKey; label: string; short?: string; value: (v: number) => string; percent?: boolean; higherIsWorse?: boolean }[] = [
+  { key: "gdp", label: "GDP", value: fmtGdp, percent: true },
+  { key: "population", label: "Population", value: fmtPop, percent: true },
+  { key: "stability", label: "Stability", value: (v) => String(Math.round(v)) },
+  { key: "military", label: "Military", value: (v) => String(Math.round(v)) },
+  { key: "warExhaustion", label: "War exhaustion", short: "Exhaustion", value: (v) => String(Math.round(v)), higherIsWorse: true },
+];
+
+/** Signed change ("+0.5%", "−2"), or null when it rounds to nothing. */
+function fmtChange(d: number, percent?: boolean) {
+  const digits = Math.abs(d) >= 10 ? 0 : Math.abs(d) >= 1 ? 1 : 2;
+  const text = String(Number(Math.abs(d).toFixed(digits)));
+  if (text === "0") return null;
+  return `${d > 0 ? "+" : "−"}${text}${percent ? "%" : ""}`;
+}
+
+const changeColor = (d: number, higherIsWorse?: boolean) => ((d > 0) !== !!higherIsWorse ? "#8fd18f" : "#e08a80");
+
+/** A change in its colour, or a muted dash when there is none. */
+function Change({ d, percent, higherIsWorse }: { d: number; percent?: boolean; higherIsWorse?: boolean }) {
+  const text = fmtChange(d, percent);
+  if (!text) return <span className="text-parchment/35">—</span>;
+  return <span style={{ color: changeColor(d, higherIsWorse) }}>{text}</span>;
+}
+
+/** How the player's nation moved this turn: stats, land and the relations that shifted most. */
+function NationReport({ n }: { n: NationChange }) {
+  const land: { label: string; pair: [number, number]; higherIsWorse?: boolean }[] = [
+    { label: "regions", pair: n.regions.owned },
+    { label: "occupied by others", pair: n.regions.occupied, higherIsWorse: true },
+    { label: "held abroad", pair: n.regions.occupying },
+  ];
+  return (
+    <>
+      <SectionTitle>Your nation</SectionTitle>
+      <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-5">
+        {STAT_TILES.map((t) => {
+          const [from, to] = n.stats[t.key];
+          const d = t.percent ? (from > 0 ? (to / from - 1) * 100 : 0) : to - from;
+          return (
+            <div key={t.key} className="rounded border border-panel-edge/30 bg-black/15 px-2 py-1.5" title={`${t.label}: ${t.value(from)} → ${t.value(to)}`}>
+              <div className="hud-label truncate text-[9.5px]">{t.short ?? t.label}</div>
+              <div className="mt-0.5 font-display text-[14px] text-parchment tabular-nums">{t.value(to)}</div>
+              <div className="text-[11px] tabular-nums">
+                <Change d={d} percent={t.percent} higherIsWorse={t.higherIsWorse} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-2 text-[12px] text-parchment/65">
+        {land.filter((l) => l.pair[0] || l.pair[1] || l.label === "regions").map((l, i) => {
+          const d = l.pair[1] - l.pair[0];
+          return (
+            <span key={l.label}>
+              {i > 0 && <span className="mx-1.5 text-parchment/30">·</span>}
+              <span className="text-parchment/85 tabular-nums">{l.pair[1]}</span> {l.label}
+              {d !== 0 && (
+                <span className="ml-1 tabular-nums">
+                  (<Change d={d} higherIsWorse={l.higherIsWorse} />)
+                </span>
+              )}
+            </span>
+          );
+        })}
+      </div>
+      {n.relations.length > 0 && (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          <span className="hud-label text-[9.5px]">Relations</span>
+          {n.relations.map((rel) => (
+            <span
+              key={rel.tag}
+              className="inline-flex items-center gap-1 rounded-sm border border-panel-edge/50 bg-black/20 px-1.5 text-[11px] text-parchment/85"
+              title={`Relations with ${countryName(rel.tag)}: ${fmtRelation(rel.from)} → ${fmtRelation(rel.to)}`}
+            >
+              <TagFlag tag={rel.tag} size={12} />
+              {countryName(rel.tag)}
+              <span className="tabular-nums">
+                <Change d={Math.round(rel.to - rel.from)} />
+              </span>
+            </span>
+          ))}
+        </div>
+      )}
+    </>
   );
 }
 
