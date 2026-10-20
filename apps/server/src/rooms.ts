@@ -202,6 +202,8 @@ export class Room {
     }
     player.secret ??= crypto.randomUUID();
     if (!s.players.some((p) => p.isHost)) player.isHost = true;
+    // A turn timer that ran out while nobody was there to play starts afresh.
+    if (s.phase === "orders" && s.turnDeadline && s.turnDeadline <= Date.now()) this.armTimer();
     ws.data.gameId = s.id;
     ws.data.playerId = player.id;
     ws.data.userId = user?.id;
@@ -224,7 +226,8 @@ export class Room {
   // Messages
 
   /** Messages that change game state. They are serialised and refused mid-resolution, because a
-   * turn commits a whole new state and would silently drop anything changed meanwhile. */
+   * turn commits a whole new state and would silently drop anything changed meanwhile. Ones
+   * already queued when a turn is called still run: the turn waits for them. */
   private static MUTATING = new Set<ClientMessage["t"]>([
     "claim", "settings", "start", "orders", "jump", "chat.open", "chat.send", "proposal.respond",
     "org.propose", "org.vote",
@@ -244,7 +247,7 @@ export class Room {
       this.send(ws, { t: "error", message: "The world is turning; try again once the turn resolves." });
       return;
     }
-    return this.exclusive(() => (this.resolving ? Promise.resolve() : this.dispatch(ws, msg)));
+    return this.exclusive(() => this.dispatch(ws, msg));
   }
 
   private async dispatch(ws: Socket, msg: ClientMessage) {
@@ -263,6 +266,9 @@ export class Room {
         return;
 
       case "claim": {
+        // After the lobby a nation is yours for good, unless it has ceased to exist. Spectators
+        // may still take one that nobody leads.
+        if (s.phase !== "lobby" && myTag && countryByTag(s, myTag)?.alive) return fail("You can only change country in the lobby.");
         if (msg.tag === null) {
           me.country = null;
           return this.changed();
@@ -271,7 +277,6 @@ export class Room {
         if (!k?.alive) return fail("That country does not exist.");
         if (s.players.some((p) => p.country === msg.tag && p.id !== me.id)) return fail(`${k.name} is already taken.`);
         if (!me.country && s.players.filter((p) => p.country).length >= MAX_PLAYERS) return fail("This game is full.");
-        if (s.phase !== "lobby" && me.country) return fail("You can only change country in the lobby.");
         me.country = msg.tag;
         return this.changed();
       }
@@ -478,17 +483,26 @@ export class Room {
     this.state.turnDeadline = this.state.phase === "orders" && t > 0 ? Date.now() + t * 1000 : undefined;
   }
 
-  /** Resolve when every connected player with a country is ready, or when the timer runs out. */
-  async maybeResolve(force = false) {
+  /** Every connected player with a country is ready, or the timer ran out with someone there to play. */
+  private turnDue() {
     const s = this.state;
-    if (s.phase !== "orders" || this.resolving) return;
-    const active = s.players.filter((p) => p.country && p.connected);
-    const allReady = active.length > 0 && active.every((p) => p.ready);
-    const timedOut = !!s.turnDeadline && Date.now() >= s.turnDeadline;
-    if (!allReady && !timedOut && !force) return;
-    // Wait for in-flight chats/formations to land before the turn snapshots the state.
+    // A player whose nation is gone gives no orders, so the turn does not wait for them.
+    const active = s.players.filter((p) => p.country && p.connected && countryByTag(s, p.country)?.alive);
+    if (s.phase !== "orders" || !active.length) return false;
+    return active.every((p) => p.ready) || (!!s.turnDeadline && Date.now() >= s.turnDeadline);
+  }
+
+  async maybeResolve() {
+    if (this.resolving || !this.turnDue()) return;
+    // Wait for in-flight chats/formations and queued orders to land before the turn snapshots
+    // the state; new changes are refused from here on.
     this.resolving = true;
     await this.lock;
+    // Someone may have un-readied or left meanwhile.
+    if (!this.turnDue()) {
+      this.resolving = false;
+      return;
+    }
     await this.resolveTurn();
   }
 
@@ -504,7 +518,11 @@ export class Room {
       const started = Date.now();
       const orderCount = Object.values(s.orders).flat().length;
       this.log("info", `resolving turn ${s.turn} (${s.date}, ${orderCount} orders, jump ${s.settings.jumpDays}d, reasoning ${s.settings.reasoningEffort})`);
+      // Joins and departures during the turn land on this list, which the commit would replace
+      // with its copy from the start (leaving someone who left "connected" for good).
+      const players = s.players;
       const result = await engine.runTurn(s, this.engineDeps());
+      s.players = players.map((p) => ({ ...p, ready: false }));
       const rejected = result.events.reduce((n, e) => n + (e.rejected?.length ?? 0), 0);
       const clamped = result.events.reduce((n, e) => n + (e.clamped?.length ?? 0), 0);
       this.log("info", `turn done in ${Math.round((Date.now() - started) / 1000)}s: ${result.events.length} events, ${result.verdicts.map((v) => `${v.orderId.slice(0, 6)}=${v.outcome}`).join(" ")}, ${rejected} effects rejected, ${clamped} clamped`);
