@@ -42,7 +42,9 @@ export function effectReference(state: GameState, days: number) {
 {"type":"createOrg","abbrev":"ABC","name":"Full name","kind":"regional","members":["AAA","BBB"],"rule":"consensus","tradeBloc":false,"mutualDefense":false}
 {"type":"proposeResolution","orgId":"o1","resolutionType":"condemn","proposer":"FRA","target":"RUS","text":"what it says"}   proposer must be a member and the org must have that power; it is voted next turn.
 {"type":"updateFormation","country":"DEU","index":0,"met":true}   mark a FORMATION GOALS requirement met when events achieve it.
-{"type":"updateAgenda","country":"BRA","goals":["goal","goal"]}   AI countries only.`;
+{"type":"updateAgenda","country":"BRA","goals":["goal","goal"]}   AI countries only.
+{"type":"addClaim","claimant":"VEN","provinces":[813,814],"note":"why, in one line"}   a government formally lays claim to regions another country holds (after losing them in a war, a nationalist turn, a referendum). Rare.
+{"type":"dropClaim","claimant":"VEN","provinces":[813]}   a government renounces a claim (omit provinces to renounce all of it), e.g. in a peace treaty or a settlement.`;
 }
 
 export function resolverSystem(state: GameState, days: number, economy: boolean) {
@@ -144,14 +146,3 @@ export const BRAINSTORM_SYSTEM = `You suggest orders for a player's country in W
 
 OUTPUT: one JSON object: {"ideas":["...","..."]}`;
 
-export const ASSESSOR_SYSTEM = `You assess plans to form a new nation in Worldline, a geopolitical simulation that begins in the real world. Using your knowledge of history, culture, language, religion and politics together with the current state, decide what would really have to happen first.
-
-- requirements: 2-6 concrete conditions, each achievable through orders the player can give (diplomacy, referendums, treaties, reforms, integration steps, winning a war, stability at home). Not vague ("be strong") and not impossible. For each, "met" says whether it is satisfied RIGHT NOW in the given state, and "why" explains briefly.
-- If PREVIOUS REQUIREMENTS are given, keep them (same wording and order) unless the situation changed fundamentally; just re-evaluate "met".
-- consent: one entry per participating country (not the founder): "needed" whether its agreement is required, "willing" whether its government would agree today.
-- verdict: "achievable" only if every requirement is met now; "notYet" if it is a realistic goal with work left; "unrealistic" if it cannot happen in any plausible future.
-- suggestedPath: 2-3 sentences on the order of steps the player should take.
-- plan: name (the official name, normally exactly the requested one), orgHandling (what happens to the participants' memberships), reactions: the relation changes other countries would have, e.g. {"a":"RUS","b":"DEU","delta":-15}.
-
-OUTPUT: one JSON object, nothing else:
-{"verdict":"notYet","requirements":[{"text":"Hold referendums in Austria approving the union","met":false,"why":"No referendum has been held."}],"consent":[{"country":"AUT","needed":true,"willing":false}],"suggestedPath":"...","plan":{"name":"...","orgHandling":"...","reactions":[]}}`;

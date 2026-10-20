@@ -11,6 +11,7 @@ const ICONS: Record<MapMode, IconName> = {
   relations: "user",
   orgs: "columns",
   wars: "swords",
+  disputes: "globe",
   gdp: "sparkle",
   stability: "flag",
 };

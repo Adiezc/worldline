@@ -47,9 +47,9 @@ uniform float uPoliticalMix;
 uniform float uSepia;
 uniform float uReliefK;
 uniform vec3 uInk;
-uniform usampler2D uMarks; // 1 = province picked for a proposal (64 wide, like uProv)
+uniform usampler2D uMarks; // 1 = picked for a proposal; k >= 2 = claimed by country k - 2 (64 wide, like uProv)
 
-bool marked(uint id) { return texelFetch(uMarks, ivec2(int(id) % 64, int(id) / 64), 0).r != 0u; }
+uint markOf(uint id) { return texelFetch(uMarks, ivec2(int(id) % 64, int(id) / 64), 0).r; }
 
 ivec2 wrapTexel(vec2 p) {
   int w = int(uMapSize.x);
@@ -103,7 +103,16 @@ vec3 landColor(uint id, vec2 world) {
     float s = smoothstep(0.25 - aa, 0.25 + aa, tri);
     c = mix(c, countryColor(info.y), s * 0.85);
   }
-  if (marked(id)) {
+  uint mark = markOf(id);
+  if (mark >= 2u) {
+    // Disputes map mode: the claimant's colour in screen-sized stripes, against the
+    // occupation stripes' direction so the two never read as one another.
+    float period = 9.0 * max(uDpr, 1.0) / uZoom;
+    float aa = 1.0 / (period * uZoom);
+    float d = abs(fract((world.x - world.y) / period) - 0.5);
+    c = mix(c, countryColor(mark - 2u) * 0.92, smoothstep(0.24 - aa, 0.24 + aa, d) * 0.9);
+  }
+  if (mark == 1u) {
     // Picked for a peace deal: a gold wash with a fine cross-hatch (unlike occupation's
     // single-direction stripes in the occupier's colour).
     float period = 7.0 * max(uDpr, 1.0) / uZoom; // ~7 CSS px at any zoom
@@ -405,6 +414,8 @@ uniform vec3 uCore;
 uniform vec3 uDash;
 uniform float uDashK; // 0 = no dashes
 uniform float uSpeed; // dash march, CSS px per second
+uniform float uGaps;  // 1 = dashed line whose gaps are uDash at alpha uDashK (claim lines)
+uniform float uPeriodPx; // dash period in CSS px (0 = scale with the line width)
 in vec2 vLocal;
 in float vAlong;
 flat in float vLen;
@@ -417,10 +428,16 @@ void main() {
     outColor = vec4(uCasing, 1.0);
     return;
   }
-  float period = max(vWidth * 4.0, 16.0 * uDpr);
+  float period = uPeriodPx > 0.0 ? uPeriodPx * uDpr : max(vWidth * 4.0, 16.0 * uDpr);
   float u = fract((vAlong - uTime * uSpeed * uDpr) / period);
   float e = 1.2 * uDpr / period;
   float dash = smoothstep(0.0, e, u) * (1.0 - smoothstep(0.45, 0.45 + e, u));
+  if (uGaps > 0.5) {
+    // Pale, half-clear gaps break up any border underneath, so the line reads as dashed even
+    // where it runs along a drawn frontier.
+    outColor = dash > 0.5 ? vec4(uCore, 1.0) : vec4(uDash * uDashK, uDashK);
+    return;
+  }
   vec3 c = mix(uCore, uDash, dash * uDashK);
   outColor = vec4(c, 1.0);
 }`;

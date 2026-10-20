@@ -350,10 +350,58 @@ const wars = (await Bun.file(join(SCEN, "wars.json")).json()) as War[];
 const sanctions = (await Bun.file(join(SCEN, "sanctions.json")).json()) as Sanction[];
 const relationsRaw = (await Bun.file(join(SCEN, "relations.json")).json()) as [string, string, number][];
 const calendar = ((await Bun.file(join(SCEN, "calendar.json")).json()) as CalendarEntry[]).sort((x, y) => x.date.localeCompare(y.date));
-const formables = (await Bun.file(join(SCEN, "formables.json")).json()) as Formable[];
+// Formables: a fixed identity over the start territory of `countries` plus any named regions.
+type FormableRaw = Omit<Formable, "provinces" | "formers"> & {
+  formers?: string[];
+  /** Named regions of other countries. */
+  regions?: { owner: string; names: string[] }[];
+  /** Whole modern map units held by someone else at the start (e.g. a colony). */
+  units?: string[];
+};
+const formables: Formable[] = ((await Bun.file(join(SCEN, "formables.json")).json()) as FormableRaw[]).map((f) => {
+  for (const t of [...f.countries, ...(f.formers ?? [])]) if (!TAGSET.has(t)) warn(`formable ${f.name}: unknown tag ${t}`);
+  const members = new Set(f.countries.map((t) => index.get(t)).filter((i): i is number => i !== undefined));
+  const provinces = owners.flatMap((o, id) => (id > 0 && members.has(o) ? [id] : []));
+  // Region owners are modern map units here: in 1962 many of them were colonies of someone else.
+  for (const r of f.regions ?? []) {
+    for (const name of r.names) {
+      const p = meta.provinces.find((x) => x.name === name && x.defaultOwner === r.owner);
+      if (p) provinces.push(p.id);
+      else warn(`formable ${f.name}: no region "${name}" in ${r.owner}`);
+    }
+  }
+  for (const u of f.units ?? []) {
+    const ids = meta.provinces.filter((x) => x.defaultOwner === u).map((x) => x.id);
+    if (!ids.length) warn(`formable ${f.name}: no map unit ${u}`);
+    provinces.push(...ids);
+  }
+  const { regions: _regions, units: _units, ...rest } = f;
+  return { ...rest, countries: f.countries.filter((t) => TAGSET.has(t)), formers: (f.formers ?? f.countries).filter((t) => TAGSET.has(t)), provinces: [...new Set(provinces)] };
+});
 const worldBrief = (await Bun.file(join(SCEN, "world-brief.md")).text()).trim();
 const rules = (await Bun.file(join(SCEN, "rules.md")).text()).trim();
 const organizations = orgsRaw;
+
+// ---------- Territorial disputes ----------
+// Regions are named by their modern map unit (`unit`), or "*" for everything `holder` holds in 1962.
+
+const disputesRaw = (await Bun.file(join(SCEN, "disputes.json")).json()) as { claimant: string; holder?: string; unit?: string; regions: string[] | "*"; note: string }[];
+const disputes = disputesRaw.flatMap((d) => {
+  if (!TAGSET.has(d.claimant)) {
+    warn(`dispute ${d.claimant}: unknown claimant`);
+    return [];
+  }
+  const claimant = index.get(d.claimant)!;
+  const provinces = d.regions === "*"
+    ? owners.flatMap((o, id) => (id > 0 && o === index.get(d.holder ?? "") ? [id] : []))
+    : d.regions.flatMap((name) => {
+      const p = meta.provinces.find((x) => x.name === name && x.defaultOwner === d.unit);
+      if (!p) warn(`dispute ${d.claimant}: no region "${name}" in ${d.unit}`);
+      return p ? [p.id] : [];
+    });
+  const claimed = provinces.filter((id) => owners[id] !== claimant);
+  return claimed.length ? [{ claimant: d.claimant, provinces: claimed, note: d.note }] : [];
+});
 
 // ---------- Relations: hand pairs, then bloc defaults for pairs not listed ----------
 
@@ -402,6 +450,7 @@ const seed: ScenarioSeed = {
   worldBrief,
   rules,
   formables,
+  disputes,
 };
 
 const errors: string[] = [];

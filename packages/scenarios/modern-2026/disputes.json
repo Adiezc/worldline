@@ -1,0 +1,19 @@
+[
+  { "claimant": "VEN", "holder": "GUY", "regions": ["Barima-Waini", "Pomeroon-Supenaam", "Cuyuni-Mazaruni", "Potaro-Siparuni", "Upper Takutu-Upper Essequibo"], "note": "Guayana Esequiba: Venezuela rejects the 1899 arbitral award and declared the region a Venezuelan state after its 2023 referendum; the case is before the ICJ." },
+  { "claimant": "CHN", "holder": "TWN", "regions": ["Taitung", "Hualien", "Taichung City"], "note": "Beijing regards Taiwan as a province of China and has not ruled out force to bring it under its control." },
+  { "claimant": "IND", "holder": "PAK", "regions": ["Azad Kashmir", "Northern Areas"], "note": "India claims all of the former princely state of Jammu and Kashmir, including Pakistan-administered Azad Kashmir and Gilgit-Baltistan." },
+  { "claimant": "PAK", "holder": "IND", "regions": ["Jammu and Kashmir", "Ladakh"], "note": "Pakistan disputes Indian rule in Kashmir and calls for a plebiscite under UN resolutions; the Line of Control divides the region." },
+  { "claimant": "CHN", "holder": "IND", "regions": ["Arunachal Pradesh"], "note": "China claims Arunachal Pradesh as \"South Tibet\"; the 1962 war was fought partly over it." },
+  { "claimant": "UKR", "holder": "RUS", "regions": ["Crimea"], "note": "Annexed by Russia in 2014; Ukraine and most UN members regard Crimea as Ukrainian." },
+  { "claimant": "RUS", "holder": "UKR", "regions": ["Donets'k", "Luhans'k", "Zaporizhzhya", "Kherson"], "note": "Russia declared these Ukrainian oblasts annexed in 2022 and claims them in full, including the parts it does not control." },
+  { "claimant": "ARG", "holder": "GBR", "regions": ["Falkland Islands"], "note": "Argentina claims the Islas Malvinas, the cause of the 1982 war; the islanders voted to stay British in 2013." },
+  { "claimant": "ESP", "holder": "GBR", "regions": ["Gibraltar"], "note": "Ceded to Britain in 1713; Spain maintains its claim while negotiating Gibraltar's post-Brexit border regime." },
+  { "claimant": "MUS", "holder": "GBR", "regions": ["British Indian Ocean Territory"], "note": "The Chagos Islands: Britain agreed in 2025 to hand sovereignty to Mauritius while keeping the Diego Garcia base on a long lease." },
+  { "claimant": "SRB", "holder": "KOS", "regions": ["Peć"], "note": "Serbia does not recognise Kosovo's 2008 declaration of independence and regards it as a Serbian province." },
+  { "claimant": "CYP", "holder": "CYN", "regions": ["Northern Cyprus"], "note": "The north has been under Turkish-backed administration since 1974; only Turkey recognises the Turkish Republic of Northern Cyprus." },
+  { "claimant": "GTM", "holder": "BLZ", "regions": ["Toledo", "Cayo"], "note": "Guatemala claims roughly half of Belize; both countries have referred the dispute to the ICJ." },
+  { "claimant": "SOM", "holder": "SOL", "regions": ["Somaliland"], "note": "Somaliland has governed itself since 1991 but Somalia regards it as part of its territory; no UN member recognises it." },
+  { "claimant": "PHL", "holder": "MYS", "regions": ["Sabah"], "note": "A dormant Philippine claim to Sabah, inherited from the Sultanate of Sulu." },
+  { "claimant": "KOR", "holder": "PRK", "regions": "*", "note": "Both Korean states claim the whole peninsula; the 1953 armistice line divides them." },
+  { "claimant": "PRK", "holder": "KOR", "regions": "*", "note": "Both Korean states claim the whole peninsula; the 1953 armistice line divides them." }
+]

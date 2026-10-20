@@ -4,7 +4,7 @@
 
 import type { ServerWebSocket } from "bun";
 import {
-  DEFAULT_SETTINGS, countryByTag, sanitizeOperation, type ClientMessage, type GameSettings, type GameState, type GameView,
+  DEFAULT_SETTINGS, countryByTag, pruneClaims, sanitizeOperation, type ClientMessage, type GameSettings, type GameState, type GameView,
   type MapIndex, type ScenarioSeed, type ServerMessage,
 } from "@worldline/shared";
 import { engine, jumpDays, turnEvents } from "./engine/index.ts";
@@ -106,7 +106,8 @@ export class Room {
       eventCount: events.length,
       jumpVotes,
       you: { playerId, country: tag, isHost: !!me?.isHost },
-      formables: seed.formables,
+      // Only the nations this player's country could proclaim.
+      formables: tag ? seed.formables.filter((f) => f.formers.includes(tag)) : [],
       calendar: seed.calendar.filter((e) => e.date >= s.date).slice(0, 24),
       theme: seed.theme ?? "modern",
       snapshots: me?.isHost ? listSnapshots(s.id) : [],
@@ -221,7 +222,7 @@ export class Room {
    * turn commits a whole new state and would silently drop anything changed meanwhile. */
   private static MUTATING = new Set<ClientMessage["t"]>([
     "claim", "settings", "start", "orders", "jump", "chat.open", "chat.send", "proposal.respond",
-    "org.propose", "org.vote", "formation.assess", "formation.recheck", "formation.consent", "formation.proclaim", "formation.abandon",
+    "org.propose", "org.vote",
     "rewind", "intervene",
   ]);
   private lock: Promise<unknown> = Promise.resolve();
@@ -295,7 +296,13 @@ export class Room {
           .map((o) => {
             // A battle plan that doesn't survive the checks is dropped; the order text stays.
             const operation = sanitizeOperation(o.operation, s, this.deps.map, myTag);
-            return { id: o.id.slice(0, 40), playerId: me.id, country: myTag, text: o.text.slice(0, 1200), ...(operation ? { operation } : {}) };
+            // A proclamation names a formable this country may form; anything else is dropped.
+            const formable = typeof o.formable === "string" && this.deps.seed(s.scenarioId).formables.some((f) => f.id === o.formable && f.formers.includes(myTag))
+              ? o.formable : undefined;
+            return {
+              id: o.id.slice(0, 40), playerId: me.id, country: myTag, text: o.text.slice(0, 1200),
+              ...(operation ? { operation } : {}), ...(formable ? { formable } : {}),
+            };
           });
         this.scheduleSave();
         return;
@@ -391,52 +398,6 @@ export class Room {
         return this.changed();
       }
 
-      case "formation.assess":
-      case "formation.recheck": {
-        if (!myTag) return fail("Pick a country first.");
-        try {
-          const goal = await engine.assessFormation(
-            s, deps,
-            msg.t === "formation.assess" ? { founder: myTag, request: msg.request } : { formationId: msg.formationId },
-          );
-          this.send(ws, { t: "ai", reqId: msg.reqId, kind: "formation", ok: true, formationId: goal.id });
-        } catch (e) {
-          this.log("error", `formation assessment for ${myTag} failed: ${errorText(e)}`);
-          this.send(ws, { t: "ai", reqId: msg.reqId, kind: "formation", ok: false, error: errorText(e) });
-        }
-        return this.changed();
-      }
-
-      case "formation.consent": {
-        if (!myTag) return;
-        const r = engine.consentFormation(s, { formationId: msg.formationId, country: myTag, accept: msg.accept });
-        if (!r.ok) fail(r.message);
-        return this.changed();
-      }
-
-      case "formation.proclaim": {
-        if (!myTag) return;
-        const f = s.formations.find((x) => x.id === msg.formationId);
-        if (!f || f.founder !== myTag) return fail("Only the founder can proclaim the nation.");
-        try {
-          const r = await engine.proclaimFormation(s, deps, { formationId: msg.formationId });
-          if (!r.ok) fail(`Not yet: ${r.problems.join("; ")}`);
-          else if (r.event) {
-            this.broadcast({ t: "toast", level: "info", text: r.event.headline });
-            this.broadcast({ t: "turn", result: { turn: s.turn, fromDate: s.date, toDate: s.date, events: [r.event], verdicts: [], votes: [] } });
-          }
-        } catch (e) {
-          fail(errorText(e));
-        }
-        return this.changed();
-      }
-
-      case "formation.abandon": {
-        const f = s.formations.find((x) => x.id === msg.formationId);
-        if (f?.founder === myTag) engine.abandonFormation(s, { formationId: msg.formationId });
-        return this.changed();
-      }
-
       case "rewind": {
         if (!me.isHost) return fail("Only the host can rewind time.");
         if (s.phase !== "orders") return fail("Time can only be rewound between turns.");
@@ -483,6 +444,8 @@ export class Room {
     next.jumpVotes = {};
     // Ids stay unique across branches, so clients never confuse old and new events.
     next.seq = Math.max(next.seq, s.seq);
+    // Snapshots from before disputes existed get the scenario's claims.
+    if (!next.claims) next.claims = backfillClaims(next, this.deps.seed(next.scenarioId));
     delete next.turnDeadline;
     this.state = next;
     this.snapEvents = undefined;
@@ -600,10 +563,19 @@ export class RoomManager {
     // A server restart mid-resolution leaves the game in "resolving"; recover to orders.
     if (state.phase === "resolving") state.phase = "orders";
     for (const p of state.players) p.connected = false;
+    // Games saved before disputes existed get the scenario's claims (minus land already settled).
+    if (!state.claims) state.claims = backfillClaims(state, this.deps.seed(state.scenarioId));
     room = new Room(state, this.deps);
     this.rooms.set(id, room);
     return room;
   }
+}
+
+function backfillClaims(state: GameState, seed: ScenarioSeed) {
+  const claims = (seed.disputes ?? []).map((d, i) => ({ id: `cl${i + 1}`, claimant: d.claimant, provinces: [...d.provinces], note: d.note, since: seed.date }));
+  const tmp = { ...state, claims };
+  pruneClaims(tmp);
+  return tmp.claims;
 }
 
 function sanitizeSettings(s: GameSettings): GameSettings {

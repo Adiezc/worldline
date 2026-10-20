@@ -97,7 +97,6 @@ export function intervene(state: GameState, deps: EngineDeps, opts: { snapshot: 
 
   // Not turn-scoped: carried over from the present.
   work.chats = structuredClone(state.chats);
-  work.formations = structuredClone(state.formations);
   work.settings = structuredClone(state.settings);
   work.usage = structuredClone(state.usage);
   work.rotation = state.rotation;

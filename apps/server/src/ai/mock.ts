@@ -196,27 +196,6 @@ function chat(c: { speaker: string; speakerName: string; player: string; playerN
   return out;
 }
 
-function assessor(c: { founder: string; name: string; countries: string[]; humans: string[]; founderStability: number; relations: Record<string, number> }) {
-  const humans = new Set(c.humans ?? []);
-  const requirements = (c.countries ?? []).map((t) => {
-    const rel = c.relations?.[t] ?? 0;
-    return { text: `Reach relations above 50 with ${t}`, met: rel > 50, why: `Relations are currently ${rel}.` };
-  });
-  requirements.push({
-    text: "Keep domestic stability above 50",
-    met: c.founderStability > 50,
-    why: `Stability is ${Math.round(c.founderStability)}.`,
-  });
-  const allMet = requirements.every((r) => r.met);
-  return {
-    verdict: allMet ? "achievable" : "notYet",
-    requirements,
-    consent: (c.countries ?? []).filter((t) => !humans.has(t)).map((t) => ({ country: t, needed: true, willing: (c.relations?.[t] ?? 0) > 50 })),
-    suggestedPath: allMet ? "All conditions are in place; the union can be proclaimed." : "Build trust with each partner through treaties and summits, and keep the home front stable.",
-    plan: { name: c.name, orgHandling: "The new state inherits the memberships of its founders.", reactions: [] },
-  };
-}
-
 function polishText(text: string) {
   const t = (text ?? "").replace(/\s+/g, " ").trim();
   if (!t) return "Maintain current policy.";
@@ -247,7 +226,6 @@ function respond(req: AiRequest, rng: Rng): unknown {
       return { votes: rs.flatMap((r) => r.voters.map((v) => ({ resolutionId: r.id, country: v.tag, vote: v.vote, reason: "Consistent with its national interest." }))) };
     }
     case "chat": return chat(ctx as never);
-    case "assessor": return assessor(ctx as never);
     case "polish": return { text: polishText(String(ctx.text ?? "")) };
     case "brainstorm": return brainstorm(ctx as never);
     case "consolidation": {

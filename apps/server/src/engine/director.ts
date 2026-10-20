@@ -7,7 +7,7 @@ import {
 } from "@worldline/shared";
 import type { EngineDeps } from "./api.ts";
 import {
-  calendarBlock, calendarIn, countriesBlock, diplomacyBlock, memoryBlock, nameOf, orgsBlock, recentEventsBlock, relationsBlock,
+  calendarBlock, calendarIn, countriesBlock, diplomacyBlock, disputesBlock, memoryBlock, nameOf, orgsBlock, recentEventsBlock, relationsBlock,
   sanctionsBlock, treatiesBlock, warsBlock, windowEnd, windowLine,
 } from "./context.ts";
 import { makeEvent, spreadDate } from "./game.ts";
@@ -65,6 +65,7 @@ export async function planDirector(state: GameState, deps: EngineDeps, opts: { d
     countriesBlock(state, acting, [...humans]).replace("COUNTRIES IN FOCUS:", "ACTING COUNTRIES:"),
     relationsBlock(state, scope),
     warsBlock(state, deps.map),
+    disputesBlock(state, deps.map, scope),
     treatiesBlock(state, new Set(acting), 30),
     sanctionsBlock(state, 15),
     orgsBlock(state, { maxMembers: 12 }),

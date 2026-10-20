@@ -2,13 +2,14 @@
 import type { Country, GameView } from "@worldline/shared";
 import { relationBetween } from "./selectors.ts";
 
-export type MapMode = "political" | "relations" | "orgs" | "wars" | "gdp" | "stability";
+export type MapMode = "political" | "relations" | "orgs" | "wars" | "disputes" | "gdp" | "stability";
 
 export const MAP_MODES: { id: MapMode; label: string }[] = [
   { id: "political", label: "Political" },
   { id: "relations", label: "Relations" },
   { id: "orgs", label: "Organisations" },
   { id: "wars", label: "Wars" },
+  { id: "disputes", label: "Disputes" },
   { id: "gdp", label: "GDP" },
   { id: "stability", label: "Stability" },
 ];
@@ -54,7 +55,9 @@ export interface ModeContext {
   orgId: string | null;
 }
 
-export function computePalette(mode: MapMode, view: Pick<GameView, "countries" | "relations" | "wars" | "organizations">, ctx: ModeContext): string[] {
+export function computePalette(
+  mode: MapMode, view: Pick<GameView, "countries" | "relations" | "wars" | "organizations"> & Partial<Pick<GameView, "claims" | "owners">>, ctx: ModeContext,
+): string[] {
   const countries = view.countries as Country[];
   const each = (fn: (c: Country) => string) => countries.map((c) => (c.alive === false ? MODE_COLORS.neutral : fn(c)));
 
@@ -96,6 +99,20 @@ export function computePalette(mode: MapMode, view: Pick<GameView, "countries" |
       );
     }
 
+    case "disputes": {
+      // Parties to a dispute keep their colours (claimed land gets the claimant's stripes);
+      // everyone else fades back.
+      const involved = new Set<string>();
+      for (const c of view.claims ?? []) {
+        involved.add(c.claimant);
+        for (const id of c.provinces) {
+          const holder = view.owners ? countries[view.owners[id]]?.tag : undefined;
+          if (holder) involved.add(holder);
+        }
+      }
+      return each((c) => (involved.has(c.tag) ? mix(c.color, MODE_COLORS.neutral, 0.12) : mix(c.color, MODE_COLORS.neutral, 0.78)));
+    }
+
     case "gdp": {
       const vals = countries.filter((c) => c.alive !== false && c.gdp > 0).map((c) => Math.log(c.gdp));
       const lo = Math.min(...vals), hi = Math.max(...vals);
@@ -123,6 +140,11 @@ export function legendFor(mode: MapMode): { color: string; label: string }[] | {
       return [
         { color: MODE_COLORS.bad, label: "Enemy" },
         { color: MODE_COLORS.ally, label: "Co-belligerent" },
+      ];
+    case "disputes":
+      return [
+        { color: "#8a7450", label: "Stripes: claimed by that colour's country" },
+        { color: "#33302b", label: "Dashed: disputed line" },
       ];
     case "gdp":
       return { ramp: GDP_RAMP, lo: "Small", hi: "Large (log)" };

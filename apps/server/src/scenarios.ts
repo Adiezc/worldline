@@ -5,7 +5,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import {
-  relKey,
+  deriveFlag, parseFlag, relKey,
   type CalendarEntry, type Country, type CustomScenarioRequest, type EraTheme, type Formable, type Organization, type OrgBody,
   type ResolutionType, type Sanction, type ScenarioInfo, type ScenarioSeed, type Treaty, type War,
 } from "@worldline/shared";
@@ -283,10 +283,19 @@ export function validateScenario(body: unknown, provinceCount: number): Scenario
     }];
   }).sort((a, b2) => a.date.localeCompare(b2.date)).slice(0, 300);
 
-  const formables: Formable[] = arr(b.formables).filter(isObj).flatMap((f) => {
+  // Formable nations: a fixed identity over a territory (given regions, else the listed countries' land).
+  const formables: Formable[] = arr(b.formables).filter(isObj).flatMap((f, i) => {
     const fname = str(f.name, 80);
     const fc = validList(f.countries);
-    return fname && fc.length ? [{ name: fname, concept: str(f.concept, 400), countries: fc }] : [];
+    if (!fname || !fc.length) return [];
+    const members = new Set(fc.map((t) => countries.findIndex((c) => c.tag === t)));
+    const given = arr(f.provinces).map(Number).filter((id) => Number.isInteger(id) && id >= 1 && id < owners.length);
+    const provinces = given.length ? [...new Set(given)] : owners.flatMap((o, id) => (id > 0 && members.has(o) ? [id] : []));
+    const formers = validList(f.formers);
+    const color = typeof f.color === "string" && COLOR.test(f.color) ? f.color.toLowerCase() : countries.find((c) => c.tag === fc[0])?.color ?? "#888888";
+    const flag = typeof f.flag === "string" && parseFlag(f.flag) ? f.flag : deriveFlag(color, fname);
+    const id = (str(f.id, 40) || fname).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || `formable-${i + 1}`;
+    return provinces.length ? [{ id, name: fname, concept: str(f.concept, 400), countries: fc, provinces, formers: formers.length ? formers : fc, color, flag }] : [];
   }).slice(0, 50);
 
   return {

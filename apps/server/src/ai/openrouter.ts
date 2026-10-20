@@ -242,7 +242,7 @@ export class OpenRouterProvider implements AiProvider {
 }
 
 /** Free models generate slowly; the two big turn calls write thousands of tokens. */
-const TIMEOUT_MS: Partial<Record<AiRequest["kind"], number>> = { resolver: 240_000, director: 180_000, assessor: 150_000, votes: 120_000 };
+const TIMEOUT_MS: Partial<Record<AiRequest["kind"], number>> = { resolver: 240_000, director: 180_000, votes: 120_000 };
 
 /** Per-attempt limit; thinking models get extra time. A timeout moves on to the next models. */
 function timeoutFor(kind: AiRequest["kind"], effort: string) {

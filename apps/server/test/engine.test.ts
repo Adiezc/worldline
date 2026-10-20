@@ -197,46 +197,33 @@ for (const [label, seed] of seeds) {
       expect(engine.castVote(state, { resolutionId: r.id, country: "USA", vote: "no" }).ok).toBe(false);
     });
 
-    test("formation: assess, consent and proclaim merges territory", async () => {
+    test("formation: an order proclaims the nation once its whole territory is held", async () => {
       const state = newGame(seed, [["p1", "DEU"]]);
-      state.relations[relKey("DEU", "AUT")] = 80;
-      countryByTag(state, "DEU")!.stability = 62;
-      const deps = depsFor(seed);
-      const goal = await engine.assessFormation(state, deps, {
-        founder: "DEU",
-        request: { name: "Danubian Union", concept: "A federal union of German-speaking states.", countries: ["AUT"], color: "#445566", government: "Federal republic" },
-      });
-      expect(goal.verdict).toBe("achievable");
-      expect(goal.requirements.every((r) => r.met)).toBe(true);
-      expect(goal.consent).toEqual([{ country: "AUT", needed: true, willing: true, human: false }]);
-      const again = await engine.assessFormation(state, deps, { formationId: goal.id });
-      expect(again).toBe(goal);
-
       const aut = countryIndex(state, "AUT"), deu = countryIndex(state, "DEU");
-      const autRegions = state.owners.map((o, id) => (o === aut ? id : 0)).filter(Boolean);
-      const res = await engine.proclaimFormation(state, deps, { formationId: goal.id });
-      expect(res.problems).toEqual([]);
-      expect(res.ok).toBe(true);
-      expect(res.event?.mapDiff?.length).toBeGreaterThan(0);
+      const autRegions = state.owners.flatMap((o, id) => (o === aut ? [id] : []));
+      const deuRegions = state.owners.flatMap((o, id) => (o === deu ? [id] : []));
+      const formable = {
+        id: "danubia", name: "Danubian Union", concept: "A union of the German-speaking lands.", countries: ["DEU", "AUT"],
+        provinces: [...deuRegions, ...autRegions], formers: ["DEU"], color: "#445566", flag: "gen:horizontal:#000000,#dd0000,#ffcc00",
+      };
+      const deps = depsFor({ ...seed, formables: [formable] });
+      const order = { id: "o1", playerId: "p1", country: "DEU", text: "Proclaim the Danubian Union.", formable: "danubia" };
+
+      // Without control of Austria the proclamation fails, and nothing changes.
+      state.orders = { p1: [order] };
+      let res = await engine.runTurn(state, deps);
+      expect(res.verdicts.find((v) => v.orderId === "o1")?.outcome).toBe("fail");
+      expect(countryByTag(state, "DEU")!.name).not.toBe("Danubian Union");
+
+      for (const id of autRegions) state.controllers[id] = deu;
+      state.orders = { p1: [order] };
+      res = await engine.runTurn(state, deps);
+      expect(res.verdicts.find((v) => v.orderId === "o1")?.outcome).toBe("success");
+      expect(res.events.some((e) => e.headline.includes("Danubian Union") && (e.mapDiff?.length ?? 0) > 0)).toBe(true);
       expect(autRegions.every((id) => state.owners[id] === deu)).toBe(true);
       expect(countryByTag(state, "AUT")!.alive).toBe(false);
-      expect(countryByTag(state, "DEU")!.name).toBe("Danubian Union");
-      expect(state.formations[0].status).toBe("proclaimed");
-    });
-
-    test("formation with unmet requirements cannot be proclaimed", async () => {
-      const state = newGame(seed, [["p1", "FRA"]]);
-      state.relations[relKey("FRA", "BEL")] = 0;
-      const deps = depsFor(seed);
-      const goal = await engine.assessFormation(state, deps, {
-        founder: "FRA", request: { name: "Francia", concept: "Union", countries: ["BEL"], color: "#112233", government: "Republic" },
-      });
-      expect(goal.verdict).toBe("notYet");
-      const res = await engine.proclaimFormation(state, deps, { formationId: goal.id });
-      expect(res.ok).toBe(false);
-      expect(res.problems.length).toBeGreaterThan(0);
-      engine.abandonFormation(state, { formationId: goal.id });
-      expect(state.formations[0].status).toBe("abandoned");
+      expect(countryByTag(state, "DEU")).toMatchObject({ name: "Danubian Union", color: "#445566" });
+      expect(state.formed).toEqual(["danubia"]);
     });
 
     test("advisor, polish and brainstorm return text", async () => {

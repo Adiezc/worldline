@@ -15,9 +15,11 @@ const PALETTE_W = 1024;
 const NONE = 0xffff;
 const MESH_MAGIC = 0x314d4c57; // "WLM1"
 /** Front lines: maroon casing, red core, slowly marching lighter dashes. */
-const FRONT_STYLE = { casing: [0.27, 0.04, 0.05], core: [0.78, 0.13, 0.11], dash: [0.93, 0.36, 0.26], dashK: 0.55, speed: 8, width: 1 };
+const FRONT_STYLE = { casing: [0.27, 0.04, 0.05], core: [0.78, 0.13, 0.11], dash: [0.93, 0.36, 0.26], dashK: 0.55, speed: 8, width: 1, casingPass: true, gaps: false, period: 0 };
 /** Hold lines: navy casing, steel-blue core with still, pale dashes (dug in, not moving). */
-const HOLD_STYLE = { casing: [0.05, 0.11, 0.24], core: [0.26, 0.5, 0.86], dash: [0.78, 0.89, 1], dashK: 0.6, speed: 0, width: 0.9 };
+const HOLD_STYLE = { casing: [0.05, 0.11, 0.24], core: [0.26, 0.5, 0.86], dash: [0.78, 0.89, 1], dashK: 0.6, speed: 0, width: 0.9, casingPass: true, gaps: false, period: 0 };
+/** Claim lines: thin dark dashes with pale gaps, under fronts and hold lines. */
+const CLAIM_STYLE = { casing: [0, 0, 0], core: [0.2, 0.17, 0.15], dash: [0.93, 0.9, 0.82], dashK: 0.75, speed: 0, width: 0.75, casingPass: false, gaps: true, period: 9 };
 /** Device px per map px from which the vector mesh replaces the raster land fill. */
 const MESH_ZOOM = 1.25;
 
@@ -39,6 +41,9 @@ export class MapRenderer {
   private holdVao!: WebGLVertexArrayObject;
   private holdBuf!: WebGLBuffer;
   private holdCount = 0;
+  private claimVao!: WebGLVertexArrayObject;
+  private claimBuf!: WebGLBuffer;
+  private claimCount = 0;
   private meshProg!: WebGLProgram;
   private meshVao: WebGLVertexArrayObject | null = null;
   private meshIndexCount = 0;
@@ -52,7 +57,10 @@ export class MapRenderer {
   private provRows = 0;
   private paletteTex!: WebGLTexture;
   private marksTex!: WebGLTexture;
-  private marksData!: Uint8Array;
+  private marksData!: Uint16Array;
+  /** Picked regions (gold) and claimed regions (claimant index + 2), merged into marksData. */
+  private picked = new Set<number>();
+  private claimMarks: Map<number, number> | null = null;
   private idTex!: WebGLTexture;
   private coastTex!: WebGLTexture;
   private reliefTex!: WebGLTexture;
@@ -102,8 +110,8 @@ export class MapRenderer {
     this.provData = new Uint16Array(PROV_TEX_W * this.provRows * 2).fill(NONE);
     this.provTex = texture(gl, gl.RG16UI, PROV_TEX_W, this.provRows, gl.RG_INTEGER, gl.UNSIGNED_SHORT, this.provData, gl.NEAREST);
     this.paletteTex = texture(gl, gl.RGBA8, PALETTE_W, 1, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(PALETTE_W * 4), gl.NEAREST);
-    this.marksData = new Uint8Array(PROV_TEX_W * this.provRows);
-    this.marksTex = texture(gl, gl.R8UI, PROV_TEX_W, this.provRows, gl.RED_INTEGER, gl.UNSIGNED_BYTE, this.marksData, gl.NEAREST);
+    this.marksData = new Uint16Array(PROV_TEX_W * this.provRows);
+    this.marksTex = texture(gl, gl.R16UI, PROV_TEX_W, this.provRows, gl.RED_INTEGER, gl.UNSIGNED_SHORT, this.marksData, gl.NEAREST);
 
     this.borders = opts.borders;
     this.arcsByPair = null;
@@ -148,6 +156,7 @@ export class MapRenderer {
   private buildFrontVao() {
     [this.frontVao, this.frontBuf] = this.segmentVao();
     [this.holdVao, this.holdBuf] = this.segmentVao();
+    [this.claimVao, this.claimBuf] = this.segmentVao();
   }
 
   /** VAO for instanced line segments (A, B, distance along the arc) drawn with the front program. */
@@ -178,6 +187,11 @@ export class MapRenderer {
   /** Front lines along the border arcs between these province pairs (null/empty = none). */
   setFronts(pairs: ArrayLike<readonly [number, number]> | null) {
     this.frontCount = this.uploadSegments(this.frontBuf, pairs);
+  }
+
+  /** Disputed lines (dashed, like a disputed border on a road map) between these province pairs. */
+  setClaimLines(pairs: ArrayLike<readonly [number, number]> | null) {
+    this.claimCount = this.uploadSegments(this.claimBuf, pairs);
   }
 
   /** Hold lines (blue) along the border arcs between these province pairs. */
@@ -308,11 +322,24 @@ export class MapRenderer {
 
   /** Provinces drawn with a gold hatch (picked for a proposal). */
   setMarked(ids: ArrayLike<number>) {
-    this.marksData.fill(0);
-    for (let i = 0; i < ids.length; i++) if (ids[i] > 0 && ids[i] < this.marksData.length) this.marksData[ids[i]] = 1;
+    this.picked = new Set(Array.from(ids));
+    this.uploadMarks();
+  }
+
+  /** Disputes map mode: province id → claimant country index (null clears). */
+  setClaimMarks(marks: Map<number, number> | null) {
+    this.claimMarks = marks;
+    this.uploadMarks();
+  }
+
+  private uploadMarks() {
+    const data = this.marksData;
+    data.fill(0);
+    for (const [id, owner] of this.claimMarks ?? []) if (id > 0 && id < data.length && owner >= 0) data[id] = owner + 2;
+    for (const id of this.picked) if (id > 0 && id < data.length) data[id] = 1;
     const gl = this.gl;
     gl.bindTexture(gl.TEXTURE_2D, this.marksTex);
-    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, PROV_TEX_W, this.provRows, gl.RED_INTEGER, gl.UNSIGNED_BYTE, this.marksData);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, PROV_TEX_W, this.provRows, gl.RED_INTEGER, gl.UNSIGNED_SHORT, data);
   }
 
   resize(cssW: number, cssH: number, dpr: number) {
@@ -370,6 +397,7 @@ export class MapRenderer {
     // Front lines above the borders, hold lines above those: each casing first, then the core
     // over every joint.
     const lineSets = [
+      { vao: this.claimVao, count: this.claimCount, style: CLAIM_STYLE },
       { vao: this.frontVao, count: this.frontCount, style: FRONT_STYLE },
       { vao: this.holdVao, count: this.holdCount, style: HOLD_STYLE },
     ];
@@ -385,8 +413,10 @@ export class MapRenderer {
       gl.uniform1f(this.loc(p, "uDashK"), set.style.dashK);
       gl.uniform1f(this.loc(p, "uSpeed"), set.style.speed);
       gl.uniform1f(this.loc(p, "uWidthK"), set.style.width);
+      gl.uniform1f(this.loc(p, "uGaps"), set.style.gaps ? 1 : 0);
+      gl.uniform1f(this.loc(p, "uPeriodPx"), set.style.period);
       gl.bindVertexArray(set.vao);
-      for (const pass of [0, 1]) {
+      for (const pass of set.style.casingPass ? [0, 1] : [1]) {
         gl.uniform1i(this.loc(p, "uPass"), pass);
         for (const off of offsets) {
           gl.uniform1f(this.loc(p, "uOffsetX"), off);

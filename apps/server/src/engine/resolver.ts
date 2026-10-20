@@ -28,7 +28,9 @@ export async function runResolver(
   deps: EngineDeps,
   opts: { days: number; orders: Order[]; intents: NpcIntent[]; voteFacts: string[]; tiers: Tiers; ctx: TurnContext },
 ): Promise<ResolverResult> {
-  const { days, orders } = opts;
+  const { days } = opts;
+  // Proclamations of formable nations are settled by the rules after the resolver runs.
+  const orders = opts.orders.filter((o) => !o.formable);
   const world = worldContext(state, deps, days, opts.tiers);
   const humans = humanTags(state);
   const calls = state.wars.flatMap((w) => (w.calls ?? []).map((c) => ({ warId: w.id, tag: c.tag, via: c.via })));

@@ -21,11 +21,6 @@ import { PlaybackCard } from "../turn/PlaybackCard.tsx";
 /** In-game HUD: left rail + sidebar, right country panel, bottom feed, chats and overlays. */
 export function Hud() {
   const tab = useGame((s) => s.leftTab);
-  const pendingConsents = useGame((s) => {
-    const me = s.view?.you.country;
-    if (!me || !s.view) return 0;
-    return s.view.formations.filter((f) => f.status === "active" && f.founder !== me && f.consent.some((c) => c.country === me && c.human && c.accepted === undefined)).length;
-  });
   const pendingVotes = useGame((s) => {
     const me = s.view?.you.country;
     if (!me || !s.view) return 0;
@@ -59,7 +54,7 @@ export function Hud() {
         <IconButton icon="scroll" label={`Orders${orderCount ? ` (${orderCount})` : ""}`} active={tab === "orders"} onClick={() => toggleLeftTab("orders")} />
         <IconButton icon="quill" label="Advisor" active={tab === "advisor"} onClick={() => toggleLeftTab("advisor")} />
         <IconButton icon="columns" label="Organisations" active={tab === "orgs"} onClick={() => toggleLeftTab("orgs")} badge={pendingVotes} />
-        <IconButton icon="crown" label="Form a nation" active={tab === "formation"} onClick={() => toggleLeftTab("formation")} badge={pendingConsents} />
+        <IconButton icon="crown" label="Form a nation" active={tab === "formation"} onClick={() => toggleLeftTab("formation")} />
         {isHost && <IconButton icon="history" label={`History${snapshotCount ? ` (${snapshotCount} saved turns)` : ""} — rewind`} active={tab === "history"} onClick={() => toggleLeftTab("history")} />}
         <div className="gilt-rule my-1 w-7" />
         <IconButton icon="chat" label="Diplomatic channels" active={chatList} onClick={() => setChatList(!chatList)} badge={awaitingReplies + unreadChats} />

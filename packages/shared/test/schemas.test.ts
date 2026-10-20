@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
-  AssessorOutputSchema, ChatOutputSchema, DirectorOutputSchema, EffectSchema, ResolverOutputSchema, VotesOutputSchema, jsonSchemaOf, salvageModelOutput,
+  ChatOutputSchema, DirectorOutputSchema, EffectSchema, ResolverOutputSchema, VotesOutputSchema, jsonSchemaOf, salvageModelOutput,
 } from "../src/game/schemas.ts";
 import type { Effect } from "../src/game/state.ts";
 
@@ -18,7 +18,7 @@ const resolverSample = {
         { type: "statDelta", country: "UKR", stat: "stability", delta: "-4.5" },
         { type: "relationDelta", a: "RUS", b: "UKR", delta: -10 },
         { type: "spawnCountry", name: "Free Kharkiv", government: "Council", leader: "X", provinces: [2125], color: "#AABBCC" },
-        { type: "updateFormation", country: "POL", index: "0", met: true },
+        { type: "addClaim", claimant: "POL", provinces: ["12"], note: "historic" },
       ],
     },
     { date: "2026-02-03", headline: "Quiet week" },
@@ -31,7 +31,7 @@ describe("ResolverOutputSchema", () => {
     const fx = r.events[0].effects;
     expect(fx[0]).toEqual({ type: "setController", provinces: [2125, 2122], controller: "RUS" });
     expect(fx[1]).toMatchObject({ delta: -4.5 });
-    expect(fx[4]).toMatchObject({ index: 0 });
+    expect(fx[4]).toMatchObject({ provinces: [12] });
     expect(r.events[1]).toEqual({ date: "2026-02-03", headline: "Quiet week", body: "", countries: [], causes: [], effects: [] });
     expect(ResolverOutputSchema.parse({})).toEqual({ orderVerdicts: [], events: [] });
   });
@@ -59,7 +59,7 @@ describe("ResolverOutputSchema", () => {
       transferProvinces: true, setController: true, statDelta: true, relationDelta: true, createTreaty: true, endTreaty: true,
       declareWar: true, joinWar: true, makePeace: true, spawnCountry: true, annexCountry: true, changeLeader: true, joinOrg: true,
       leaveOrg: true, createOrg: true, proposeResolution: true, applyToOrg: true, imposeSanctions: true, liftSanctions: true,
-      updateAgenda: true, updateFormation: true,
+      updateAgenda: true, addClaim: true, dropClaim: true,
     };
     const types = EffectSchema.options.map((o) => o.shape.type.value as string).sort();
     expect(types).toEqual(Object.keys(ALL).sort());
@@ -87,26 +87,6 @@ describe("DirectorOutputSchema", () => {
   });
 });
 
-describe("AssessorOutputSchema", () => {
-  test("accepts well-formed output", () => {
-    const r = AssessorOutputSchema.parse({
-      verdict: "notYet",
-      requirements: [{ text: "Union treaty", met: false, why: "Not negotiated" }],
-      consent: [{ country: "LTU", needed: true, willing: false }],
-      suggestedPath: "Negotiate first",
-      plan: { name: "Commonwealth", orgHandling: "Single EU seat", reactions: [{ a: "POL", b: "RUS", delta: "-15" }] },
-    });
-    expect(r.plan!.reactions[0].delta).toBe(-15);
-    expect(AssessorOutputSchema.parse({ verdict: "unrealistic", requirements: [{ text: "x", met: false, why: "" }], suggestedPath: "" }).consent).toEqual([]);
-  });
-
-  test("rejects malformed output", () => {
-    expect(AssessorOutputSchema.safeParse({ verdict: "maybe", requirements: [{ text: "", met: true, why: "" }], suggestedPath: "" }).success).toBe(false);
-    expect(AssessorOutputSchema.safeParse({ verdict: "achievable", requirements: [], suggestedPath: "" }).success).toBe(false);
-    expect(AssessorOutputSchema.safeParse({ verdict: "achievable", requirements: [{ text: "", met: "yes", why: "" }], suggestedPath: "" }).success).toBe(false);
-  });
-});
-
 describe("other schemas", () => {
   test("chat and votes", () => {
     expect(ChatOutputSchema.parse({ speaker: "FRA", reply: "Bonjour", relationDelta: "3" })).toMatchObject({ tone: "neutral", relationDelta: 3 });
@@ -118,7 +98,7 @@ describe("other schemas", () => {
 
 describe("jsonSchemaOf", () => {
   test("returns a JSON schema object for each LLM output", () => {
-    for (const schema of [ResolverOutputSchema, DirectorOutputSchema, AssessorOutputSchema, ChatOutputSchema, VotesOutputSchema]) {
+    for (const schema of [ResolverOutputSchema, DirectorOutputSchema, ChatOutputSchema, VotesOutputSchema]) {
       const js = jsonSchemaOf(schema) as Record<string, unknown>;
       expect(typeof js).toBe("object");
       expect(js.type).toBe("object");

@@ -8,6 +8,7 @@ import {
 } from "@worldline/shared";
 import type { EngineDeps } from "./api.ts";
 import { consolidate, needsConsolidation } from "./consolidate.ts";
+import { proclaimFormables } from "./formation.ts";
 import { planDirector, runDirector, type NpcIntent } from "./director.ts";
 import { makeEvent } from "./game.ts";
 import { runResolver } from "./resolver.ts";
@@ -71,6 +72,13 @@ async function resolveTurn(state: GameState, deps: EngineDeps): Promise<TurnResu
   progress("applying");
   const toDate = days > 0 ? addDays(fromDate, days) : res.end;
   for (const e of state.events.slice(firstEvent)) if (e.date > toDate) e.date = toDate;
+  // Proclamations are decided by the rules once the period's fighting and treaties are done.
+  const formed = proclaimFormables(state, deps, orders, toDate);
+  res.verdicts = [...res.verdicts.filter((v) => !formed.verdicts.some((f) => f.orderId === v.orderId)), ...formed.verdicts];
+  for (const v of formed.verdicts) {
+    const o = orders.find((x) => x.id === v.orderId);
+    if (o) Object.assign(v, { country: o.country, text: o.text });
+  }
   simTick(state, Math.max(1, daysBetween(fromDate, toDate)));
   for (const r of expireCalls(state)) {
     state.events.push(makeEvent(state, {

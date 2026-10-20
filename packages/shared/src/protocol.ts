@@ -119,25 +119,13 @@ export interface TurnResult {
 
 export type ProposalDraft = Pick<Proposal, "kind" | "treatyType" | "members" | "terms" | "peace" | "cessions">;
 
-export interface FormationRequest {
-  name: string;
-  concept: string;
-  /** Countries whose territory would join (excluding the founder). */
-  countries: string[];
-  /** Optional explicit regions; defaults to all regions of founder + countries. */
-  provinces?: number[];
-  color: string;
-  /** Optional generated flag for the new nation: "gen:<pattern>:<c1>,<c2>[,<c3>]". */
-  flag?: string;
-  government: string;
-}
 
 export type ClientMessage =
   | { t: "join"; gameId: string; playerId?: string; name: string; token?: string }
   | { t: "claim"; tag: string | null }
   | { t: "settings"; settings: Partial<GameSettings> }
   | { t: "start" }
-  | { t: "orders"; orders: { id: string; text: string; operation?: Operation }[] }
+  | { t: "orders"; orders: { id: string; text: string; operation?: Operation; formable?: string }[] }
   | { t: "ready"; ready: boolean }
   | { t: "jump"; days: number }
   | { t: "ai"; reqId: string; kind: "advisor" | "polish" | "brainstorm"; text?: string }
@@ -147,11 +135,6 @@ export type ClientMessage =
   | { t: "proposal.respond"; chatId: string; proposalId: string; accept: boolean }
   | { t: "org.propose"; orgId: string; resolutionType: ResolutionType; target?: string; text: string }
   | { t: "org.vote"; resolutionId: string; vote: "yes" | "no" | "abstain" }
-  | { t: "formation.assess"; reqId: string; request: FormationRequest }
-  | { t: "formation.recheck"; reqId: string; formationId: string }
-  | { t: "formation.proclaim"; formationId: string }
-  | { t: "formation.consent"; formationId: string; accept: boolean }
-  | { t: "formation.abandon"; formationId: string }
   /** Host: restore the game to the start of an earlier turn (from per-turn snapshots). */
   | { t: "rewind"; turn: number }
   /** Host: stop the last turn at this event; later events are discarded and the date set to it. */
@@ -162,7 +145,7 @@ export type ServerMessage =
   | { t: "view"; view: GameView }
   | { t: "progress"; stage: "director" | "votes" | "resolver" | "applying" | "consolidating" | "done"; detail?: string }
   | { t: "turn"; result: TurnResult }
-  | { t: "ai"; reqId: string; kind: "advisor" | "polish" | "brainstorm" | "formation"; ok: boolean; text?: string; ideas?: string[]; formationId?: string; error?: string }
+  | { t: "ai"; reqId: string; kind: "advisor" | "polish" | "brainstorm"; ok: boolean; text?: string; ideas?: string[]; error?: string }
   | { t: "chat.typing"; chatId: string; from: string; stop?: boolean }
   | { t: "toast"; level: "info" | "warn" | "error"; text: string }
   | { t: "error"; message: string };

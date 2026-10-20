@@ -105,20 +105,6 @@ await step("advisor", async () => {
   if (text.length < 40) throw new Error("briefing suspiciously short");
 });
 
-await step("formation assessment", async () => {
-  const goal = await engine.assessFormation(state, deps, {
-    founder: "FRA",
-    request: {
-      name: "Carolingian Union", concept: "A federal union of France and the Benelux states.",
-      countries: ["BEL", "LUX"], color: "#2b4c9a", government: "Federal republic",
-    },
-  });
-  console.log(`  verdict: ${goal.verdict}`);
-  for (const r of goal.requirements) console.log(`   [${r.met ? "x" : " "}] ${r.text} – ${r.why}`);
-  for (const c of goal.consent) console.log(`   consent ${c.country}: ${c.willing === null ? "?" : c.willing ? "willing" : "unwilling"}`);
-  console.log(`  path: ${goal.suggestedPath}`);
-});
-
 const calls = ai.log;
 const tokens = calls.reduce((a, c) => ({ p: a.p + c.promptTokens, c: a.c + c.completionTokens }), { p: 0, c: 0 });
 console.log("== summary");

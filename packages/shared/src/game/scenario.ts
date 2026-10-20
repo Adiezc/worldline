@@ -8,10 +8,23 @@ export interface CalendarEntry {
   note?: string;
 }
 
+/** A nation that can be proclaimed (Paradox-style): fixed identity and territory. */
 export interface Formable {
+  id: string;
   name: string;
   concept: string;
+  /** Countries whose land (at the scenario start) makes up the territory, for display. */
   countries: string[];
+  /** Region ids of the territory; the founder must control all of them. */
+  provinces: number[];
+  /** Countries that may proclaim it. */
+  formers: string[];
+  color: string;
+  /** Flag reference, usually "hist:<id>" (drawn by the client). */
+  flag: string;
+  capital?: string;
+  /** Form of government the new state adopts, when it should change. */
+  government?: string;
 }
 
 /** Visual theme of an era; the client maps it to map colours, paper and fonts. */
@@ -42,4 +55,6 @@ export interface ScenarioSeed {
   /** Scenario simulation rules (prose the AI re-reads every turn). */
   rules: string;
   formables: Formable[];
+  /** Territorial disputes at the start date (become GameState.claims). */
+  disputes?: { claimant: string; provinces: number[]; note: string }[];
 }

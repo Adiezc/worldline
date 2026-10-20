@@ -1,22 +1,780 @@
 [
-  { "name": "United Korea", "concept": "Peaceful or forced reunification of the Korean peninsula under one government.", "countries": ["KOR", "PRK"] },
-  { "name": "Gran Colombia", "concept": "Revival of Bolívar's republic uniting the northern Andes and the isthmus.", "countries": ["COL", "VEN", "ECU", "PAN"] },
-  { "name": "European Federation", "concept": "The EU turned into a single federal state with a common government, army and foreign policy.", "countries": ["AUT", "BEL", "BGR", "HRV", "CYP", "CZE", "DNK", "EST", "FIN", "FRA", "DEU", "GRC", "HUN", "IRL", "ITA", "LVA", "LTU", "LUX", "MLT", "NLD", "POL", "PRT", "ROU", "SVK", "SVN", "ESP", "SWE"] },
-  { "name": "Nordic Union", "concept": "A federation of the Nordic countries sharing defence, currency and foreign policy.", "countries": ["DNK", "FIN", "ISL", "NOR", "SWE"] },
-  { "name": "Maghreb Union", "concept": "A political union of North Africa's western Arab states, reviving the Arab Maghreb Union.", "countries": ["MAR", "DZA", "TUN", "LBY", "MRT"] },
-  { "name": "Greater Somalia", "concept": "Unification of the Somali-inhabited lands of the Horn of Africa.", "countries": ["SOM", "SOL", "DJI"] },
-  { "name": "East African Federation", "concept": "The long-planned political federation of the East African Community.", "countries": ["KEN", "TZA", "UGA", "RWA", "BDI", "SDS", "COD"] },
-  { "name": "Union of South American Nations", "concept": "A continental union of South America with a common market, parliament and currency.", "countries": ["ARG", "BOL", "BRA", "CHL", "COL", "ECU", "GUY", "PRY", "PER", "SUR", "URY", "VEN"] },
-  { "name": "Pan-Arab Federation", "concept": "A unified Arab state from the Atlantic to the Gulf.", "countries": ["EGY", "SAU", "JOR", "IRQ", "SYR", "LBN", "PSX", "YEM", "ARE", "OMN", "KWT", "QAT", "BHR", "LBY", "TUN", "DZA", "MAR", "SDN"] },
-  { "name": "Central Asian Union", "concept": "Integration of the five Central Asian republics into a single union.", "countries": ["KAZ", "UZB", "KGZ", "TJK", "TKM"] },
-  { "name": "Benelux Union", "concept": "Full political union of Belgium, the Netherlands and Luxembourg.", "countries": ["BEL", "NLD", "LUX"] },
-  { "name": "Federation of Indochina", "concept": "A federation of the former French Indochina states.", "countries": ["VNM", "LAO", "KHM"] },
-  { "name": "Iberian Union", "concept": "Union of Spain and Portugal under a shared state.", "countries": ["ESP", "PRT"] },
-  { "name": "Balkan Federation", "concept": "A federation of the western and southern Balkan states overcoming old rivalries.", "countries": ["SRB", "HRV", "BIH", "MNE", "MKD", "SVN", "ALB", "KOS", "BGR"] },
-  { "name": "Baltic Union", "concept": "A federal union of Estonia, Latvia and Lithuania.", "countries": ["EST", "LVA", "LTU"] },
-  { "name": "Turkic Union", "concept": "A confederation of Turkic states building on the Organization of Turkic States.", "countries": ["TUR", "AZE", "KAZ", "UZB", "KGZ", "TKM", "CYN"] },
-  { "name": "Greater Romania", "concept": "Reunification of Romania and Moldova.", "countries": ["ROU", "MDA"] },
-  { "name": "United Ireland", "concept": "Irish reunification through a border poll in Northern Ireland.", "countries": ["IRL", "GBR"] },
-  { "name": "Reunified Cyprus", "concept": "A bizonal, bicommunal federation ending the island's division.", "countries": ["CYP", "CYN"] },
-  { "name": "Central American Federation", "concept": "Revival of the 19th-century Federal Republic of Central America.", "countries": ["GTM", "SLV", "HND", "NIC", "CRI"] }
+ {
+  "id": "united-korea",
+  "name": "United Korea",
+  "concept": "The two Korean states become one country again, by agreement or by force.",
+  "countries": [
+   "KOR",
+   "PRK"
+  ],
+  "formers": [
+   "KOR",
+   "PRK"
+  ],
+  "color": "#4f86c6",
+  "flag": "hist:united-korea",
+  "capital": "Seoul"
+ },
+ {
+  "id": "gran-colombia",
+  "name": "Gran Colombia",
+  "concept": "Bolívar's republic of the northern Andes and the isthmus is restored as one federal state.",
+  "countries": [
+   "COL",
+   "VEN",
+   "ECU",
+   "PAN"
+  ],
+  "formers": [
+   "COL",
+   "VEN",
+   "ECU",
+   "PAN"
+  ],
+  "color": "#e0b83a",
+  "flag": "hist:gran-colombia",
+  "capital": "Bogotá"
+ },
+ {
+  "id": "central-american-federation",
+  "name": "Federal Republic of Central America",
+  "concept": "The five republics of the isthmus rejoin the federation they formed after independence from Spain.",
+  "countries": [
+   "GTM",
+   "SLV",
+   "HND",
+   "NIC",
+   "CRI"
+  ],
+  "formers": [
+   "GTM",
+   "SLV",
+   "HND",
+   "NIC",
+   "CRI"
+  ],
+  "color": "#3d7fc1",
+  "flag": "hist:central-american-federation",
+  "capital": "Guatemala City"
+ },
+ {
+  "id": "rio-de-la-plata",
+  "name": "United Provinces of the Río de la Plata",
+  "concept": "The lands of the old Spanish viceroyalty of the River Plate unite under Buenos Aires again.",
+  "countries": [
+   "ARG",
+   "URY",
+   "PRY",
+   "BOL"
+  ],
+  "formers": [
+   "ARG",
+   "URY",
+   "PRY"
+  ],
+  "color": "#8cc0e6",
+  "flag": "iso:ar",
+  "capital": "Buenos Aires"
+ },
+ {
+  "id": "union-of-south-american-nations",
+  "name": "Union of South American Nations",
+  "concept": "All twelve South American republics merge into one continental federation with a single parliament and currency.",
+  "countries": [
+   "ARG",
+   "BOL",
+   "BRA",
+   "CHL",
+   "COL",
+   "ECU",
+   "GUY",
+   "PRY",
+   "PER",
+   "SUR",
+   "URY",
+   "VEN"
+  ],
+  "formers": [
+   "BRA",
+   "ARG",
+   "COL",
+   "VEN",
+   "PER",
+   "CHL"
+  ],
+  "color": "#2f9e6b",
+  "flag": "hist:union-of-south-american-nations",
+  "capital": "Quito"
+ },
+ {
+  "id": "west-indies-federation",
+  "name": "West Indies Federation",
+  "concept": "The English-speaking Caribbean islands revive the short-lived federation of 1958-1962.",
+  "countries": [
+   "JAM",
+   "TTO",
+   "BRB",
+   "ATG",
+   "DMA",
+   "GRD",
+   "KNA",
+   "LCA",
+   "VCT"
+  ],
+  "formers": [
+   "JAM",
+   "TTO",
+   "BRB"
+  ],
+  "color": "#e3923a",
+  "flag": "hist:west-indies-federation",
+  "capital": "Port of Spain"
+ },
+ {
+  "id": "united-ireland",
+  "name": "United Ireland",
+  "concept": "Northern Ireland leaves the United Kingdom and joins the Republic, making the whole island one state.",
+  "countries": [
+   "IRL"
+  ],
+  "formers": [
+   "IRL"
+  ],
+  "regions": [
+   {
+    "owner": "GBR",
+    "names": [
+     "Northern Ireland"
+    ]
+   }
+  ],
+  "color": "#3fa66a",
+  "flag": "iso:ie",
+  "capital": "Dublin"
+ },
+ {
+  "id": "kalmar-union",
+  "name": "Kalmar Union",
+  "concept": "Denmark, Norway and Sweden join under one crown again, as in the medieval Kalmar Union.",
+  "countries": [
+   "DNK",
+   "NOR",
+   "SWE"
+  ],
+  "formers": [
+   "DNK",
+   "NOR",
+   "SWE"
+  ],
+  "color": "#c9a13b",
+  "flag": "hist:kalmar-union",
+  "capital": "Copenhagen"
+ },
+ {
+  "id": "nordic-federation",
+  "name": "Nordic Federation",
+  "concept": "The five Nordic states pool their defence, currency and foreign policy in a single federation.",
+  "countries": [
+   "DNK",
+   "NOR",
+   "SWE",
+   "FIN",
+   "ISL"
+  ],
+  "formers": [
+   "DNK",
+   "NOR",
+   "SWE",
+   "FIN",
+   "ISL"
+  ],
+  "color": "#6f9fd8",
+  "flag": "hist:nordic-federation",
+  "capital": "Stockholm"
+ },
+ {
+  "id": "baltic-federation",
+  "name": "Baltic Federation",
+  "concept": "Estonia, Latvia and Lithuania merge into one federal state on the Baltic coast.",
+  "countries": [
+   "EST",
+   "LVA",
+   "LTU"
+  ],
+  "formers": [
+   "EST",
+   "LVA",
+   "LTU"
+  ],
+  "color": "#5aa3a0",
+  "flag": "hist:baltic-federation",
+  "capital": "Riga"
+ },
+ {
+  "id": "polish-lithuanian-commonwealth",
+  "name": "Polish-Lithuanian Commonwealth",
+  "concept": "Poland and Lithuania revive their old union as one Commonwealth of two nations.",
+  "countries": [
+   "POL",
+   "LTU"
+  ],
+  "formers": [
+   "POL",
+   "LTU"
+  ],
+  "color": "#c0505f",
+  "flag": "hist:polish-lithuanian-commonwealth",
+  "capital": "Warsaw"
+ },
+ {
+  "id": "intermarium",
+  "name": "Intermarium",
+  "concept": "A federation of the lands between the Baltic and the Black Sea, led by Poland and Ukraine, in the spirit of Piłsudski's plan.",
+  "countries": [
+   "POL",
+   "UKR",
+   "LTU",
+   "LVA",
+   "EST"
+  ],
+  "formers": [
+   "POL",
+   "UKR",
+   "LTU"
+  ],
+  "color": "#b8746a",
+  "flag": "hist:intermarium",
+  "capital": "Warsaw"
+ },
+ {
+  "id": "union-state",
+  "name": "Union State of Russia and Belarus",
+  "concept": "The 1999 Union State treaty is carried through into a real single state with one government.",
+  "countries": [
+   "RUS",
+   "BLR"
+  ],
+  "formers": [
+   "RUS",
+   "BLR"
+  ],
+  "color": "#9c4a4a",
+  "flag": "hist:union-state",
+  "capital": "Moscow"
+ },
+ {
+  "id": "greater-romania",
+  "name": "Greater Romania",
+  "concept": "Romania and Moldova unite, as Romanian and Moldovan unionists propose.",
+  "countries": [
+   "ROU",
+   "MDA"
+  ],
+  "formers": [
+   "ROU",
+   "MDA"
+  ],
+  "color": "#d9c24a",
+  "flag": "iso:ro",
+  "capital": "Bucharest"
+ },
+ {
+  "id": "czechoslovakia",
+  "name": "Czechoslovakia",
+  "concept": "The Czech Republic and Slovakia undo the 1993 split and become one federal state again.",
+  "countries": [
+   "CZE",
+   "SVK"
+  ],
+  "formers": [
+   "CZE",
+   "SVK"
+  ],
+  "color": "#5577b0",
+  "flag": "iso:cz",
+  "capital": "Prague"
+ },
+ {
+  "id": "austria-hungary",
+  "name": "Austria-Hungary",
+  "concept": "Austria and Hungary rebuild their dual union as a modern two-part federation.",
+  "countries": [
+   "AUT",
+   "HUN"
+  ],
+  "formers": [
+   "AUT",
+   "HUN"
+  ],
+  "color": "#e6d68a",
+  "flag": "hist:austria-hungary",
+  "capital": "Vienna"
+ },
+ {
+  "id": "danubian-federation",
+  "name": "Danubian Federation",
+  "concept": "The states of the middle Danube form a federation of equals, as liberal reformers proposed before 1914.",
+  "countries": [
+   "AUT",
+   "HUN",
+   "CZE",
+   "SVK",
+   "SVN",
+   "HRV"
+  ],
+  "formers": [
+   "AUT",
+   "HUN",
+   "CZE",
+   "SVK"
+  ],
+  "color": "#b9a35c",
+  "flag": "hist:danubian-federation",
+  "capital": "Vienna"
+ },
+ {
+  "id": "yugoslavia",
+  "name": "Yugoslavia",
+  "concept": "The former Yugoslav republics reunite in a new South Slav federation.",
+  "countries": [
+   "SVN",
+   "HRV",
+   "BIH",
+   "SRB",
+   "MNE",
+   "MKD",
+   "KOS"
+  ],
+  "formers": [
+   "SRB",
+   "HRV",
+   "SVN",
+   "BIH",
+   "MNE",
+   "MKD"
+  ],
+  "color": "#7d5c8f",
+  "flag": "hist:yu",
+  "capital": "Belgrade"
+ },
+ {
+  "id": "balkan-federation",
+  "name": "Balkan Federation",
+  "concept": "Yugoslavia, Bulgaria and Albania join in the Balkan federation Tito and Dimitrov discussed in 1947.",
+  "countries": [
+   "SRB",
+   "HRV",
+   "BIH",
+   "MNE",
+   "MKD",
+   "SVN",
+   "KOS",
+   "BGR",
+   "ALB"
+  ],
+  "formers": [
+   "SRB",
+   "BGR",
+   "ALB",
+   "HRV"
+  ],
+  "color": "#8f6fa8",
+  "flag": "hist:balkan-federation",
+  "capital": "Belgrade"
+ },
+ {
+  "id": "benelux",
+  "name": "Benelux Union",
+  "concept": "Belgium, the Netherlands and Luxembourg turn their customs union into one federal state.",
+  "countries": [
+   "BEL",
+   "NLD",
+   "LUX"
+  ],
+  "formers": [
+   "BEL",
+   "NLD",
+   "LUX"
+  ],
+  "color": "#e07b39",
+  "flag": "hist:benelux",
+  "capital": "Brussels"
+ },
+ {
+  "id": "iberian-union",
+  "name": "Iberian Union",
+  "concept": "Spain and Portugal join as one federation covering the whole peninsula.",
+  "countries": [
+   "ESP",
+   "PRT"
+  ],
+  "formers": [
+   "ESP",
+   "PRT"
+  ],
+  "color": "#d6a04a",
+  "flag": "hist:iberian-union",
+  "capital": "Madrid"
+ },
+ {
+  "id": "european-federation",
+  "name": "European Federation",
+  "concept": "The European Union becomes a single federal state with one government, army and foreign policy.",
+  "countries": [
+   "AUT",
+   "BEL",
+   "BGR",
+   "HRV",
+   "CYP",
+   "CZE",
+   "DNK",
+   "EST",
+   "FIN",
+   "FRA",
+   "DEU",
+   "GRC",
+   "HUN",
+   "IRL",
+   "ITA",
+   "LVA",
+   "LTU",
+   "LUX",
+   "MLT",
+   "NLD",
+   "POL",
+   "PRT",
+   "ROU",
+   "SVK",
+   "SVN",
+   "ESP",
+   "SWE"
+  ],
+  "formers": [
+   "FRA",
+   "DEU",
+   "ITA",
+   "ESP",
+   "BEL",
+   "NLD",
+   "LUX",
+   "POL"
+  ],
+  "color": "#2f4fa0",
+  "flag": "iso:eu",
+  "capital": "Brussels"
+ },
+ {
+  "id": "united-cyprus",
+  "name": "United Cyprus",
+  "concept": "The Republic of Cyprus and the Turkish Cypriot north agree to reunite the island in a bicommunal federation.",
+  "countries": [
+   "CYP",
+   "CYN"
+  ],
+  "formers": [
+   "CYP",
+   "CYN"
+  ],
+  "color": "#d58a3a",
+  "flag": "iso:cy",
+  "capital": "Nicosia"
+ },
+ {
+  "id": "albania-kosovo-union",
+  "name": "Albania-Kosovo Union",
+  "concept": "Albania and Kosovo merge by referendum into one Albanian state.",
+  "countries": [
+   "ALB",
+   "KOS"
+  ],
+  "formers": [
+   "ALB",
+   "KOS"
+  ],
+  "color": "#c2413c",
+  "flag": "iso:al",
+  "capital": "Tirana"
+ },
+ {
+  "id": "transcaucasian-federation",
+  "name": "Transcaucasian Federation",
+  "concept": "Georgia, Armenia and Azerbaijan revive the short-lived 1918 South Caucasus federation.",
+  "countries": [
+   "GEO",
+   "ARM",
+   "AZE"
+  ],
+  "formers": [
+   "GEO",
+   "ARM",
+   "AZE"
+  ],
+  "color": "#b07a3e",
+  "flag": "hist:transcaucasian-federation",
+  "capital": "Tbilisi"
+ },
+ {
+  "id": "central-asian-union",
+  "name": "Central Asian Union",
+  "concept": "The five Central Asian republics unite, as Kazakhstan proposed in 2005.",
+  "countries": [
+   "KAZ",
+   "UZB",
+   "KGZ",
+   "TJK",
+   "TKM"
+  ],
+  "formers": [
+   "KAZ",
+   "UZB",
+   "KGZ",
+   "TJK",
+   "TKM"
+  ],
+  "color": "#3aa0a8",
+  "flag": "hist:central-asian-union",
+  "capital": "Tashkent"
+ },
+ {
+  "id": "indochina-federation",
+  "name": "Indochinese Federation",
+  "concept": "Vietnam, Laos and Cambodia form one federation across the Mekong lands.",
+  "countries": [
+   "VNM",
+   "LAO",
+   "KHM"
+  ],
+  "formers": [
+   "VNM",
+   "LAO",
+   "KHM"
+  ],
+  "color": "#c9584a",
+  "flag": "hist:indochina-federation",
+  "capital": "Hanoi"
+ },
+ {
+  "id": "federation-of-malaysia",
+  "name": "Federation of Malaysia",
+  "concept": "Malaysia, Singapore and Brunei form the wider Malaysia planned in 1963.",
+  "countries": [
+   "MYS",
+   "SGP",
+   "BRN"
+  ],
+  "formers": [
+   "MYS",
+   "SGP",
+   "BRN"
+  ],
+  "color": "#3f8a7a",
+  "flag": "iso:my",
+  "capital": "Kuala Lumpur"
+ },
+ {
+  "id": "united-arab-republic",
+  "name": "United Arab Republic",
+  "concept": "Egypt and Syria restore Nasser's 1958 union as one republic.",
+  "countries": [
+   "EGY",
+   "SYR"
+  ],
+  "formers": [
+   "EGY",
+   "SYR"
+  ],
+  "color": "#8fae4f",
+  "flag": "hist:uar",
+  "capital": "Cairo"
+ },
+ {
+  "id": "federation-of-arab-republics",
+  "name": "Federation of Arab Republics",
+  "concept": "Egypt, Libya and Syria form the federation they founded in 1972, with real common institutions this time.",
+  "countries": [
+   "EGY",
+   "LBY",
+   "SYR"
+  ],
+  "formers": [
+   "EGY",
+   "LBY",
+   "SYR"
+  ],
+  "color": "#a3b04a",
+  "flag": "hist:federation-of-arab-republics",
+  "capital": "Cairo"
+ },
+ {
+  "id": "arab-union",
+  "name": "United Arab Nation",
+  "concept": "One Arab state from the Atlantic to the Gulf, the pan-Arab dream of Nasserists and Ba'athists.",
+  "countries": [
+   "EGY",
+   "SAU",
+   "JOR",
+   "IRQ",
+   "SYR",
+   "LBN",
+   "PSX",
+   "YEM",
+   "ARE",
+   "OMN",
+   "KWT",
+   "QAT",
+   "BHR",
+   "LBY",
+   "TUN",
+   "DZA",
+   "MAR",
+   "SDN"
+  ],
+  "formers": [
+   "EGY",
+   "SAU",
+   "IRQ",
+   "SYR",
+   "JOR",
+   "DZA",
+   "LBY",
+   "MAR"
+  ],
+  "color": "#4f8a4a",
+  "flag": "hist:arab-union",
+  "capital": "Cairo"
+ },
+ {
+  "id": "gulf-union",
+  "name": "Gulf Union",
+  "concept": "The six Gulf Cooperation Council monarchies merge into one union, as Saudi Arabia proposed in 2011.",
+  "countries": [
+   "SAU",
+   "KWT",
+   "BHR",
+   "QAT",
+   "ARE",
+   "OMN"
+  ],
+  "formers": [
+   "SAU",
+   "KWT",
+   "BHR",
+   "QAT",
+   "ARE",
+   "OMN"
+  ],
+  "color": "#9a6b4f",
+  "flag": "hist:gulf-union",
+  "capital": "Riyadh"
+ },
+ {
+  "id": "maghreb-union",
+  "name": "Maghreb Union",
+  "concept": "The states of North Africa's west turn the Arab Maghreb Union into one political union.",
+  "countries": [
+   "MAR",
+   "DZA",
+   "TUN",
+   "LBY",
+   "MRT"
+  ],
+  "formers": [
+   "MAR",
+   "DZA",
+   "TUN",
+   "LBY",
+   "MRT"
+  ],
+  "color": "#c98a4f",
+  "flag": "hist:maghreb-union",
+  "capital": "Rabat"
+ },
+ {
+  "id": "greater-somalia",
+  "name": "Greater Somalia",
+  "concept": "All the Somali-inhabited lands of the Horn of Africa unite under one Somali state, the five points of the Somali star.",
+  "countries": [
+   "SOM",
+   "SOL",
+   "DJI"
+  ],
+  "formers": [
+   "SOM",
+   "SOL"
+  ],
+  "regions": [
+   {
+    "owner": "ETH",
+    "names": [
+     "Somali"
+    ]
+   },
+   {
+    "owner": "KEN",
+    "names": [
+     "North-Eastern"
+    ]
+   }
+  ],
+  "color": "#5fa8e0",
+  "flag": "iso:so",
+  "capital": "Mogadishu"
+ },
+ {
+  "id": "east-african-federation",
+  "name": "East African Federation",
+  "concept": "The core East African Community states carry out their long-planned political federation.",
+  "countries": [
+   "KEN",
+   "UGA",
+   "TZA",
+   "RWA",
+   "BDI"
+  ],
+  "formers": [
+   "KEN",
+   "UGA",
+   "TZA",
+   "RWA",
+   "BDI",
+   "SDS"
+  ],
+  "color": "#b5a04a",
+  "flag": "hist:east-african-federation",
+  "capital": "Arusha"
+ },
+ {
+  "id": "mali-federation",
+  "name": "Mali Federation",
+  "concept": "Senegal and Mali re-form the federation they founded at independence in 1959-1960.",
+  "countries": [
+   "SEN",
+   "MLI"
+  ],
+  "formers": [
+   "SEN",
+   "MLI"
+  ],
+  "color": "#d9b24a",
+  "flag": "hist:mali-federation",
+  "capital": "Dakar"
+ },
+ {
+  "id": "sahel-confederation",
+  "name": "Confederation of Sahel States",
+  "concept": "Mali, Burkina Faso and Niger turn their 2024 confederation into one united Sahelian state.",
+  "countries": [
+   "MLI",
+   "BFA",
+   "NER"
+  ],
+  "formers": [
+   "MLI",
+   "BFA",
+   "NER"
+  ],
+  "color": "#c79a5c",
+  "flag": "hist:sahel-confederation",
+  "capital": "Bamako"
+ }
 ]

@@ -8,7 +8,7 @@ import {
   type ProposalCession, type ProposalDraft, type TreatyType, type War,
 } from "@worldline/shared";
 import type { EngineDeps } from "./api.ts";
-import { countryDetail, nameOf, occupationSummary, orgsOf, recentEventsBlock, relationList, treatiesBlock } from "./context.ts";
+import { countryDetail, disputesBlock, nameOf, occupationSummary, orgsOf, recentEventsBlock, relationList, treatiesBlock } from "./context.ts";
 import { makeEvent } from "./game.ts";
 import { callJson } from "./llm.ts";
 import { chatSystem } from "./prompts.ts";
@@ -252,6 +252,7 @@ function chatPrompt(state: GameState, map: MapIndex, chat: Chat, speaker: string
     `YOUR RELATIONS (-100..100): ${relationList(state, speaker, others)}${shared.length ? `; shared memberships: ${shared.join(" ")}` : ""}`,
     treatiesBlock(state, focus, 15),
     wars.length ? `WARS:\n${wars.join("\n")}` : "",
+    disputesBlock(state, map, focus),
     ...others.map((t) => warSituation(state, map, speaker, t)).filter(Boolean),
     sanctions.length ? `SANCTIONS:\n${sanctions.join("\n")}` : "",
     recentEventsBlock(state, { involving: focus, max: 14, bodies: true }),

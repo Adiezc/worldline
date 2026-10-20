@@ -138,7 +138,8 @@ export type Effect =
   | { type: "imposeSanctions"; target: string; by: string[] }
   | { type: "liftSanctions"; target: string; by: string[] }
   | { type: "updateAgenda"; country: string; goals: string[] }
-  | { type: "updateFormation"; country: string; index: number; met: boolean; text?: string };
+  | { type: "addClaim"; claimant: string; provinces: number[]; note: string }
+  | { type: "dropClaim"; claimant: string; provinces?: number[] };
 
 export interface GameEvent {
   id: string;
@@ -166,6 +167,8 @@ export interface Order {
   text: string;
   /** A battle plan drawn on the map (offensive arrow or hold line). */
   operation?: Operation;
+  /** Proclaim this formable nation (id) when the turn resolves. */
+  formable?: string;
 }
 
 export interface OrderVerdict {
@@ -230,31 +233,14 @@ export interface Chat {
   lastTurn: number;
 }
 
-export interface FormationGoal {
+/** A country's claim on regions another country holds (a disputed territory). */
+export interface Claim {
   id: string;
-  founder: string;
-  name: string;
-  concept: string;
-  color: string;
-  /** Generated flag ("gen:…") the new nation adopts; derived from `color` when missing. */
-  flag?: string;
-  government: string;
-  /** Countries whose territory is involved. */
-  countries: string[];
+  claimant: string;
   provinces: number[];
-  verdict: "achievable" | "notYet" | "unrealistic";
-  requirements: { text: string; met: boolean; why: string }[];
-  consent: { country: string; needed: boolean; willing: boolean | null; human: boolean; accepted?: boolean }[];
-  suggestedPath: string;
-  plan?: FormationPlan;
-  lastChecked: number;
-  status: "active" | "proclaimed" | "abandoned";
-}
-
-export interface FormationPlan {
-  name: string;
-  orgHandling: string;
-  reactions: { a: string; b: string; delta: number }[];
+  /** One line of context: the basis of the claim and where it stands. */
+  note: string;
+  since: string;
 }
 
 export interface GameSettings {
@@ -299,7 +285,10 @@ export interface GameState {
   events: GameEvent[];
   memory: { upToTurn: number; text: string }[];
   chats: Chat[];
-  formations: FormationGoal[];
+  /** Formable nations already proclaimed (ids). */
+  formed?: string[];
+  /** Territorial claims on land others hold. Informational: shown on the map and given to the AI. */
+  claims?: Claim[];
   players: Player[];
   /** Pending orders this turn, keyed by player id. */
   orders: Record<string, Order[]>;

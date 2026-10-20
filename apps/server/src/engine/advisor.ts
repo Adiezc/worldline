@@ -1,7 +1,8 @@
 // Player-side helpers: the strategic adviser, order polishing and order brainstorming.
 
 import {
-  addDays, BrainstormOutputSchema, countryAdjacency, countryByTag, countryIndex, getRelation, humanTags, PolishOutputSchema,
+  addDays, BrainstormOutputSchema, countryAdjacency, countryByTag, countryIndex, formablesFor, formableStatus, getRelation, humanTags,
+  PolishOutputSchema,
   type GameState,
 } from "@worldline/shared";
 import type { EngineDeps } from "./api.ts";
@@ -30,8 +31,11 @@ export function countryContext(state: GameState, deps: EngineDeps, tag: string) 
   const orgs = state.organizations.filter((o) => o.members.includes(tag));
   const pending = state.resolutions.filter((r) => r.status === "pending" && orgs.some((o) => o.id === r.orgId))
     .map((r) => `${r.id} ${r.type}${r.target ? ` on ${r.target}` : ""} by ${r.proposer}: "${r.text}"`);
-  const formations = state.formations.filter((f) => f.founder === tag && f.status === "active")
-    .map((f) => `"${f.name}" (${f.verdict}): ${f.requirements.map((r) => `${r.met ? "MET" : "unmet"} ${r.text}`).join("; ")}`);
+  // Nations this country could proclaim, and how much of their territory it still lacks.
+  const formations = formablesFor(state, deps.seed.formables, tag).map((f) => {
+    const st = formableStatus(state, f, tag);
+    return `"${f.name}" (controls ${st.total - st.missing.length} of ${st.total} regions; proclaimed by order once it controls all of them)`;
+  });
   const goals = k.agenda.goals.length ? `\nHistorical agenda of ${k.name}: ${k.agenda.goals.join("; ")}` : "";
 
   return [
@@ -45,7 +49,7 @@ export function countryContext(state: GameState, deps: EngineDeps, tag: string) 
     sanctions.length ? `SANCTIONS: ${sanctions.join("; ")}` : "",
     orgs.length ? `MEMBERSHIPS: ${orgs.map((o) => `${o.id} ${o.abbrev}`).join(", ")}` : "",
     pending.length ? `PENDING VOTES: ${pending.join("; ")}` : "",
-    formations.length ? `FORMATION GOALS: ${formations.join("; ")}` : "",
+    formations.length ? `FORMABLE NATIONS: ${formations.join("; ")}` : "",
     `ECONOMY RANK: #${rank(state, tag)} by GDP (${fmtGdp(k.gdp)})`,
     recentEventsBlock(state, { max: 25 }),
     calendarBlock(deps.seed, state.date, addDays(state.date, 120)),

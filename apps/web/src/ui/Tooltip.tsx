@@ -27,6 +27,11 @@ export function Tooltip() {
         {owner?.name ?? "Unclaimed"}
       </div>
       {controller && controller !== owner && <div className="mt-0.5 text-xs text-red-300/85">Occupied by {controller.name}</div>}
+      {view?.claims?.filter((c) => c.provinces.includes(id)).map((c) => (
+        <div key={c.id} className="mt-0.5 text-xs text-amber-200/80">
+          Claimed by {view.countries.find((k) => k.tag === c.claimant)?.name ?? c.claimant}
+        </div>
+      ))}
       {holder && <div className="mt-0.5 text-[11px] text-gold/80">Played by {holder.name}</div>}
       {view?.phase === "lobby" && owner && !holder && <div className="mt-1 text-[10.5px] tracking-wider text-parchment/45 uppercase">Click to claim</div>}
     </div>

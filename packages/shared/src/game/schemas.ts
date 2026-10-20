@@ -46,7 +46,8 @@ export const EffectSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("imposeSanctions"), target: tag, by: z.array(tag).min(1) }),
   z.object({ type: z.literal("liftSanctions"), target: tag, by: z.array(tag).min(1) }),
   z.object({ type: z.literal("updateAgenda"), country: tag, goals: trimmed(z.string(), 5) }),
-  z.object({ type: z.literal("updateFormation"), country: tag, index: z.coerce.number().int().min(0), met: z.boolean(), text: z.string().optional() }),
+  z.object({ type: z.literal("addClaim"), claimant: tag, provinces: ids.min(1), note: z.string().default("") }),
+  z.object({ type: z.literal("dropClaim"), claimant: tag, provinces: ids.optional() }),
 ]);
 
 const EventSchema = z.object({
@@ -106,19 +107,6 @@ export type ChatOutput = z.infer<typeof ChatOutputSchema>;
 export const PolishOutputSchema = z.object({ text: z.string().min(1) });
 export const BrainstormOutputSchema = z.object({ ideas: trimmed(z.string(), 8).refine((a) => a.length > 0, "at least one idea") });
 export const ConsolidationOutputSchema = z.object({ summary: z.string().min(10) });
-
-export const AssessorOutputSchema = z.object({
-  verdict: z.enum(["achievable", "notYet", "unrealistic"]),
-  requirements: trimmed(z.object({ text: z.string(), met: z.boolean(), why: z.string() }), 8).refine((a) => a.length > 0, "at least one requirement"),
-  consent: z.array(z.object({ country: tag, needed: z.boolean(), willing: z.boolean() })).default([]),
-  suggestedPath: z.string(),
-  plan: z.object({
-    name: z.string(),
-    orgHandling: z.string(),
-    reactions: z.array(z.object({ a: tag, b: tag, delta: z.coerce.number() })).default([]),
-  }).optional(),
-});
-export type AssessorOutput = z.infer<typeof AssessorOutputSchema>;
 
 export const VotesOutputSchema = z.object({
   votes: z.array(z.object({

@@ -4,7 +4,7 @@ import type { GameEvent, GameView, Operation, OperationKind, OperationStance, Tu
 import type { SocketStatus } from "../net/socket.ts";
 import type { MapMode } from "./mapModes.ts";
 
-export type AiKind = "advisor" | "polish" | "brainstorm" | "formation";
+export type AiKind = "advisor" | "polish" | "brainstorm";
 export type ProgressStage = "director" | "votes" | "resolver" | "applying" | "consolidating" | "done";
 
 export interface AiRequest {
@@ -20,7 +20,6 @@ export interface AiReply {
   ok: boolean;
   text?: string;
   ideas?: string[];
-  formationId?: string;
   error?: string;
 }
 
@@ -37,6 +36,8 @@ export interface DraftOrder {
   id: string;
   text: string;
   operation?: Operation;
+  /** Proclaim this formable nation. */
+  formable?: string;
 }
 
 /** A battle plan being drawn on the map (before it becomes an order). */
@@ -89,8 +90,6 @@ export interface GameStore {
   advisorLog: { reqId: string; question: string }[];
   ideas: string[];
   brainstormReq: string | null;
-  formationReq: string | null;
-  activeFormationId: string | null;
 
   orders: DraftOrder[];
   /** Battle plan being drawn (the map picks regions into it). */
@@ -145,8 +144,6 @@ const initial: GameStore = {
   advisorLog: [],
   ideas: [],
   brainstormReq: null,
-  formationReq: null,
-  activeFormationId: null,
   orders: [],
   opDraft: null,
   ordersDirty: false,
@@ -208,7 +205,7 @@ export function applyView(view: GameView) {
         mapHold: false,
         playback: null,
         progress: null,
-        orders: view.orders.map((o) => ({ id: o.id, text: o.text, operation: o.operation })),
+        orders: view.orders.map((o) => ({ id: o.id, text: o.text, operation: o.operation, formable: o.formable })),
         ordersDirty: false,
       } satisfies Partial<GameStore>);
       // A rewind makes the last results meaningless; an intervention keeps them (trimmed by a `turn`).
@@ -224,7 +221,7 @@ export function applyView(view: GameView) {
     }
     // Orders: adopt the server's list unless we have local edits waiting to sync.
     if (!wentBack && (!prev || turnChanged || !s.ordersDirty)) {
-      patch.orders = view.orders.map((o) => ({ id: o.id, text: o.text, operation: o.operation }));
+      patch.orders = view.orders.map((o) => ({ id: o.id, text: o.text, operation: o.operation, formable: o.formable }));
       if (turnChanged) patch.ordersDirty = false;
     }
     if (view.phase !== "resolving" && s.progress) patch.progress = null;

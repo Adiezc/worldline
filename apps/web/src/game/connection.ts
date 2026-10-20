@@ -51,7 +51,7 @@ export function flushOrders() {
   window.clearTimeout(ordersTimer);
   const { orders, ordersDirty } = useGame.getState();
   if (!ordersDirty) return;
-  send({ t: "orders", orders: orders.filter((o) => o.text.trim()).map((o) => ({ id: o.id, text: o.text, operation: o.operation })) });
+  send({ t: "orders", orders: orders.filter((o) => o.text.trim()).map((o) => ({ id: o.id, text: o.text, operation: o.operation, formable: o.formable })) });
   useGame.setState({ ordersDirty: false });
 }
 
@@ -135,7 +135,7 @@ function handleMessage(msg: ServerMessage) {
 function handleAi(msg: Extract<ServerMessage, { t: "ai" }>) {
   const s = useGame.getState();
   const req = s.requests[msg.reqId];
-  const reply = { ok: msg.ok, text: msg.text, ideas: msg.ideas, formationId: msg.formationId, error: msg.error };
+  const reply = { ok: msg.ok, text: msg.text, ideas: msg.ideas, error: msg.error };
   const patch: Partial<typeof s> = { replies: { ...s.replies, [msg.reqId]: reply } };
   const requests = { ...s.requests };
   delete requests[msg.reqId];
@@ -149,7 +149,6 @@ function handleAi(msg: Extract<ServerMessage, { t: "ai" }>) {
       patch.ordersDirty = true;
     }
     if (msg.kind === "brainstorm" && msg.ideas) patch.ideas = msg.ideas;
-    if (msg.kind === "formation" && msg.formationId) patch.activeFormationId = msg.formationId;
   }
   useGame.setState(patch);
   if (patch.ordersDirty) scheduleOrdersSync();

@@ -5,6 +5,7 @@ import { getMap } from "../map/controller.ts";
 import { useMap } from "../store.ts";
 import { pushFronts } from "./fronts.ts";
 import { pushOperations } from "./operations.ts";
+import { pushDisputes } from "./disputes.ts";
 import { computePalette } from "./mapModes.ts";
 import { focusTag } from "./selectors.ts";
 import { useGame } from "./store.ts";
@@ -58,9 +59,14 @@ export function MapSync() {
       map.setLabelStyle(scenario.countries.map((c) => c.name), scenario.countries.map((c) => c.color));
       return;
     }
-    map.setPalette(computePalette(mode, { countries, relations: relations ?? {}, wars: wars ?? [], organizations: orgs ?? [] }, { focus, orgId }));
+    map.setPalette(computePalette(mode, { countries, relations: relations ?? {}, wars: wars ?? [], organizations: orgs ?? [], claims: view?.claims, owners: view?.owners }, { focus, orgId }));
     map.setLabelStyle(countries.map((c) => (c.alive === false ? "" : c.name)), countries.map((c) => c.color));
-  }, [ready, editing, scenario, countries, relations, wars, orgs, mode, focus, orgId]);
+  }, [ready, editing, scenario, countries, relations, wars, orgs, mode, focus, orgId, view?.claims, view?.owners]);
+
+  // Disputed territories: dashed claim lines, and claimant stripes in the Disputes mode.
+  useEffect(() => {
+    if (ready) pushDisputes();
+  }, [ready, editing, view?.claims, view?.owners, mode, meta]);
 
   // Ownership + labels, unless a turn result is holding the pre-turn map.
   const owners = view?.owners ?? scenario?.owners;

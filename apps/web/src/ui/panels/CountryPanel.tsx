@@ -5,7 +5,7 @@ import { relationColor } from "../../game/mapModes.ts";
 import { countryMap, focusTag, relationBetween, TREATY_LABELS } from "../../game/selectors.ts";
 import { useGame } from "../../game/store.ts";
 import { getMap } from "../../map/controller.ts";
-import { useMap } from "../../store.ts";
+import { provinceName, useMap } from "../../store.ts";
 import { Badge, Bar, Button, CountryChip, Empty, Panel, SectionTitle } from "../common/ui.tsx";
 import { Flag } from "../common/Flag.tsx";
 import { Icon } from "../common/Icon.tsx";
@@ -165,6 +165,8 @@ function CountryDetails({ view, c }: { view: GameView; c: Country }) {
 
       <ForcesSection tag={c.tag} />
 
+      <DisputesSection view={view} tag={c.tag} />
+
       <SectionTitle>Treaties</SectionTitle>
       {treaties.length === 0 && <Empty>No treaties.</Empty>}
       <ul className="space-y-1.5">
@@ -284,5 +286,45 @@ function RegionLine({ view, tag }: { view: GameView; tag: string }) {
         {ctl && owner && ctl !== owner && <span className="text-[#f0b2aa]"> · occupied by {ctl.name}</span>}
       </span>
     </div>
+  );
+}
+
+/** Territorial disputes this country is party to: what it claims, and what others claim of it. */
+function DisputesSection({ view, tag }: { view: GameView; tag: string }) {
+  const claims = view.claims ?? [];
+  const idx = view.countries.findIndex((k) => k.tag === tag);
+  const mine = claims.filter((cl) => cl.claimant === tag);
+  const onUs = claims.filter((cl) => cl.claimant !== tag && cl.provinces.some((id) => view.owners[id] === idx));
+  if (!mine.length && !onUs.length) return null;
+  const byTag = countryMap(view.countries);
+  const row = (cl: (typeof claims)[number], label: string) => {
+    const regions = cl.provinces.length <= 3 ? cl.provinces.map(provinceName).join(", ") : `${cl.provinces.length} regions`;
+    return (
+      <li key={cl.id}>
+        <button
+          type="button"
+          onClick={() => getMap()?.focusOn(cl.provinces, { maxZoom: 1.6 })}
+          className="w-full rounded border border-panel-edge/40 bg-black/15 px-2.5 py-1.5 text-left hover:border-gold/50"
+          title="Show on the map"
+        >
+          <div className="text-[12px] text-parchment/85">
+            {label} <span className="text-parchment">{regions}</span>
+          </div>
+          {cl.note && <div className="mt-0.5 text-[11px] leading-snug text-parchment/50">{cl.note}</div>}
+        </button>
+      </li>
+    );
+  };
+  return (
+    <>
+      <SectionTitle>Territorial disputes</SectionTitle>
+      <ul className="space-y-1.5">
+        {mine.map((cl) => {
+          const holders = [...new Set(cl.provinces.map((id) => view.countries[view.owners[id]]?.name).filter(Boolean))];
+          return row(cl, `Claims from ${holders.join(" / ")}:`);
+        })}
+        {onUs.map((cl) => row(cl, `${byTag.get(cl.claimant)?.name ?? cl.claimant} claims:`))}
+      </ul>
+    </>
   );
 }

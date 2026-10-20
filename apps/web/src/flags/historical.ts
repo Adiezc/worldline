@@ -39,6 +39,67 @@ const lion = (x: number, y: number, s: number, fill: string, stroke = "none") =>
   `<rect x="112" y="62" width="13" height="44" rx="4"/><rect x="130" y="60" width="13" height="46" rx="4"/>` +
   `<ellipse cx="94" cy="56" rx="54" ry="24"/><circle cx="36" cy="38" r="28"/></g>`;
 
+/** Several same-size stars at the given centres. */
+const stars = (pts: [number, number][], r: number, fill: string) => pts.map(([x, y]) => star(x, y, r, fill)).join("");
+
+/** `n` upright stars evenly spaced on a circle of radius R (first one at the top). */
+const starRing = (cx: number, cy: number, R: number, n: number, r: number, fill: string) =>
+  stars(
+    Array.from({ length: n }, (_, k): [number, number] => {
+      const a = ((-90 + (360 * k) / n) * Math.PI) / 180;
+      return [cx + R * Math.cos(a), cy + R * Math.sin(a)];
+    }),
+    r,
+    fill,
+  );
+
+/** `n` upright stars on an arc of radius R around (cx, cy), from angle a0 to a1 (degrees, 0 = +x, screen y down). */
+const starArc = (cx: number, cy: number, R: number, a0: number, a1: number, n: number, r: number, fill: string) =>
+  stars(
+    Array.from({ length: n }, (_, k): [number, number] => {
+      const a = ((a0 + ((a1 - a0) * k) / (n - 1)) * Math.PI) / 180;
+      return [cx + R * Math.cos(a), cy + R * Math.sin(a)];
+    }),
+    r,
+    fill,
+  );
+
+/** Crescent: disc of radius r at (cx, cy) with a bite of radius ri centred dx further along; opens toward
+ *  the fly (+x) at rot 0, rotated by `rot` degrees clockwise about (cx, cy). */
+function crescent(cx: number, cy: number, r: number, dx: number, ri: number, fill: string, rot = 0): string {
+  const xi = (r * r - ri * ri + dx * dx) / (2 * dx);
+  const yi = Math.sqrt(r * r - xi * xi);
+  const p1 = `${(cx + xi).toFixed(1)} ${(cy - yi).toFixed(1)}`, p2 = `${(cx + xi).toFixed(1)} ${(cy + yi).toFixed(1)}`;
+  const d = `M${p1}A${r} ${r} 0 1 0 ${p2}A${ri} ${ri} 0 ${xi - dx > 0 ? 1 : 0} 1 ${p1}z`;
+  return `<path d="${d}" fill="${fill}"${rot ? ` transform="rotate(${rot} ${cx} ${cy})"` : ""}/>`;
+}
+
+/** Sine wave polyline across the full width (slightly overshooting the edges), for stroking. */
+const wave = (y: number, amp: number, periods: number, phase = 0) =>
+  Array.from({ length: 65 }, (_, i) => {
+    const x = -20 + (i * 680) / 64;
+    return `${i ? "L" : "M"}${x.toFixed(1)} ${(y - amp * Math.sin(((x / W) * periods + phase) * 2 * Math.PI)).toFixed(1)}`;
+  }).join("");
+
+/** Heater shield outline with its top-left corner at (x, y). */
+const shieldPath = (x: number, y: number, w: number, h: number) =>
+  `M${x} ${y}h${w}v${h * 0.6}q0 ${h * 0.3}-${w / 2} ${h * 0.4}q-${w / 2}-${h * 0.1}-${w / 2}-${h * 0.4}z`;
+
+/** Simple three-pointed crown, base centred at (cx, y) and `w` wide. */
+const crown = (cx: number, y: number, w: number, fill: string) =>
+  `<path d="M${cx - w / 2} ${y}v-${w * 0.42}l${w / 4} ${w * 0.2}l${w / 4}-${w * 0.32}l${w / 4} ${w * 0.32}l${w / 4}-${w * 0.2}v${w * 0.42}z" fill="${fill}"/>`;
+
+/** Simplified spread eagle (~44×36) centred at (cx, cy). */
+const eagle = (cx: number, cy: number, s: number, fill: string) =>
+  `<path transform="translate(${cx} ${cy}) scale(${s})" fill="${fill}" d="M-22-10L-6-3-5-12 0-18 5-12 6-3 22-10 16 6 6 4 8 18 0 12-8 18-6 4-16 6z"/>`;
+
+/** Simplified mounted knight (~44×40, riding toward the hoist) centred at (cx, cy). */
+const knight = (cx: number, cy: number, s: number, fill: string) =>
+  `<g transform="translate(${cx} ${cy}) scale(${s})" fill="${fill}">` +
+  `<path d="M-20-2l8-10 4 2-2 6h26l6 6-2 18h-5v-12h-22v12h-5v-12l-6-4z"/>` +
+  `<rect x="-2" y="-20" width="9" height="16"/><circle cx="2.5" cy="-23" r="4"/>` +
+  `<path d="M-2-16l-14-8" stroke="${fill}" stroke-width="3"/></g>`;
+
 export const HISTORICAL_FLAGS: Record<string, string> = {
   // Soviet Union: red with the gold hammer, sickle and outlined star.
   su: svg(
@@ -210,6 +271,168 @@ export const HISTORICAL_FLAGS: Record<string, string> = {
     rect(0, 0, W, H, "#fff") + rect(0, 48, W, 48, "#e30a17") + rect(0, 384, W, 48, "#e30a17") +
       `<path d="M340 150a90 90 0 0 0 0 180a58 90 0 0 1 0-180z" fill="#e30a17"/>` +
       `<polygon points="${starPoints(372, 240, 40, 5, 0.382, -90)}" fill="#e30a17"/>`,
+  ),
+
+  // ---- Formable nations (keyed by formable id) ----
+
+  // United Korea: the Korean Unification Flag, a blue peninsula (with Jeju and Ulleungdo) on white.
+  "united-korea": svg(
+    rect(0, 0, W, H, "#fff") +
+      `<g fill="#1e73be" transform="translate(320 240) scale(1.25 1.04) translate(-330 -240)"><path d="M234 179L266 143 301 116 336 109 374 92 398 79 406 96 379 113 358 157 333 174 317 201 323 208 344 228 360 252 371 283 374 310 371 327 363 341 347 347 323 354 296 364 288 357 293 337 296 310 288 283 299 259 282 249 261 252 248 239 258 222 264 208 251 191z"/>` +
+      `<ellipse cx="295" cy="398" rx="15" ry="8"/><circle cx="412" cy="259" r="6"/></g>`,
+  ),
+  // Gran Colombia (1821–31): yellow-blue-red with the crossed cornucopias and fasces in a gold oval.
+  "gran-colombia": svg(
+    hBands("#ffcd00", "#003087", "#c8102e") +
+      `<ellipse cx="320" cy="240" rx="64" ry="86" fill="#003087" stroke="#ffcd00" stroke-width="10"/>` +
+      rect(312, 176, 16, 128, "#8b5a2b") +
+      `<path d="M266 306q30-56 80-112l28 26q-56 42-94 92zM374 306q-30-56-80-112l-28 26q56 42 94 92z" fill="#e8b923"/>` +
+      `<circle cx="350" cy="196" r="12" fill="#c8102e"/><circle cx="290" cy="196" r="12" fill="#c8102e"/>`,
+  ),
+  // Federal Republic of Central America (1823–41): blue-white-blue with the triangle of volcanoes in a gold ring.
+  "central-american-federation": svg(
+    hBands("#1b4895", "#fff", "#1b4895") +
+      `<circle cx="320" cy="240" r="66" fill="#fff" stroke="#e8b923" stroke-width="10"/>` +
+      `<clipPath id="tri"><path d="M320 184L368.5 268h-97z"/></clipPath><g clip-path="url(#tri)">` +
+      rect(270, 180, 100, 90, "#a8d8f0") +
+      `<path d="M276 262a44 44 0 0 1 88 0" fill="none" stroke="#e03c31" stroke-width="7"/>` +
+      `<path d="M283 262a37 37 0 0 1 74 0" fill="none" stroke="#f6d32d" stroke-width="7"/>` +
+      `<circle cx="320" cy="222" r="7" fill="#c8102e"/>` +
+      `<path d="M270 262l14-20 12 14 12-22 12 22 12-22 12 22 12-14 14 20z" fill="#2e8b3d"/>` +
+      rect(270, 258, 100, 12, "#1b4895") +
+      `</g><path d="M320 184L368.5 268h-97z" fill="none" stroke="#e8b923" stroke-width="5"/>`,
+  ),
+  // Union of South American Nations (original): green over blue, gold disc ringed by twelve white stars.
+  "union-of-south-american-nations": svg(
+    rect(0, 0, W, 240, "#1e7b4a") + rect(0, 240, W, 240, "#1f4e9c") +
+      `<circle cx="320" cy="240" r="60" fill="#f2c230"/>` + starRing(320, 240, 144, 12, 20, "#fff"),
+  ),
+  // Antillean Confederation (original): blue-white-red with three white stars on the blue.
+  "antillean-confederation": svg(hBands("#002a8f", "#fff", "#cf142b") + stars([[160, 86], [320, 86], [480, 86]], 56, "#fff")),
+  // West Indies Federation (1958–62): blue with four wavy white lines and an orange sun.
+  "west-indies-federation": svg(
+    rect(0, 0, W, H, "#1f4ea1") +
+      [100, 193, 287, 380].map((y) => `<path d="${wave(y, 12, 4)}" fill="none" stroke="#fff" stroke-width="14"/>`).join("") +
+      `<circle cx="320" cy="240" r="120" fill="#f7941d"/>`,
+  ),
+  // Kalmar Union: red Nordic cross on gold.
+  "kalmar-union": svg(rect(0, 0, W, H, "#ffcd00") + rect(192, 0, 96, H, "#c8102e") + rect(0, 192, W, 96, "#c8102e")),
+  // Nordic Federation (original): blue with a red-edged gold Nordic cross.
+  "nordic-federation": svg(
+    rect(0, 0, W, H, "#1f4e8c") + rect(180, 0, 120, H, "#c8102e") + rect(0, 180, W, 120, "#c8102e") +
+      rect(200, 0, 80, H, "#f2c230") + rect(0, 200, W, 80, "#f2c230"),
+  ),
+  // Baltic Federation (original): blue-white-carmine with a gold band at the hoist.
+  "baltic-federation": svg(hBands("#0072ce", "#fff", "#9e3039") + rect(0, 0, W / 6, H, "#fdb913")),
+  // Polish–Lithuanian Commonwealth: red-white-red royal banner with the crowned Eagle-and-Vytis shield.
+  "polish-lithuanian-commonwealth": svg(
+    hBands("#eb001a", "#fff", "#eb001a") +
+      `<path d="${shieldPath(256, 168, 128, 168)}" fill="#eb001a" stroke="#e8b923" stroke-width="8"/>` +
+      `<path d="M320 168v168M256 252h128" stroke="#e8b923" stroke-width="5"/>` +
+      eagle(288, 210, 1.1, "#fff") + knight(352, 212, 1.05, "#fff") + knight(288, 286, 1.05, "#fff") + eagle(352, 284, 1.1, "#fff") +
+      crown(320, 160, 96, "#e8b923"),
+  ),
+  // Intermarium (original): white between two blue seas, a red lozenge with a gold star.
+  intermarium: svg(
+    rect(0, 0, W, H, "#fff") + rect(0, 0, W, 96, "#1f5fa8") + rect(0, 384, W, 96, "#1f5fa8") +
+      `<path d="M320 120L420 240 320 360 220 240z" fill="#c8102e"/>` + star(320, 248, 58, "#ffd500"),
+  ),
+  // Union State of Russia and Belarus (original): white-blue-red with a red-and-green band at the hoist.
+  "union-state": svg(hBands("#fff", "#0039a6", "#d52b1e") + rect(0, 0, 128, 320, "#c8313e") + rect(0, 320, 128, 160, "#4aa657")),
+  // Austria-Hungary (civil ensign 1869–1918): red-white-red beside red-white-green, each with its crowned shield.
+  "austria-hungary": svg(
+    rect(0, 0, 320, 160, "#c8102e") + rect(0, 160, 320, 160, "#fff") + rect(0, 320, 320, 160, "#c8102e") +
+      rect(320, 0, 320, 160, "#ce2939") + rect(320, 160, 320, 160, "#fff") + rect(320, 320, 320, 160, "#477050") +
+      `<clipPath id="as"><path d="${shieldPath(234, 206, 56, 74)}"/></clipPath><g clip-path="url(#as)">` +
+      rect(234, 206, 56, 80, "#c8102e") + rect(234, 228, 56, 24, "#fff") + `</g>` +
+      `<clipPath id="hs"><path d="${shieldPath(350, 206, 56, 74)}"/></clipPath><g clip-path="url(#hs)">` +
+      rect(350, 206, 28, 80, "#ce2939") + [216, 236, 256, 276].map((y) => rect(350, y, 28, 10, "#fff")).join("") +
+      rect(378, 206, 28, 80, "#ce2939") + `<path d="M378 280q14-22 28 0z" fill="#477050"/>` +
+      `<path d="M392 266v-50M384 228h16M386 240h12" stroke="#fff" stroke-width="5"/></g>` +
+      `<path d="${shieldPath(234, 206, 56, 74)}${shieldPath(350, 206, 56, 74)}" fill="none" stroke="#b8902a" stroke-width="3"/>` +
+      crown(262, 202, 40, "#e8b923") + crown(378, 202, 40, "#e8b923"),
+  ),
+  // Danubian Federation (original): red over white over red, crossed by the blue wavy Danube.
+  "danubian-federation": svg(
+    rect(0, 0, W, H, "#fff") + rect(0, 0, W, 96, "#c8102e") + rect(0, 384, W, 96, "#c8102e") +
+      `<path d="${wave(240, 36, 2)}" fill="none" stroke="#1f5fa8" stroke-width="80"/>`,
+  ),
+  // Balkan Federation (original): blue-white-green with a ring of eight gold stars.
+  "balkan-federation": svg(hBands("#1f5fa8", "#fff", "#1f7a3a") + starRing(320, 242, 60, 8, 18, "#f2c230")),
+  // Benelux Union (original): red-white-blue with three gold stars on the white.
+  benelux: svg(hBands("#ae1c28", "#fff", "#21468b") + stars([[180, 246], [320, 246], [460, 246]], 64, "#fdda24")),
+  // Iberian Union (original): green and red halves with a gold armillary ring.
+  "iberian-union": svg(
+    vBands("#006600", "#c60b1e") +
+      `<g fill="none" stroke="#f1bf00" stroke-width="18"><circle cx="320" cy="240" r="120"/><path d="M200 240h240M235.1 324.9L404.9 155.1"/></g>`,
+  ),
+  // Transcaucasian Democratic Federative Republic (1918): gold-black-red.
+  "transcaucasian-federation": svg(hBands("#ffcc00", "#000", "#ff0000")),
+  // Central Asian Union (original): sky blue over green with a white line, a gold sun under an arc of five stars.
+  "central-asian-union": svg(
+    rect(0, 0, W, 320, "#3aa0d8") + rect(0, 320, W, 160, "#1e8a4a") + rect(0, 312, W, 16, "#fff") +
+      `<circle cx="320" cy="196" r="60" fill="#f5c518"/>` + starArc(320, 196, 108, -160, -20, 5, 20, "#f5c518"),
+  ),
+  // Indochinese Federation (original): red and dark blue halves with three gold stars in a triangle.
+  "indochina-federation": svg(vBands("#c8102e", "#1f3f8f") + stars([[320, 184], [262, 290], [378, 290]], 50, "#f2c230")),
+  // Maphilindo (original): red and blue split by a white diagonal, with a gold eight-rayed sun.
+  maphilindo: svg(
+    `<path d="M0 0H640L0 480z" fill="#ce1126"/><path d="M640 0V480H0z" fill="#0038a8"/>` +
+      `<path d="M-40 510L680-30" stroke="#fff" stroke-width="80"/>` +
+      `<polygon points="${starPoints(320, 240, 80, 8, 0.6)}" fill="#fcd116"/><circle cx="320" cy="240" r="40" fill="#fcd116"/>`,
+  ),
+  // Arab Federation of Iraq and Jordan (1958): black-white-green with a red hoist triangle.
+  "arab-federation": svg(hBands("#000", "#fff", "#007a3d") + `<path d="M0 0L275 240 0 480z" fill="#ce1126"/>`),
+  // Federation of Arab Republics (1972–77): red-white-black with the gold Hawk of Quraish.
+  "federation-of-arab-republics": svg(
+    hBands("#ce1126", "#fff", "#000") +
+      `<g fill="#efbb22" stroke="#9a7417" stroke-width="3">` +
+      `<path d="M314 206L214 164l14 36-18 10 26 22-14 14 40 14 46-8zM326 206l100-42-14 36 18 10-26 22 14 14-40 14-46-8z"/>` +
+      `<path d="M302 294h36l-6 30h-24z"/><ellipse cx="320" cy="252" rx="30" ry="50"/>` +
+      `<circle cx="318" cy="190" r="18"/><path d="M302 184l-16 10 18 4z"/>` +
+      `<rect x="282" y="310" width="76" height="16" rx="7"/></g>`,
+  ),
+  // Arab Union (Arab Revolt flag, 1916): black-green-white with a red hoist triangle.
+  "arab-union": svg(hBands("#000", "#007a3d", "#fff") + `<path d="M0 0L213 240 0 480z" fill="#ce1126"/>`),
+  // Gulf Union (original): green and maroon bands on white, a green crescent holding six stars.
+  "gulf-union": svg(
+    rect(0, 0, W, H, "#fff") + rect(0, 0, W, 120, "#007a3d") + rect(0, 360, W, 120, "#8d1b3d") +
+      crescent(296, 240, 92, 32, 78, "#007a3d") + starArc(340, 240, 46, -80, 80, 6, 12, "#007a3d"),
+  ),
+  // Maghreb Union (original): white over green, a red upturned crescent beneath an arc of five red stars.
+  "maghreb-union": svg(
+    rect(0, 0, W, 320, "#fff") + rect(0, 320, W, 160, "#006233") +
+      crescent(320, 196, 72, 28, 62, "#c1272d", -90) + starArc(320, 196, 120, -165, -15, 5, 20, "#c1272d"),
+  ),
+  // Nile Valley Union (Kingdom of Egypt flag, 1922–53): green with a white crescent and three white stars.
+  "nile-valley-union": svg(
+    rect(0, 0, W, H, "#0b8a3e") + crescent(290, 240, 132, 48, 114, "#fff") + stars([[384, 242], [326, 182], [326, 302]], 30, "#fff"),
+  ),
+  // East African Federation (original): five stripes of the members' colours, a white disc at the hoist with a shield and spear.
+  "east-african-federation": svg(
+    rect(0, 0, W, H, "#fff") +
+      ["#000", "#bb0000", "#1eb53a", "#fcd116", "#00a3dd"].map((c, i) => rect(0, i * 98.4, W, 86.4, c)).join("") +
+      `<circle cx="160" cy="240" r="96" fill="#fff"/>` +
+      `<path d="M112 312L208 168" stroke="#000" stroke-width="7"/><path d="M208 168l-4 22 14-10z" fill="#000"/>` +
+      `<ellipse cx="160" cy="240" rx="32" ry="56" fill="#000"/><path d="M160 190v100" stroke="#fff" stroke-width="7"/>`,
+  ),
+  // Mali Federation (1959–60): green-gold-red with a black kanaga figure.
+  "mali-federation": svg(
+    vBands("#14b53a", "#fcd116", "#ce1126") +
+      `<path d="M320 128v224M280 196h80M280 196v-56M360 196v-56M266 140h28M346 140h28M280 288h80M280 288v52M360 288v52M266 340h28M346 340h28" stroke="#000" stroke-width="16" fill="none"/>`,
+  ),
+  // Union of African States (1961–62): red-gold-green with three black stars.
+  "union-of-african-states": svg(hBands("#ce1126", "#fcd116", "#006b3f") + stars([[160, 248], [320, 248], [480, 248]], 76, "#000")),
+  // Confederation of Sahel States (2025), simplified: sun, baobab and people in a white ring on green.
+  "sahel-confederation": svg(
+    rect(0, 0, W, H, "#1e8a3c") +
+      `<clipPath id="ring"><circle cx="320" cy="240" r="154"/></clipPath><g clip-path="url(#ring)">` +
+      `<circle cx="320" cy="236" r="78" fill="#f28c28"/>` +
+      `<path d="M302 324l6-92h24l6 92z" fill="#5a3a1e"/>` +
+      `<path d="M320 236L268 186M320 236l-22-64M320 236l22-64M320 236l52-50" stroke="#5a3a1e" stroke-width="12" stroke-linecap="round" fill="none"/>` +
+      `<g fill="#5a3a1e"><ellipse cx="264" cy="180" rx="26" ry="14"/><ellipse cx="296" cy="166" rx="24" ry="14"/><ellipse cx="344" cy="166" rx="24" ry="14"/><ellipse cx="376" cy="180" rx="26" ry="14"/>` +
+      [248, 284, 320, 356, 392].map((x) => `<circle cx="${x}" cy="338" r="9"/><rect x="${x - 8}" y="350" width="16" height="30" rx="5"/>`).join("") +
+      `</g></g><circle cx="320" cy="240" r="160" fill="none" stroke="#fff" stroke-width="12"/>`,
   ),
 };
 

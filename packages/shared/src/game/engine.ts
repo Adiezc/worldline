@@ -516,11 +516,32 @@ export function applyEvent(state: GameState, map: MapIndex, event: GameEvent, ct
         ok();
         break;
       }
-      case "updateFormation": {
-        const f = state.formations.find((x) => x.founder === effect.country && x.status === "active");
-        if (!f || !f.requirements[effect.index]) { reject("no such formation requirement"); break; }
-        f.requirements[effect.index].met = effect.met;
-        if (effect.text) f.requirements[effect.index].text = effect.text;
+      case "addClaim": {
+        const ci = countryIndex(state, effect.claimant);
+        if (ci < 0 || !alive(effect.claimant)) { reject("unknown country"); break; }
+        if (humans.has(effect.claimant) && !causedBy.has(effect.claimant)) { reject(`${effect.claimant} is player-controlled; it only lays claims by its own orders`); break; }
+        state.claims ??= [];
+        const existing = new Set(state.claims.filter((c) => c.claimant === effect.claimant).flatMap((c) => c.provinces));
+        const provinces = [...new Set(effect.provinces)]
+          .filter((id) => id >= 1 && id <= map.count && state.owners[id] !== ci && state.owners[id] >= 0 && !existing.has(id))
+          .slice(0, MAX_CLAIM_REGIONS);
+        if (!provinces.length) { reject("no new regions to claim (already claimed or already its own)"); break; }
+        state.claims.push({ id: nextId(state, "cl"), claimant: effect.claimant, provinces, note: effect.note.trim().slice(0, 300), since: event.date });
+        applied.push({ ...effect, provinces });
+        break;
+      }
+      case "dropClaim": {
+        if (humans.has(effect.claimant) && !causedBy.has(effect.claimant)) { reject(`${effect.claimant} is player-controlled; it only renounces claims by its own decision`); break; }
+        const drop = effect.provinces?.length ? new Set(effect.provinces) : null;
+        let dropped = 0;
+        for (const c of state.claims ?? []) {
+          if (c.claimant !== effect.claimant) continue;
+          const before = c.provinces.length;
+          c.provinces = drop ? c.provinces.filter((id) => !drop.has(id)) : [];
+          dropped += before - c.provinces.length;
+        }
+        state.claims = (state.claims ?? []).filter((c) => c.provinces.length);
+        if (!dropped) { reject("no such claim"); break; }
         ok();
         break;
       }
@@ -540,6 +561,9 @@ export function applyEvent(state: GameState, map: MapIndex, event: GameEvent, ct
     }
   }
 
+  // A claim is settled once the claimant owns the land.
+  if (diff.size && state.claims?.length) pruneClaims(state);
+
   // Countries that lost their last region cease to exist.
   const held = new Set(state.owners.filter((o) => o >= 0));
   for (let i = 0; i < state.countries.length; i++) {
@@ -554,6 +578,18 @@ export function applyEvent(state: GameState, map: MapIndex, event: GameEvent, ct
   if (clamped.length) event.clamped = clamped;
   if (diff.size) event.mapDiff = [...diff].map((province) => ({ province, owner: state.owners[province], controller: state.controllers[province] }));
   return { applied, rejected, clamped };
+}
+
+const MAX_CLAIM_REGIONS = 20;
+
+/** Drop claimed regions the claimant now owns, and claims of countries that no longer exist. */
+export function pruneClaims(state: GameState) {
+  if (!state.claims) return;
+  for (const c of state.claims) {
+    const ci = countryIndex(state, c.claimant);
+    c.provinces = state.countries[ci]?.alive === false || ci < 0 ? [] : c.provinces.filter((id) => state.owners[id] !== ci);
+  }
+  state.claims = state.claims.filter((c) => c.provinces.length);
 }
 
 /**

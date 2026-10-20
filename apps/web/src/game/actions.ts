@@ -1,5 +1,5 @@
 // User intents → store updates + client messages.
-import type { FormationRequest, GameSettings, Operation, ProposalDraft, ResolutionType } from "@worldline/shared";
+import type { GameSettings, Operation, ProposalDraft, ResolutionType } from "@worldline/shared";
 import { getMap, getPickHandler } from "../map/controller.ts";
 import { useMap } from "../store.ts";
 import { flushOrders, scheduleOrdersSync, send } from "./connection.ts";
@@ -15,10 +15,11 @@ function setOrders(fn: (o: DraftOrder[]) => DraftOrder[]) {
   scheduleOrdersSync();
 }
 
-export const addOrder = (text: string, operation?: Operation) => {
+/** Add an order; battle plans and proclamations carry their structured part along. */
+export const addOrder = (text: string, extra: { operation?: Operation; formable?: string } = {}) => {
   const t = text.trim();
   if (!t) return;
-  setOrders((o) => [...o, { id: uid("o"), text: t, ...(operation ? { operation } : {}) }]);
+  setOrders((o) => [...o, { id: uid("o"), text: t, ...(extra.operation ? { operation: extra.operation } : {}), ...(extra.formable ? { formable: extra.formable } : {}) }]);
 };
 /** Replace an order's battle plan (and its text) after it was redrawn. */
 export const updateOperation = (id: string, text: string, operation: Operation) =>
@@ -28,7 +29,7 @@ export const deleteOrder = (id: string) => setOrders((o) => o.filter((x) => x.id
 
 // --- AI helpers ------------------------------------------------------------------------------
 
-function aiRequest(kind: Exclude<AiKind, "formation">, text?: string, extra: { orderId?: string; question?: string } = {}) {
+function aiRequest(kind: AiKind, text?: string, extra: { orderId?: string; question?: string } = {}) {
   const reqId = uid("r");
   useGame.setState((s) => ({ requests: { ...s.requests, [reqId]: { kind, at: Date.now(), ...extra } } }));
   send({ t: "ai", reqId, kind, text });
@@ -165,25 +166,6 @@ export const respondProposal = (chatId: string, proposalId: string, accept: bool
 export const proposeResolution = (orgId: string, resolutionType: ResolutionType, text: string, target?: string) =>
   send({ t: "org.propose", orgId, resolutionType, text, target: target || undefined });
 export const voteResolution = (resolutionId: string, vote: "yes" | "no" | "abstain") => send({ t: "org.vote", resolutionId, vote });
-
-// --- Formation -------------------------------------------------------------------------------
-
-export function assessFormation(request: FormationRequest) {
-  const reqId = uid("f");
-  useGame.setState((s) => ({ formationReq: reqId, requests: { ...s.requests, [reqId]: { kind: "formation", at: Date.now() } } }));
-  send({ t: "formation.assess", reqId, request });
-}
-export function recheckFormation(formationId: string) {
-  const reqId = uid("f");
-  useGame.setState((s) => ({ formationReq: reqId, requests: { ...s.requests, [reqId]: { kind: "formation", at: Date.now() } } }));
-  send({ t: "formation.recheck", reqId, formationId });
-}
-export const proclaimFormation = (formationId: string) => send({ t: "formation.proclaim", formationId });
-export const consentFormation = (formationId: string, accept: boolean) => send({ t: "formation.consent", formationId, accept });
-export const abandonFormation = (formationId: string) => {
-  send({ t: "formation.abandon", formationId });
-  useGame.setState((s) => (s.activeFormationId === formationId ? { activeFormationId: null } : {}));
-};
 
 // --- Turn results & playback -----------------------------------------------------------------
 

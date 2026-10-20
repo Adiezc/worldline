@@ -232,7 +232,7 @@ function OperationComposer() {
       stance: draft.stance, ...(draft.name.trim() ? { name: draft.name.trim() } : {}),
     };
     if (draft.orderId) updateOperation(draft.orderId, describeOperation(op), op);
-    else addOrder(describeOperation(op), op);
+    else addOrder(describeOperation(op), { operation: op });
     useGame.setState({ opDraft: null });
   };
 

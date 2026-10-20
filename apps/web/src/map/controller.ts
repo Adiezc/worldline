@@ -43,6 +43,8 @@ export interface MapController {
   setHighlightOwner(owner: number | null): void;
   /** Gold-hatch these provinces (e.g. regions picked for a peace deal); empty clears. */
   setMarked(ids: ArrayLike<number>): void;
+  /** Disputed territories: dashed claim lines (province pairs) and claimant stripes (id → claimant index). */
+  setClaims(linePairs: [number, number][] | null, marks: Map<number, number> | null): void;
   /** Battle plans: offensive arrows and hold lines (province pairs along the held border). */
   setOperations(arrows: OperationArrow[], holdPairs: [number, number][] | null): void;
 }

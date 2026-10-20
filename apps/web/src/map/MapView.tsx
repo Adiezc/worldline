@@ -256,6 +256,11 @@ export function MapView() {
         renderer.setMarked(ids);
         dirty = true;
       },
+      setClaims: (linePairs, marks) => {
+        renderer.setClaimLines(linePairs);
+        renderer.setClaimMarks(marks);
+        dirty = true;
+      },
       setOperations: (arrows, holdPairs) => {
         operations.set(arrows, renderer.mapW);
         renderer.setHoldLines(holdPairs);

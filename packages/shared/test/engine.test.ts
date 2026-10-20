@@ -759,9 +759,9 @@ describe("sanctions, leaders, agendas, formations", () => {
     expect(reasons(r.rejected)).toContain("USA");
   });
 
-  test("changeLeader, updateAgenda, updateFormation", () => {
+  test("changeLeader, updateAgenda", () => {
     const s = makeState();
-    let r = applyEvent(s, MAP, ev([
+    const r = applyEvent(s, MAP, ev([
       { type: "changeLeader", country: "FRA", leader: "New PM", government: "Fifth Republic" },
       { type: "changeLeader", country: "ZZZ", leader: "x" },
       { type: "updateAgenda", country: "FRA", goals: ["a", "b", "c", "d", "e"] },
@@ -769,17 +769,6 @@ describe("sanctions, leaders, agendas, formations", () => {
     expect(r.applied).toHaveLength(2);
     expect(country(s, "FRA")).toMatchObject({ leader: "New PM", government: "Fifth Republic" });
     expect(country(s, "FRA").agenda.goals).toEqual(["a", "b", "c", "d"]);
-    s.formations.push({
-      id: "f1", founder: "POL", name: "Commonwealth", concept: "", color: "#aa0000", government: "", countries: ["LTU"], provinces: [],
-      verdict: "notYet", requirements: [{ text: "Treaty", met: false, why: "" }], consent: [], suggestedPath: "", lastChecked: 1, status: "active",
-    });
-    r = applyEvent(s, MAP, ev([
-      { type: "updateFormation", country: "POL", index: 0, met: true, text: "Treaty signed" },
-      { type: "updateFormation", country: "POL", index: 3, met: true },
-    ]), ctx());
-    expect(r.applied).toHaveLength(1);
-    expect(s.formations[0].requirements[0]).toMatchObject({ met: true, text: "Treaty signed" });
-    expect(reasons(r.rejected)).toContain("no such formation requirement");
   });
 });
 

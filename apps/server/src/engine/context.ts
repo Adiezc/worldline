@@ -241,14 +241,17 @@ export function regionsBlock(state: GameState, map: MapIndex) {
 
 // ---- formations, memory, events, calendar ----
 
-export function formationsBlock(state: GameState) {
-  const active = state.formations.filter((f) => f.status === "active");
-  if (!active.length) return "";
-  const lines = active.map((f) => {
-    const reqs = f.requirements.map((r, i) => `[${i}] ${r.met ? "MET" : "unmet"}: ${r.text}`).join("; ");
-    return `${f.founder} working to form "${f.name}" with ${f.countries.join(", ") || "no partners"} — ${reqs}`;
+/** Territorial disputes: who claims which regions held by whom, and the basis of each claim. */
+export function disputesBlock(state: GameState, map: MapIndex, involving?: Set<string>) {
+  const lines = (state.claims ?? []).flatMap((c) => {
+    const holders = [...new Set(c.provinces.map((id) => state.countries[state.owners[id]]?.tag).filter((t): t is string => !!t))];
+    if (involving && !involving.has(c.claimant) && !holders.some((h) => involving.has(h))) return [];
+    const regions = c.provinces.length <= 6 ? c.provinces.map((id) => `${regionName(map, id)} (${id})`).join(", ") : `${c.provinces.length} regions`;
+    return [`${c.claimant} claims ${regions} held by ${holders.join("/")}: ${c.note}`];
   });
-  return `FORMATION GOALS (index in brackets for updateFormation):\n${lines.join("\n")}`;
+  return lines.length
+    ? `TERRITORIAL DISPUTES (grievances and context, not permission; most stay frozen for decades, but they shape how governments and the world read a crisis):\n${lines.join("\n")}`
+    : "";
 }
 
 export function memoryBlock(state: GameState, seed: ScenarioSeed) {
@@ -349,10 +352,10 @@ export function worldContext(state: GameState, deps: { map: MapIndex; seed: Scen
     relationsBlock(state, tiered),
     treatiesBlock(state, tiered),
     warsBlock(state, deps.map),
+    disputesBlock(state, map),
     sanctionsBlock(state),
     orgsBlock(state),
     regionsBlock(state, map),
-    formationsBlock(state),
     recentEventsBlock(state),
     diplomacyBlock(state),
     calendarBlock(seed, state.date, end),

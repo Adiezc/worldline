@@ -81,7 +81,7 @@ function mockView(phase: GameView["phase"] = "orders", theme: EraTheme = "modern
       { id: "m1", from: "DEU", text: "Chancellor's office here. We welcome your proposal in principle.", at: "2026-02-20" },
       { id: "m2", from: "DEU", text: "", at: "2026-02-21", proposal: { id: "p1", kind: "treaty", treatyType: "defensive", members: ["FRA", "DEU"], terms: "Mutual defence of each other's territory for ten years.", status: "open", awaiting: ["FRA"] } },
     ] }],
-    formations: [],
+    formed: [],
     players: [
       { id: "me", name: "Talleyrand", country: phase === "lobby" ? null : "FRA", isHost: true, connected: true, ready: false },
       { id: "p2", name: "Bismarck", country: "DEU", isHost: false, connected: true, ready: true },
@@ -93,7 +93,10 @@ function mockView(phase: GameView["phase"] = "orders", theme: EraTheme = "modern
     rotation: 0,
     seq: 0,
     you: { playerId: "me", country: phase === "lobby" ? null : "FRA", isHost: true },
-    formables: [{ name: "United States of Europe", concept: "A federal Europe with a common army and treasury.", countries: ["FRA", "DEU", "ITA", "ESP", "BEL", "NLD"] }],
+    formables: [{
+      id: "european-federation", name: "United States of Europe", concept: "A federal Europe with a common army and treasury.", countries: ["FRA", "DEU", "ITA", "ESP", "BEL", "NLD"],
+      provinces: [], formers: ["FRA", "DEU"], color: "#2f4a8a", flag: "gen:canton:#2f4a8a,#f4d03f",
+    }],
     calendar: [
       { date: "2026-03-15", title: "Slovenian parliamentary election", kind: "election", countries: ["SVN"] },
       { date: "2026-04-12", title: "Hungarian parliamentary election", kind: "election", countries: ["HUN"], note: "Fidesz faces its strongest challenge in years." },

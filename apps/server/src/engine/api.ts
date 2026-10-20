@@ -3,7 +3,7 @@
 // never builds prompts. All functions mutate the passed GameState in place.
 
 import type {
-  FormationGoal, FormationRequest, GameEvent, GameState, MapIndex, ProposalDraft, ResolutionType, ScenarioSeed, TurnResult,
+  GameEvent, GameState, MapIndex, ProposalDraft, ResolutionType, ScenarioSeed, TurnResult,
 } from "@worldline/shared";
 import type { DirectorPlan } from "./director.ts";
 
@@ -15,7 +15,7 @@ export interface AiCallUsage {
 
 export interface AiRequest {
   /** Which feature is calling; the mock provider uses it to synthesise a valid response. */
-  kind: "director" | "resolver" | "votes" | "consolidation" | "chat" | "advisor" | "polish" | "brainstorm" | "assessor";
+  kind: "director" | "resolver" | "votes" | "consolidation" | "chat" | "advisor" | "polish" | "brainstorm";
   system: string;
   user: string;
   /** Zod schema name from @worldline/shared (e.g. "ResolverOutput"); omitted for plain text. */
@@ -91,10 +91,6 @@ export interface EngineApi {
   brainstorm(state: GameState, deps: EngineDeps, opts: { country: string }): Promise<string[]>;
   proposeResolution(state: GameState, opts: { orgId: string; proposer: string; resolutionType: ResolutionType; target?: string; text: string }): { ok: boolean; message: string };
   castVote(state: GameState, opts: { resolutionId: string; country: string; vote: "yes" | "no" | "abstain" }): { ok: boolean; message: string };
-  assessFormation(state: GameState, deps: EngineDeps, opts: { founder: string; request: FormationRequest } | { formationId: string }): Promise<FormationGoal>;
-  consentFormation(state: GameState, opts: { formationId: string; country: string; accept: boolean }): { ok: boolean; message: string };
-  proclaimFormation(state: GameState, deps: EngineDeps, opts: { formationId: string }): Promise<{ ok: boolean; problems: string[]; event?: TurnResult["events"][number] }>;
-  abandonFormation(state: GameState, opts: { formationId: string }): void;
   /** Rebuild the last resolved turn from its pre-turn snapshot, stopping at `eventId`. */
   intervene(state: GameState, deps: EngineDeps, opts: { snapshot: GameState; eventId: string }): InterveneResult;
 }

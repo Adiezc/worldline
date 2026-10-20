@@ -1,320 +1,143 @@
-import { useMemo, useState } from "react";
-import { deriveFlag, type Formable, type FormationGoal, type GameView } from "@worldline/shared";
-import { abandonFormation, assessFormation, consentFormation, proclaimFormation, recheckFormation } from "../../game/actions.ts";
+import { useEffect, useState } from "react";
+import { formableStatus, type Formable, type GameView } from "@worldline/shared";
+import { addOrder, deleteOrder } from "../../game/actions.ts";
 import { countryMap } from "../../game/selectors.ts";
 import { useGame } from "../../game/store.ts";
-import { Badge, Button, CountryChip, Empty, Field, Panel, SectionTitle, Spinner } from "../common/ui.tsx";
+import { getMap } from "../../map/controller.ts";
+import { Badge, Bar, Button, Empty, Panel, SectionTitle } from "../common/ui.tsx";
 import { Flag } from "../common/Flag.tsx";
-import { FlagDesigner } from "../common/FlagDesigner.tsx";
-import { Icon } from "../common/Icon.tsx";
 
-/** The flag a goal will adopt (formNation derives the same one when none was chosen). */
-const goalFlag = (g: FormationGoal) => ({ tag: g.founder, color: g.color, name: g.name, flag: g.flag ?? deriveFlag(g.color, g.plan?.name ?? g.name) });
-
-const GOVERNMENTS = ["Federal republic", "Unitary republic", "Parliamentary democracy", "Constitutional monarchy", "Confederation", "Presidential republic", "One-party state", "Absolute monarchy", "Theocracy", "Military junta"];
-
+/**
+ * Nations this country can proclaim, Paradox-style: each has a fixed name, flag, colour and
+ * territory. Hold every region of it, then order the proclamation; it happens when the turn resolves.
+ */
 export function FormationPanel({ onClose }: { onClose: () => void }) {
   const view = useGame((s) => s.view)!;
-  const activeId = useGame((s) => s.activeFormationId);
-  const assessing = useGame((s) => !!s.formationReq && !!s.requests[s.formationReq]);
-  const [composing, setComposing] = useState(false);
   const me = view.you.country;
+  const myName = me ? countryMap(view.countries).get(me)?.name ?? me : null;
+  const formables = view.formables.filter((f) => me && f.formers.includes(me));
+  const open = formables.filter((f) => !(view.formed ?? []).includes(f.id));
+  const formed = formables.filter((f) => (view.formed ?? []).includes(f.id));
 
-  const goal =
-    view.formations.find((f) => f.id === activeId && f.status === "active") ??
-    view.formations.find((f) => f.founder === me && f.status === "active");
-  const invites = view.formations.filter((f) => f.status === "active" && f.founder !== me && f.consent.some((c) => c.country === me && c.human));
+  // Leaving the panel clears any territory highlighted from it.
+  useEffect(() => () => getMap()?.setMarked([]), []);
 
   return (
-    <Panel title="Form a Nation" subtitle="Unite peoples under a new flag" onClose={onClose} className="max-h-full" bodyClassName="px-4 py-3">
+    <Panel title="Form a Nation" subtitle={myName ? `Nations ${myName} can proclaim` : "Unite peoples under a new flag"} onClose={onClose} className="max-h-full" bodyClassName="px-4 py-3">
       {!me && <Empty>Spectators cannot found nations.</Empty>}
-      {invites.map((f) => (
-        <Invitation key={f.id} goal={f} me={me!} />
-      ))}
-      {me && assessing && (
-        <div className="mb-3 flex items-center gap-2.5 rounded border border-gold/40 bg-gold/[0.06] px-3 py-3 text-[12.5px] text-parchment/80">
-          <Spinner className="text-gold" />
-          Your ministers are studying the proposal…
-        </div>
+      {me && !formables.length && <Empty>No nation can be formed from {myName} in this world.</Empty>}
+      {me && open.length > 0 && (
+        <p className="mb-3 text-[11.5px] leading-snug text-parchment/55">
+          Bring every region of a nation's territory under your control, by war, treaty or union, then order its proclamation. It takes effect when the turn resolves.
+        </p>
       )}
-      {me && goal && !composing ? (
-        <GoalView goal={goal} view={view} busy={assessing} onNew={() => setComposing(true)} />
-      ) : (
-        me && <Composer view={view} me={me} busy={assessing} onSubmitted={() => setComposing(false)} onCancel={goal ? () => setComposing(false) : undefined} />
+      <div className="space-y-3">
+        {me && open.map((f) => <FormableCard key={f.id} f={f} view={view} me={me} />)}
+      </div>
+      {formed.length > 0 && (
+        <>
+          <SectionTitle>Already proclaimed</SectionTitle>
+          <ul className="space-y-1">
+            {formed.map((f) => (
+              <li key={f.id} className="flex items-center gap-2 text-[12px] text-parchment/55">
+                <Flag country={{ tag: f.id, flag: f.flag, color: f.color, name: f.name }} size={16} />
+                {f.name}
+              </li>
+            ))}
+          </ul>
+        </>
       )}
     </Panel>
   );
 }
 
-function Invitation({ goal, me }: { goal: FormationGoal; me: string }) {
-  const entry = goal.consent.find((c) => c.country === me)!;
-  return (
-    <div className="mb-3 rounded border border-partial/50 bg-partial/[0.07] px-3 py-2.5">
-      <div className="flex items-center gap-2">
-        <Flag country={goalFlag(goal)} size={20} />
-        <span className="font-display text-[13px] text-parchment">{goal.name}</span>
-      </div>
-      <p className="mt-1 text-[11.5px] leading-snug text-parchment/60">
-        <CountryChip tag={goal.founder} small /> invites you to join. {goal.concept}
-      </p>
-      {entry.accepted === undefined ? (
-        <div className="mt-2 flex gap-1.5">
-          <Button size="sm" variant="success" className="flex-1" onClick={() => consentFormation(goal.id, true)}>
-            Accept
-          </Button>
-          <Button size="sm" variant="danger" className="flex-1" onClick={() => consentFormation(goal.id, false)}>
-            Decline
-          </Button>
-        </div>
-      ) : (
-        <div className="mt-1.5 text-[11.5px] text-parchment/50">You have {entry.accepted ? "accepted" : "declined"}.</div>
-      )}
-    </div>
-  );
-}
+function FormableCard({ f, view, me }: { f: Formable; view: GameView; me: string }) {
+  const status = formableStatus(view, f, me);
+  const order = useGame((s) => s.orders.find((o) => o.formable === f.id));
+  const locked = useGame((s) => s.view?.phase !== "orders" || !!s.view.players.find((p) => p.id === s.view!.you.playerId)?.ready);
+  const [showing, setShowing] = useState(false);
+  const byTag = countryMap(view.countries);
+  const held = status.total - status.missing.length;
+  const ready = status.missing.length === 0;
 
-const VERDICTS = {
-  achievable: { tone: "green", label: "Achievable" },
-  notYet: { tone: "amber", label: "Not yet" },
-  unrealistic: { tone: "red", label: "Unrealistic" },
-} as const;
+  // Who holds the regions still missing, largest first.
+  const holders = new Map<string, number[]>();
+  for (const id of status.missing) {
+    const t = view.countries[view.controllers[id]]?.tag ?? "?";
+    if (!holders.has(t)) holders.set(t, []);
+    holders.get(t)!.push(id);
+  }
+  const missingBy = [...holders].sort((a, b) => b[1].length - a[1].length);
 
-function GoalView({ goal, view, busy, onNew }: { goal: FormationGoal; view: GameView; busy: boolean; onNew: () => void }) {
-  const me = view.you.country!;
-  const v = VERDICTS[goal.verdict];
-  const unmet = goal.requirements.filter((r) => !r.met).length;
-  const consentOk = goal.consent.every((c) => !c.needed || c.country === goal.founder || (c.human ? c.accepted === true : c.willing === true));
-  const canProclaim = goal.founder === me && goal.verdict === "achievable" && unmet === 0 && consentOk;
-
-  return (
-    <div>
-      <div className="rounded border border-panel-edge/50 p-3" style={{ background: `linear-gradient(110deg, ${goal.color}44, transparent 75%)` }}>
-        <div className="flex items-center gap-2.5">
-          <Flag country={goalFlag(goal)} size={44} className="ring-1 ring-gold/40" />
-          <div className="min-w-0">
-            <div className="font-display text-[15px] leading-tight text-parchment">{goal.name}</div>
-            <div className="text-[11px] text-parchment/55">{goal.government}</div>
-          </div>
-          <div className="ml-auto">
-            <Badge tone={v.tone}>{v.label}</Badge>
-          </div>
-        </div>
-        <p className="mt-2 text-[12px] leading-snug text-parchment/70">{goal.concept}</p>
-        <div className="mt-2 flex flex-wrap gap-1">
-          {[goal.founder, ...goal.countries].map((t) => (
-            <CountryChip key={t} tag={t} small />
-          ))}
-          <span className="self-center text-[10.5px] text-parchment/40">{goal.provinces.length} regions</span>
-        </div>
-      </div>
-
-      <SectionTitle right={<span className="text-[10.5px] text-parchment/45">{goal.requirements.length - unmet}/{goal.requirements.length}</span>}>Requirements</SectionTitle>
-      {goal.requirements.length === 0 && <Empty>No requirements set.</Empty>}
-      <ul className="space-y-1.5">
-        {goal.requirements.map((r, i) => (
-          <li key={i} className="flex gap-2 text-[12.5px] leading-snug" title={r.why}>
-            <span className={`mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-sm border ${r.met ? "border-success/70 bg-success/20 text-success" : "border-panel-edge text-transparent"}`}>
-              <Icon name="check" size={11} strokeWidth={2.4} />
-            </span>
-            <span className={r.met ? "text-parchment/60 line-through decoration-parchment/30" : "text-parchment/90"}>
-              {r.text}
-              {r.why && <span className="block text-[11px] text-parchment/40 no-underline">{r.why}</span>}
-            </span>
-          </li>
-        ))}
-      </ul>
-
-      <SectionTitle>Consent</SectionTitle>
-      <ul className="space-y-1">
-        {goal.consent.map((c) => {
-          const state = c.country === goal.founder ? "Founder" : !c.needed ? "Not required" : c.human ? (c.accepted === undefined ? "Awaiting reply" : c.accepted ? "Accepted" : "Declined") : c.willing === null ? "Undecided" : c.willing ? "Willing" : "Unwilling";
-          const tone = /Accepted|Willing|Founder/.test(state) ? "text-[#9fd6a1]" : /Declined|Unwilling/.test(state) ? "text-[#ec9d94]" : "text-parchment/50";
-          return (
-            <li key={c.country} className="flex items-center gap-2 text-[11.5px]">
-              <CountryChip tag={c.country} small />
-              {c.human && <Badge tone="blue">Player</Badge>}
-              <span className={`ml-auto ${tone}`}>{state}</span>
-            </li>
-          );
-        })}
-      </ul>
-
-      {goal.suggestedPath && (
-        <>
-          <SectionTitle>Suggested path</SectionTitle>
-          <p className="text-[12.5px] leading-relaxed whitespace-pre-line text-parchment/75 select-text">{goal.suggestedPath}</p>
-        </>
-      )}
-
-      {goal.founder === me && (
-        <div className="mt-4 flex flex-wrap gap-1.5">
-          <Button size="sm" variant="secondary" icon="refresh" busy={busy} onClick={() => recheckFormation(goal.id)}>
-            Re-check
-          </Button>
-          <Button size="sm" variant="primary" icon="crown" disabled={!canProclaim} onClick={() => proclaimFormation(goal.id)} title={canProclaim ? "Proclaim the new nation" : "All requirements and consents must be met"}>
-            Proclaim
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="ml-auto text-[#e0948b] hover:text-[#f0b2aa]"
-            onClick={() => {
-              if (confirm(`Abandon the dream of ${goal.name}?`)) abandonFormation(goal.id);
-            }}
-          >
-            Abandon
-          </Button>
-        </div>
-      )}
-      <button onClick={onNew} className="mt-3 text-[11px] text-parchment/40 hover:text-parchment">
-        + Assess a different nation
-      </button>
-    </div>
-  );
-}
-
-function Composer({ view, me, busy, onSubmitted, onCancel }: { view: GameView; me: string; busy: boolean; onSubmitted: () => void; onCancel?: () => void }) {
-  const myColor = countryMap(view.countries).get(me)?.color ?? "#8a7a5a";
-  const [name, setName] = useState("");
-  const [concept, setConcept] = useState("");
-  const [countries, setCountries] = useState<string[]>([]);
-  const [color, setColor] = useState(myColor);
-  const [flag, setFlag] = useState(() => deriveFlag(myColor, me));
-  const [government, setGovernment] = useState(GOVERNMENTS[0]);
-  const formables = useMemo(
-    () => [...view.formables].sort((a, b) => Number(b.countries.includes(me)) - Number(a.countries.includes(me))),
-    [view.formables, me],
-  );
-
-  const use = (f: Formable) => {
-    setName(f.name);
-    setConcept(f.concept);
-    setCountries(f.countries.filter((t) => t !== me));
+  const show = (ids: number[]) => {
+    getMap()?.setMarked(ids);
+    getMap()?.focusOn(f.provinces, { maxZoom: 1.2 });
+    setShowing(true);
   };
 
   return (
-    <div>
-      {formables.length > 0 && (
-        <>
-          <SectionTitle>Historic ambitions</SectionTitle>
-          <ul className="hud-scroll -mx-1 max-h-52 space-y-1.5 px-1">
-            {formables.map((f) => (
-              <li key={f.name}>
-                <button onClick={() => use(f)} className={`w-full rounded border px-2.5 py-2 text-left transition-colors hover:border-gold/60 ${name === f.name ? "border-gold/70 bg-gold/[0.07]" : "border-panel-edge/40 bg-black/15"}`}>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-display text-[12.5px] text-parchment">{f.name}</span>
-                    {f.countries.includes(me) && <Badge>Includes you</Badge>}
-                  </div>
-                  <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-parchment/55">{f.concept}</p>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
+    <div className="rounded border border-panel-edge/50 bg-black/20 p-3">
+      <div className="flex items-start gap-3">
+        <Flag country={{ tag: f.id, flag: f.flag, color: f.color, name: f.name }} size={44} className="mt-0.5 shrink-0 ring-1 ring-gold/40" />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="h-2.5 w-2.5 shrink-0 rounded-sm border border-black/40" style={{ background: f.color }} />
+            <span className="font-display text-[14px] text-parchment">{f.name}</span>
+          </div>
+          {f.capital && <div className="text-[11px] text-parchment/45">Capital: {f.capital}</div>}
+          <p className="mt-1 text-[11.5px] leading-snug text-parchment/65">{f.concept}</p>
+        </div>
+      </div>
 
-      <SectionTitle>Your design</SectionTitle>
-      <form
-        className="space-y-2.5"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (!name.trim() || !concept.trim()) return;
-          assessFormation({ name: name.trim(), concept: concept.trim(), countries, color, flag, government });
-          onSubmitted();
-        }}
-      >
-        <Field label="Name">
-          <input className="hud-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. United States of Europe" maxLength={60} />
-        </Field>
-        <Field label="Concept">
-          <textarea className="hud-input min-h-16 resize-none" value={concept} onChange={(e) => setConcept(e.target.value)} placeholder="Why should these peoples unite, and how?" />
-        </Field>
-        <Field label="Countries joining">
-          <CountryMultiSelect view={view} exclude={me} value={countries} onChange={setCountries} />
-        </Field>
-        <div className="grid grid-cols-[auto_1fr] gap-3">
-          <Field label="Map colour">
-            <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="h-[31px] w-14 cursor-pointer rounded border border-panel-edge bg-transparent p-0.5" />
-          </Field>
-          <Field label="Government">
-            <select className="hud-input" value={government} onChange={(e) => setGovernment(e.target.value)}>
-              {GOVERNMENTS.map((g) => (
-                <option key={g}>{g}</option>
-              ))}
-            </select>
-          </Field>
-        </div>
-        <div>
-          <span className="hud-label mb-1 block">Flag colours</span>
-          <FlagDesigner value={flag} onChange={setFlag} tag={me} name={name} />
-        </div>
-        <div className="flex justify-end gap-2 pt-1">
-          {onCancel && (
-            <Button type="button" size="sm" variant="ghost" onClick={onCancel}>
-              Back
-            </Button>
-          )}
-          <Button type="submit" size="sm" variant="primary" icon="crown" busy={busy} disabled={!name.trim() || !concept.trim()}>
-            Assess feasibility
-          </Button>
-        </div>
-      </form>
-    </div>
-  );
-}
-
-function CountryMultiSelect({ view, exclude, value, onChange }: { view: GameView; exclude: string; value: string[]; onChange: (v: string[]) => void }) {
-  const [q, setQ] = useState("");
-  const matches = useMemo(() => {
-    const s = q.trim().toLowerCase();
-    if (!s) return [];
-    return view.countries
-      .filter((c) => c.alive !== false && c.tag !== exclude && !value.includes(c.tag) && (c.name.toLowerCase().includes(s) || c.tag.toLowerCase() === s))
-      .slice(0, 6);
-  }, [q, view.countries, exclude, value]);
-  return (
-    <div>
-      {value.length > 0 && (
-        <div className="mb-1.5 flex flex-wrap gap-1">
-          {value.map((t) => (
-            <span key={t} className="inline-flex items-center">
-              <CountryChip tag={t} small onClick={() => onChange(value.filter((x) => x !== t))} />
-            </span>
+      <div className="mt-2.5 flex items-center gap-2">
+        <span className="hud-label shrink-0">Territory</span>
+        <Bar value={(held / Math.max(1, status.total)) * 100} color={ready ? "#6fbf73" : "#c9a45c"} className="flex-1" />
+        <span className="text-[11px] text-parchment/70 tabular-nums">
+          {held}/{status.total}
+        </span>
+      </div>
+      {missingBy.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          {missingBy.map(([tag, ids]) => (
+            <button
+              key={tag}
+              type="button"
+              onClick={() => show(ids)}
+              className="flex items-center gap-1 rounded-sm border border-panel-edge/50 px-1.5 py-0.5 text-[11px] text-parchment/70 hover:border-gold/60 hover:text-parchment"
+              title="Show these regions on the map"
+            >
+              <Flag country={byTag.get(tag) ?? { tag }} size={12} />
+              {byTag.get(tag)?.name ?? tag}: {ids.length} region{ids.length === 1 ? "" : "s"}
+            </button>
           ))}
-          <span className="self-center text-[10px] text-parchment/35">click to remove</span>
         </div>
       )}
-      <div className="relative">
-        <input
-          className="hud-input"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Search a country to add…"
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && matches[0]) {
-              e.preventDefault();
-              onChange([...value, matches[0].tag]);
-              setQ("");
-            }
-          }}
-        />
-        {matches.length > 0 && (
-          <ul className="hud-panel absolute inset-x-0 top-full z-10 mt-1 py-1">
-            {matches.map((c) => (
-              <li key={c.tag}>
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 px-2.5 py-1 text-left text-[12.5px] text-parchment/85 hover:bg-gold/10"
-                  onClick={() => {
-                    onChange([...value, c.tag]);
-                    setQ("");
-                  }}
-                >
-                  <Flag country={c} size={13} /> {c.name}
-                </button>
-              </li>
-            ))}
-          </ul>
+
+      <div className="mt-2.5 flex items-center gap-1.5">
+        <Button size="sm" variant="ghost" icon="map" onClick={() => (showing ? (getMap()?.setMarked([]), setShowing(false)) : show(status.missing))}>
+          {showing ? "Hide" : "Show territory"}
+        </Button>
+        <div className="flex-1" />
+        {order ? (
+          <>
+            <Badge tone="green">Proclamation ordered</Badge>
+            {!locked && (
+              <Button size="sm" variant="ghost" onClick={() => deleteOrder(order.id)} title="Withdraw the order">
+                Cancel
+              </Button>
+            )}
+          </>
+        ) : (
+          <Button
+            size="sm"
+            variant="primary"
+            icon="crown"
+            disabled={!ready || locked}
+            title={ready ? "Order the proclamation; it takes effect when the turn resolves" : "Control every region of the territory first"}
+            onClick={() => addOrder(`Proclaim the ${f.name}.`, { formable: f.id })}
+          >
+            Proclaim
+          </Button>
         )}
       </div>
     </div>

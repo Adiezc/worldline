@@ -86,7 +86,7 @@ export function makeState(): GameState {
     controllers: [...START.controllers],
     relations: {}, treaties: [], wars: [], sanctions: [],
     organizations: orgs(countries.map((c) => c.tag)),
-    resolutions: [], events: [], memory: [], chats: [], formations: [], players: [],
+    resolutions: [], events: [], memory: [], chats: [], formed: [], players: [],
     orders: {}, jumpVotes: {}, lastVerdicts: [],
     usage: { requests: 0, promptTokens: 0, completionTokens: 0, failures: 0 },
     rotation: 0, seq: 0,

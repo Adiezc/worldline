@@ -105,6 +105,17 @@ function OrgDetail({ view, org, onClose }: { view: GameView; org: Organization; 
         {org.founded && <Badge tone="grey">Founded {org.founded.slice(0, 4)}</Badge>}
       </div>
 
+      {/* What members can act on first: the agenda and proposing a resolution. */}
+      <SectionTitle>On the agenda</SectionTitle>
+      {pending.length === 0 && <Empty>No resolutions pending this turn.</Empty>}
+      <ul className="space-y-2">
+        {pending.map((r) => (
+          <PendingResolution key={r.id} r={r} org={org} me={me} />
+        ))}
+      </ul>
+
+      {me && org.members.includes(me) && !org.suspended.includes(me) && <ProposeForm view={view} org={org} />}
+
       <SectionTitle>Bodies</SectionTitle>
       <ul className="space-y-2">
         {org.bodies.map((b) => (
@@ -166,16 +177,6 @@ function OrgDetail({ view, org, onClose }: { view: GameView; org: Organization; 
           </div>
         </>
       )}
-
-      <SectionTitle>On the agenda</SectionTitle>
-      {pending.length === 0 && <Empty>No resolutions pending this turn.</Empty>}
-      <ul className="space-y-2">
-        {pending.map((r) => (
-          <PendingResolution key={r.id} r={r} org={org} me={me} />
-        ))}
-      </ul>
-
-      {me && org.members.includes(me) && !org.suspended.includes(me) && <ProposeForm view={view} org={org} />}
 
       <SectionTitle>Past resolutions</SectionTitle>
       {past.length === 0 && <Empty>None yet.</Empty>}
