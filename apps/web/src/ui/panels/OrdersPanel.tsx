@@ -21,8 +21,11 @@ export function OrdersPanel({ onClose }: { onClose: () => void }) {
 
   return (
     <Panel title="Orders" subtitle={me ? `${me.name} · Turn ${view.turn}` : "Spectating"} onClose={onClose} className="max-h-full" bodyClassName="px-4 py-3">
-      {!me ? (
-        <Empty>Spectators cannot issue orders. Claim a nation in the next game to play.</Empty>
+      {!me || me.alive === false ? (
+        <Empty>
+          {me ? `${me.name} is no more.` : "Spectators cannot issue orders."} To play, select a nation nobody leads on the map and choose
+          “Play as”.
+        </Empty>
       ) : (
         <>
           {locked && view.phase === "orders" && (
