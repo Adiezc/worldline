@@ -33,13 +33,16 @@ describe("scheduled dates", () => {
     expect(s.schedule![0].date).toBe("2026-09-01");
   });
 
-  test("holding a player's scheduled election may change its leader and government", () => {
+  test("holding a player's scheduled election may change its government", () => {
     const s = playerVenezuela();
     applyEvent(s, MAP, ev([ELECTION], { causes: ["o1"] }), ctx(30, [{ id: "o1", country: "VEN" }]));
     const id = s.schedule![0].id;
-    // Without the election behind it, the AI can't replace a stable player's leader.
-    const coup = applyEvent(s, MAP, ev([NEW_LEADER], { date: "2026-06-26" }), ctx());
-    expect(reasons(coup.rejected)).toContain("player-controlled");
+    // Without the election behind it, a new leader takes over but the form of government stays.
+    const before = country(s, "VEN").government;
+    const coup = applyEvent(s, MAP, ev([{ ...NEW_LEADER, leader: "Diosdado Cabello" }], { date: "2026-06-26" }), ctx());
+    expect(reasons(coup.clamped)).toContain("form of government stays");
+    expect(country(s, "VEN").leader).toBe("Diosdado Cabello");
+    expect(country(s, "VEN").government).toBe(before);
     const vote = ev([NEW_LEADER], { date: "2026-06-26", holds: id });
     applyEvent(s, MAP, vote, ctx());
     expect(country(s, "VEN").leader).toBe("María Corina Machado");
@@ -53,7 +56,8 @@ describe("scheduled dates", () => {
     applyEvent(s, MAP, ev([ELECTION], { causes: ["o1"] }), ctx(30, [{ id: "o1", country: "VEN" }]));
     const early = ev([NEW_LEADER], { date: "2026-06-01", holds: s.schedule![0].id });
     const r = applyEvent(s, MAP, early, ctx());
-    expect(r.rejected).toHaveLength(1);
+    expect(r.clamped).toHaveLength(1);
+    expect(country(s, "VEN").government).not.toBe("Presidential republic");
     expect(early.holds).toBeUndefined();
     expect(s.schedule).toHaveLength(1);
   });
@@ -63,7 +67,7 @@ describe("scheduled dates", () => {
     const turn = ctx();
     turn.calendar = [{ id: "cal4", date: "2026-01-10", kind: "election", title: "General election", countries: ["VEN"], since: "" }];
     applyEvent(s, MAP, ev([NEW_LEADER], { holds: "cal4" }), turn);
-    expect(country(s, "VEN").leader).toBe("María Corina Machado");
+    expect(country(s, "VEN").government).toBe("Presidential republic");
   });
 
   test("dates long overdue are dropped", () => {

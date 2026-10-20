@@ -501,19 +501,25 @@ describe("player protection", () => {
     expect(ok.applied).toHaveLength(1);
   });
 
-  test("stable player countries resist secession and leader changes", () => {
+  test("stable player countries resist secession and regime change, but leaders can still fall", () => {
     const { s, c } = setup();
+    const government = country(s, "UKR").government;
     let r = applyEvent(s, MAP, ev([
       { type: "spawnCountry", name: "Donetsk Republic", government: "Junta", leader: "X", provinces: [DONETSK] },
-      { type: "changeLeader", country: "UKR", leader: "Puppet" },
+      { type: "changeLeader", country: "UKR", leader: "Successor", government: "Military junta" },
     ]), c);
-    expect(r.applied).toHaveLength(0);
+    expect(r.rejected.map((x) => x.effect.type)).toEqual(["spawnCountry"]);
+    // An assassination or a resignation replaces the leader; the form of government stays.
+    expect(country(s, "UKR").leader).toBe("Successor");
+    expect(country(s, "UKR").government).toBe(government);
+    expect(r.clamped).toHaveLength(1);
     country(s, "UKR").stability = 10;
     r = applyEvent(s, MAP, ev([
       { type: "spawnCountry", name: "Donetsk Republic", government: "Junta", leader: "X", provinces: [DONETSK] },
-      { type: "changeLeader", country: "UKR", leader: "Puppet" },
+      { type: "changeLeader", country: "UKR", leader: "Puppet", government: "Military junta" },
     ]), c);
     expect(r.applied).toHaveLength(2);
+    expect(country(s, "UKR").government).toBe("Military junta");
   });
 });
 

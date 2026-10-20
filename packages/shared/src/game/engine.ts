@@ -409,8 +409,17 @@ export function applyEvent(state: GameState, map: MapIndex, event: GameEvent, ct
       case "changeLeader": {
         const k = countryByTag(state, effect.country);
         if (!k?.alive) { reject("unknown country"); break; }
-        if (humans.has(k.tag) && !causedBy.has(k.tag) && !heldFor.has(k.tag) && k.stability >= 30) { reject(`${k.tag} is player-controlled and stable`); break; }
+        // Players run the nation, not its leader: a player's leader can die, be killed or resign
+        // whenever the story supports it. The form of government changes only by the player's
+        // order, a scheduled vote, or real instability.
+        const govLocked = humans.has(k.tag) && !causedBy.has(k.tag) && !heldFor.has(k.tag) && k.stability >= 30;
         k.leader = effect.leader;
+        if (effect.government && effect.government !== k.government && govLocked) {
+          const { government: _, ...leaderOnly } = effect;
+          applied.push(leaderOnly);
+          noteClamp(`${k.tag} is player-controlled and stable; its form of government stays`);
+          break;
+        }
         if (effect.government) k.government = effect.government;
         ok();
         break;
