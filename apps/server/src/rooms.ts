@@ -22,6 +22,8 @@ type Socket = ServerWebSocket<SocketData>;
 
 const MAX_PLAYERS = 8;
 const VIEW_EVENTS = 150;
+/** How long a changed jump or AI setting must stand before the AI governments plan again. */
+const PLAN_SETTLE_MS = 1500;
 
 export interface RoomDeps {
   map: MapIndex;
@@ -38,26 +40,35 @@ export class Room {
 
   constructor(public state: GameState, private deps: RoomDeps) {}
 
-  /** AI governments' plan for the open turn, computed while players write their orders. */
-  private directorPlan?: NonNullable<EngineDeps["directorPlan"]> & { key: string };
+  /** AI governments' plans for the open turn by planKey, computed while players write their orders. */
+  private plans = new Map<string, NonNullable<EngineDeps["directorPlan"]>>();
+  private planTimer: ReturnType<typeof setTimeout> | undefined;
 
   private planKey() {
     const s = this.state;
     return JSON.stringify([s.turn, s.date, jumpDays(s), s.settings.modelChain, s.settings.aiBehaviour, s.settings.economyMode]);
   }
 
-  /** Start (or restart) the advance plan whenever the open turn or its AI settings change. */
-  private ensureDirectorPlan() {
+  /** Start an advance plan for the open turn and its AI settings, unless one exists already. */
+  private ensureDirectorPlan(settled = false) {
     const s = this.state;
     if (s.phase !== "orders" || this.resolving || s.settings.economyMode) return;
     if (!s.players.some((p) => p.connected && p.country)) return;
     const key = this.planKey();
-    if (this.directorPlan?.key === key) return;
+    if (this.plans.has(key)) return;
+    for (const [k, p] of this.plans) if (p.turn !== s.turn || p.date !== s.date) this.plans.delete(k);
+    // The turn's first plan starts at once. After a change of jump or AI settings, wait for the
+    // choice to settle: each plan is an AI request, and one abandoned midway still runs to the end.
+    clearTimeout(this.planTimer);
+    if (this.plans.size && !settled) {
+      this.planTimer = setTimeout(() => this.ensureDirectorPlan(true), PLAN_SETTLE_MS);
+      return;
+    }
     const started = Date.now();
     const pre = engine.planDirector(s, { map: this.deps.map, seed: this.deps.seed(s.scenarioId), ai: this.deps.ai });
-    this.directorPlan = { ...pre, key };
+    this.plans.set(key, pre);
     void pre.plan.then((p) => {
-      if (this.directorPlan?.plan === pre.plan) {
+      if (this.plans.get(this.planKey()) === pre) {
         this.log("info", `turn ${pre.turn}: AI governments planned ahead in ${Math.round((Date.now() - started) / 1000)}s${p ? "" : " (no plan; the turn will plan live)"}`);
       }
     });
@@ -68,7 +79,7 @@ export class Room {
       map: this.deps.map,
       seed: this.deps.seed(this.state.scenarioId),
       ai: this.deps.ai,
-      directorPlan: this.directorPlan,
+      directorPlan: this.plans.get(this.planKey()),
       onProgress: (stage, detail) => {
         this.log("info", `turn ${this.state.turn}: ${stage}${detail ? ` (${detail})` : ""}`);
         this.broadcast({ t: "progress", stage, detail });
@@ -329,8 +340,10 @@ export class Room {
       case "jump": {
         if (s.phase === "resolving") return;
         const days = [0, 7, 30, 90, 180, 365].includes(msg.days) ? msg.days : 30;
-        if (s.settings.jumpVoting) s.jumpVotes[me.id] = days;
-        else if (me.isHost) s.settings.jumpDays = days;
+        if (s.settings.jumpVoting) {
+          if (!myTag) return fail("Only players leading a nation vote on the jump.");
+          s.jumpVotes[me.id] = days;
+        } else if (me.isHost) s.settings.jumpDays = days;
         else return fail("Only the host sets the jump length.");
         return this.changed();
       }

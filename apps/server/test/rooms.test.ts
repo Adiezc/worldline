@@ -106,6 +106,30 @@ test("a timed turn waits for someone to play it, and the timer restarts when the
   expect(room.state.turn).toBe(1);
 });
 
+test("changing the jump back and forth doesn't spend an AI request on every change", async () => {
+  const mock = new MockProvider();
+  let plans = 0;
+  const ai: AiProvider = {
+    name: "mock",
+    quota: () => mock.quota(),
+    complete: async (req) => {
+      if (req.kind === "director") plans++;
+      return mock.complete(req);
+    },
+  };
+  const { room, a } = await startedRoom(ai);
+  expect(plans).toBe(1);
+  // Rapid changes start nothing; the choice that stands gets one plan.
+  for (const days of [90, 7, 180, 90]) await room.handle(a as never, { t: "jump", days });
+  expect(plans).toBe(1);
+  await Bun.sleep(1700);
+  expect(plans).toBe(2);
+  // Going back to a jump planned for already reuses that plan.
+  await room.handle(a as never, { t: "jump", days: 30 });
+  await Bun.sleep(1700);
+  expect(plans).toBe(2);
+});
+
 test("a spectator's request to the adviser is answered as a failed request, so the client stops waiting", async () => {
   const { room } = await startedRoom(slowAi({}));
   const watcher = socket();
