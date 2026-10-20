@@ -41,7 +41,6 @@ export function effectReference(state: GameState, days: number) {
 {"type":"joinOrg","orgId":"o7","country":"BRA"}   only for orgs without admitMember power.   {"type":"leaveOrg","orgId":"o1","country":"HUN"}
 {"type":"createOrg","abbrev":"ABC","name":"Full name","kind":"regional","members":["AAA","BBB"],"rule":"consensus","tradeBloc":false,"mutualDefense":false}
 {"type":"proposeResolution","orgId":"o1","resolutionType":"condemn","proposer":"FRA","target":"RUS","text":"what it says"}   proposer must be a member and the org must have that power; it is voted next turn.
-{"type":"updateFormation","country":"DEU","index":0,"met":true}   mark a FORMATION GOALS requirement met when events achieve it.
 {"type":"updateAgenda","country":"BRA","goals":["goal","goal"]}   AI countries only.
 {"type":"addClaim","claimant":"VEN","provinces":[813,814],"note":"why, in one line"}   a government formally lays claim to regions another country holds (after losing them in a war, a nationalist turn, a referendum). Rare.
 {"type":"dropClaim","claimant":"VEN","provinces":[813]}   a government renounces a claim (omit provinces to renounce all of it), e.g. in a peace treaty or a settlement.`;
@@ -59,6 +58,7 @@ export function resolverSystem(state: GameState, days: number, economy: boolean)
 PRINCIPLES
 - ${DIFFICULTY[state.settings.difficulty].text}
 - Judge each order on means, preparation, geography, politics and the reactions of others. Be skeptical: confident or emphatic wording earns nothing, and an order without the means to carry it out fails or only partly succeeds. Say why.
+- PLAYERS' EARLIER ORDERS is each player's recent track record. An order that builds on groundwork already laid there is better prepared than one out of the blue; an order repeating one that failed succeeds only if something has changed.
 - Other governments act in their own interest. NPC INTENTS are what AI governments are trying to do this period: play them out, letting them collide with or answer the players' orders.
 - Most of the world changes slowly. Keep effects proportionate.
 - STATE MUST MATCH THE STORY. Narrate nothing the effects don't record:
@@ -135,14 +135,14 @@ OUTPUT: one JSON object, nothing else:
 }
 
 export function advisorSystem(name: string) {
-  return `You are the chief strategic adviser to the government of ${name} in Worldline, a geopolitical simulation that begins in the real world. Brief your leader candidly and specifically, the way a trusted adviser would in private: the most pressing threats and opportunities, what rivals are likely to do, and two or three concrete moves worth ordering next (things the country can actually do with its means). Refer to the actual situation: names, numbers, relations and recent events. 150-250 words, plain prose or short paragraphs, no headings, no JSON.`;
+  return `You are the chief strategic adviser to the government of ${name} in Worldline, a geopolitical simulation that begins in the real world. Brief your leader candidly and specifically, the way a trusted adviser would in private: the most pressing threats and opportunities, what rivals are likely to do, and two or three concrete moves worth ordering next (things the country can actually do with its means). Refer to the actual situation: names, numbers, relations, recent events and how the government's recent orders went. 150-250 words, plain prose or short paragraphs, no headings, no JSON.`;
 }
 
 export const POLISH_SYSTEM = `You edit orders that a player gives to their country's government in Worldline, a geopolitical simulation. Rewrite the order so it is clear, concrete and actionable: who does what, with which means, towards whom, and on what timeline. Keep the same intent and scope; do not add new ambitions, targets or resources the player did not mention. Keep it short (1-4 sentences), in the imperative, in the player's language.
 
 OUTPUT: one JSON object: {"text":"..."}`;
 
-export const BRAINSTORM_SYSTEM = `You suggest orders for a player's country in Worldline, a geopolitical simulation that begins in the real world. Give 4-6 concrete, distinct order ideas that fit the country's situation, means and agenda: a mix of diplomacy, economy, domestic politics and security. Each idea is one imperative sentence a player could submit as an order, specific about partners and means, and realistic for the next few months.
+export const BRAINSTORM_SYSTEM = `You suggest orders for a player's country in Worldline, a geopolitical simulation that begins in the real world. Give 4-6 concrete, distinct order ideas that fit the country's situation, means and agenda: a mix of diplomacy, economy, domestic politics and security. Each idea is one imperative sentence a player could submit as an order, specific about partners and means, and realistic for the next few months. When YOUR RECENT ORDERS are listed, build on them: follow up what worked, and don't repeat what failed unchanged.
 
 OUTPUT: one JSON object: {"ideas":["...","..."]}`;
 

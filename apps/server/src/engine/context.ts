@@ -284,6 +284,20 @@ export function recentEventsBlock(state: GameState, opts: { involving?: Set<stri
 const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
 /**
+ * What players ordered in the last few turns and how each order went, so the adjudicator can
+ * credit groundwork already laid (or see a plan that keeps failing) instead of judging every
+ * order cold. `country` limits it to one player's own orders (they are private).
+ */
+export function orderHistoryBlock(state: GameState, opts: { country?: string; turns?: number; maxPerCountry?: number } = {}) {
+  const turns = opts.turns ?? 2, max = opts.maxPerCountry ?? 6;
+  const tags = opts.country ? [opts.country] : [...humanTags(state)];
+  const recent = (state.verdictLog ?? []).filter((v) => v.turn >= state.turn - turns && v.text);
+  const lines = tags.flatMap((tag) => recent.filter((v) => v.country === tag).slice(-max).map((v) =>
+    `- ${v.date} ${tag}: "${clip(v.text!.replace(/\s+/g, " "), 160)}" → ${v.outcome.toUpperCase()}: ${clip(v.reason.replace(/\s+/g, " "), 160)}`));
+  return lines.length ? `${opts.country ? "YOUR RECENT ORDERS" : "PLAYERS' EARLIER ORDERS"} (last ${turns} turns and how they went):\n${lines.join("\n")}` : "";
+}
+
+/**
  * What governments told each other in diplomatic talks recently: the last few statements and
  * every proposal with its outcome, per conversation. Turn prompts use it so the news stays
  * consistent with what was said at the table.

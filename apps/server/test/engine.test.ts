@@ -5,12 +5,13 @@ import { describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import {
-  addDays, buildMapIndex, countryByTag, countryIndex, relKey,
+  addDays, buildMapIndex, countryByTag, countryIndex, EffectSchema, relKey,
   type GameState, type MapMeta, type ScenarioSeed,
 } from "@worldline/shared";
 import { MockProvider } from "../src/ai/mock.ts";
 import type { AiProvider, AiRequest, EngineDeps } from "../src/engine/api.ts";
 import { engine, extractJson, INTERRUPTED } from "../src/engine/index.ts";
+import { effectReference } from "../src/engine/prompts.ts";
 import { buildFixtureSeed, ROOT } from "./fixtures/seed.ts";
 
 const meta = (await Bun.file(join(ROOT, "packages", "mapdata", "public", "map", "provinces.json")).json()) as MapMeta;
@@ -71,6 +72,16 @@ test("extractJson handles fences, prose and trailing commas", () => {
   expect(extractJson("<think>{no}</think>Here: {\"a\":{\"b\":\"}\"}} trailing")).toEqual({ a: { b: "}" } });
   expect(extractJson("{\"a\":[1,2,],}")).toEqual({ a: [1, 2] });
   expect(extractJson("I will fill {orderVerdicts} first. {\"a\":1}")).toEqual({ a: 1 });
+});
+
+test("the effect reference in the prompts matches the effect schema both ways", () => {
+  const ref = effectReference(newGame(seeds[0][1]), 30);
+  const examples = (ref.match(/\{"type":[^{}]*\}/g) ?? []).map((s) => JSON.parse(s) as { type: string });
+  // Every example the model is shown must parse; an effect the schema dropped would be discarded.
+  for (const e of examples) expect([e.type, EffectSchema.safeParse(e).success]).toEqual([e.type, true]);
+  // And every effect the rules engine accepts is documented.
+  const documented = new Set(examples.map((e) => e.type));
+  expect(EffectSchema.options.map((o) => o.shape.type.value).filter((t) => !documented.has(t))).toEqual([]);
 });
 
 for (const [label, seed] of seeds) {
@@ -507,5 +518,21 @@ describe("diplomacy and turns", () => {
       expect(spy.prompts[kind]).toContain("We will never cede Kharkiv.");
     }
     expect(spy.prompts.resolver).toMatch(/PROPOSAL peace treaty \(white peace\) among UKR, RUS: (ACCEPTED|REJECTED)/);
+  });
+
+  test("players' earlier orders and verdicts reach the next resolver, and each adviser sees only its own", async () => {
+    const state = newGame(seed, [["p1", "FRA"], ["p2", "DEU"]]);
+    state.orders = {
+      p1: [{ id: "o1", playerId: "p1", country: "FRA", text: "Fund a new generation of nuclear reactors." }],
+      p2: [{ id: "o2", playerId: "p2", country: "DEU", text: "Rebuild ammunition stocks." }],
+    };
+    await engine.runTurn(state, depsFor(seed));
+    const spy = new SpyProvider();
+    await engine.runTurn(state, depsFor(seed, spy));
+    expect(spy.prompts.resolver).toMatch(/PLAYERS' EARLIER ORDERS[^\n]*\n(- .*\n)*- 2026-01-01 FRA: "Fund a new generation of nuclear reactors\." → (SUCCESS|PARTIAL|FAIL): \S/);
+    expect(spy.prompts.resolver).toContain(`DEU: "Rebuild ammunition stocks." →`);
+    await engine.advisor(state, depsFor(seed, spy), { country: "FRA" });
+    expect(spy.prompts.advisor).toContain(`YOUR RECENT ORDERS (last 2 turns and how they went):\n- 2026-01-01 FRA: "Fund a new generation`);
+    expect(spy.prompts.advisor).not.toContain(`DEU: "Rebuild ammunition stocks."`);
   });
 });

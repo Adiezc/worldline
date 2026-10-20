@@ -7,7 +7,7 @@ import {
 } from "@worldline/shared";
 import type { EngineDeps } from "./api.ts";
 import {
-  calendarBlock, countryBrief, countryDetail, fmtGdp, memoryBlock, nameOf, recentEventsBlock, treatiesBlock,
+  calendarBlock, countryBrief, countryDetail, fmtGdp, memoryBlock, nameOf, orderHistoryBlock, recentEventsBlock, treatiesBlock,
 } from "./context.ts";
 import { callJson, callText } from "./llm.ts";
 import { advisorSystem, BRAINSTORM_SYSTEM, POLISH_SYSTEM } from "./prompts.ts";
@@ -51,6 +51,7 @@ export function countryContext(state: GameState, deps: EngineDeps, tag: string) 
     pending.length ? `PENDING VOTES: ${pending.join("; ")}` : "",
     formations.length ? `FORMABLE NATIONS: ${formations.join("; ")}` : "",
     `ECONOMY RANK: #${rank(state, tag)} by GDP (${fmtGdp(k.gdp)})`,
+    orderHistoryBlock(state, { country: tag }),
     recentEventsBlock(state, { max: 25 }),
     calendarBlock(deps.seed, state.date, addDays(state.date, 120)),
   ].filter(Boolean).join("\n\n");
