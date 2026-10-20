@@ -91,13 +91,16 @@ function handleMessage(msg: ServerMessage) {
       // After an intervention the server may resend the kept part of the turn: keep it for
       // reference but don't reopen the results or hold the map.
       if (s.timeTravel && Date.now() - s.timeTravel.at < 20_000) {
-        useGame.setState({ lastResult: msg.result, timeTravel: null, resultOpen: false, mapHold: false, playback: null, turnBase: null, viewAdvanced: false, progress: null });
+        useGame.setState({ lastResult: msg.result, timeTravel: null, resultOpen: false, mapHold: false, playback: null, turnBase: null, progress: null });
         break;
       }
       useGame.setState({
         lastResult: msg.result,
-        turnBase: s.viewAdvanced && s.preTurn ? { owners: s.preTurn.owners, controllers: s.preTurn.controllers } : null,
-        viewAdvanced: false,
+        // The server sends this before the post-turn view. If that view got here first, the map
+        // already shows the new borders, so playback must start from the ones it replaced.
+        turnBase: s.view && s.view.turn > msg.result.turn && s.preTurn?.turn === msg.result.turn
+          ? { owners: s.preTurn.owners, controllers: s.preTurn.controllers }
+          : null,
         resultOpen: true,
         mapHold: true,
         playback: null,

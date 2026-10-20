@@ -71,8 +71,6 @@ export interface GameStore {
   view: GameView | null;
   /** Ownership before the most recent turn change, for playback. */
   preTurn: { turn: number; owners: number[]; controllers: number[] } | null;
-  /** A post-turn view arrived since the last `turn` message (so the map already shows it). */
-  viewAdvanced: boolean;
   /** Ownership playback must start from (set when the view beat the `turn` message). */
   turnBase: { owners: number[]; controllers: number[] } | null;
   progress: { stage: ProgressStage; detail?: string } | null;
@@ -131,7 +129,6 @@ const initial: GameStore = {
   playerId: null,
   view: null,
   preTurn: null,
-  viewAdvanced: false,
   turnBase: null,
   progress: null,
   lastResult: null,
@@ -199,7 +196,6 @@ export function applyView(view: GameView) {
     if (wentBack) {
       Object.assign(patch, {
         preTurn: null,
-        viewAdvanced: false,
         turnBase: null,
         resultOpen: false,
         mapHold: false,
@@ -216,7 +212,6 @@ export function applyView(view: GameView) {
     }
     if (turnChanged) {
       patch.preTurn = { turn: prev.turn, owners: prev.owners, controllers: prev.controllers };
-      patch.viewAdvanced = true;
       patch.prevOrders = Object.fromEntries(s.orders.map((o) => [o.id, o.text]));
     }
     // Orders: adopt the server's list unless we have local edits waiting to sync.

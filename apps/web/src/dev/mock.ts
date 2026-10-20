@@ -169,7 +169,7 @@ function mockTurn() {
       relations: [{ tag: "BEL", from: 22, to: 48 }, { tag: "DEU", from: 31, to: 25 }],
     }],
   };
-  useGame.setState({ lastResult: result, resultOpen: true, mapHold: true, playback: null, turnBase: null, viewAdvanced: false });
+  useGame.setState({ lastResult: result, resultOpen: true, mapHold: true, playback: null, turnBase: null });
   const owners = v.owners.slice();
   belProvs.forEach((p) => (owners[p] = fra));
   applyView({
