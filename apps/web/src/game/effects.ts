@@ -1,6 +1,7 @@
 // Plain-language notes on the rule effects an event applied ("Ukraine stability −2", "War:
 // Russia vs Ukraine"), so news cards show what actually changed, not only the story.
 import type { Effect, GameView, StatKey } from "@worldline/shared";
+import { fmtShortDate } from "./format.ts";
 import { countryMap, RESOLUTION_LABELS, TREATY_LABELS } from "./selectors.ts";
 
 /** up: something improved; down: something worsened or a conflict escalated. */
@@ -93,6 +94,12 @@ export function describeEffects(effects: Effect[], view: Pick<GameView, "countri
         break;
       case "dropClaim":
         add(`${name(e.claimant)} drops a claim`, "up");
+        break;
+      case "scheduleEvent":
+        add(`${name(e.country)} sets a date: ${e.title}, ${fmtShortDate(e.date)}`);
+        break;
+      case "cancelScheduled":
+        add("A scheduled date is called off");
         break;
       case "updateAgenda":
         break; // internal to the AI

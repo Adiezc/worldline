@@ -26,7 +26,7 @@ export interface DirectorResult {
 
 /** Only effects on the acting country itself survive. */
 export function selfOnly(e: Effect, tag: string) {
-  return (e.type === "statDelta" || e.type === "changeLeader" || e.type === "updateAgenda") && e.country === tag;
+  return (e.type === "statDelta" || e.type === "changeLeader" || e.type === "updateAgenda" || e.type === "scheduleEvent") && e.country === tag;
 }
 
 /** The planner's decision for one turn, computed ahead of time or on demand. */
@@ -53,7 +53,7 @@ export async function planDirector(state: GameState, deps: EngineDeps, opts: { d
   const humans = humanTags(state);
   const end = windowEnd(state, opts.days);
   // Countries with scheduled events act too, so the planner can decide those events.
-  const scheduled = calendarIn(deps.seed, state.date, end).flatMap((c) => c.countries);
+  const scheduled = calendarIn(state, deps.seed, state.date, end).flatMap((c) => c.countries);
   const acting = [...new Set([...opts.tiers.movers, ...opts.tiers.background, ...scheduled])]
     .filter((t) => !humans.has(t) && countryByTag(state, t)?.alive);
   if (!acting.length) return null;
@@ -71,7 +71,7 @@ export async function planDirector(state: GameState, deps: EngineDeps, opts: { d
     orgsBlock(state, { maxMembers: 12 }),
     recentEventsBlock(state, { max: 30 }),
     diplomacyBlock(state, { involving: scope }),
-    calendarBlock(deps.seed, state.date, end),
+    calendarBlock(state, deps.seed, state.date, end),
     `TASK: Decide what the ${acting.length} acting governments do between ${state.date} and ${end}. Return the JSON object.`,
   ].filter(Boolean).join("\n\n");
 
@@ -86,7 +86,7 @@ export async function planDirector(state: GameState, deps: EngineDeps, opts: { d
       date: state.date,
       end,
       acting: acting.map((t) => ({ tag: t, name: nameOf(state, t) })),
-      calendar: calendarIn(deps.seed, state.date, end),
+      calendar: calendarIn(state, deps.seed, state.date, end),
     },
   }, DirectorOutputSchema);
   return { turn: state.turn, date: state.date, days: opts.days, acting, out };
@@ -112,7 +112,8 @@ export function applyDirector(state: GameState, deps: EngineDeps, plan: Director
       return;
     }
     const effects = (intent.selfEffects as Effect[]).filter((e) => selfOnly(e, intent.country));
-    if (!effects.length) return;
+    // An election held is news even when the incumbent stays.
+    if (!effects.length && !intent.holds) return;
     // Use the planner's date when it falls inside the period (e.g. a scheduled election), else spread.
     const date = intent.date && intent.date >= state.date && intent.date <= evEnd ? intent.date : spreadDate(state.date, evEnd, i, valid.length);
     const ev = makeEvent(state, {
@@ -122,6 +123,7 @@ export function applyDirector(state: GameState, deps: EngineDeps, plan: Director
       countries: [intent.country],
       effects,
       scope: "world",
+      holds: intent.holds,
     });
     applyEvent(state, deps.map, ev, opts.ctx);
     state.events.push(ev);

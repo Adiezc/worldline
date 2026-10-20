@@ -3,11 +3,12 @@
 // game exactly as it was.
 
 import {
-  addDays, computeTiers, countryByTag, countryIndex, daysBetween, expireCalls, getRelation, humanTags, newTurnContext, simTick,
+  addDays, computeTiers, countryByTag, countryIndex, daysBetween, expireCalls, getRelation, humanTags, newTurnContext, pruneSchedule, simTick,
   type GameState, type NationChange, type StatKey, type TurnResult,
 } from "@worldline/shared";
 import type { EngineDeps } from "./api.ts";
 import { consolidate, needsConsolidation } from "./consolidate.ts";
+import { calendarIn, windowEnd } from "./context.ts";
 import { proclaimFormables } from "./formation.ts";
 import { planDirector, runDirector, type NpcIntent } from "./director.ts";
 import { makeEvent } from "./game.ts";
@@ -88,6 +89,8 @@ async function resolveTurn(state: GameState, deps: EngineDeps): Promise<Omit<Tur
   const tiers = computeTiers(state, deps.map);
   // Open-ended jumps size their caps for ~2 months until the resolver picks the stop date.
   const ctx = newTurnContext(days > 0 ? days : 60, orders);
+  // Scenario calendar entries due this turn can be held too (dates set in the game live in the state).
+  ctx.calendar = calendarIn(state, deps.seed, state.date, windowEnd(state, days)).filter((c) => c.id.startsWith("cal"));
 
   let intents: NpcIntent[] = [];
   if (!state.settings.economyMode) {
@@ -130,6 +133,7 @@ async function resolveTurn(state: GameState, deps: EngineDeps): Promise<Omit<Tur
   state.events.push(...fresh.map((x) => x.e));
 
   state.date = toDate;
+  pruneSchedule(state);
   state.turn = turn + 1;
   state.rotation += 10;
   state.orders = {};

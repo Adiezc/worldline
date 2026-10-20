@@ -61,7 +61,10 @@ export function scopeOf(state: GameState, causes: string[], countries: string[])
 
 export function makeEvent(
   state: GameState,
-  e: { date: string; headline: string; body?: string; countries?: string[]; causes?: string[]; effects?: Effect[]; scope?: GameEvent["scope"] },
+  e: {
+    date: string; headline: string; body?: string; countries?: string[]; causes?: string[]; effects?: Effect[];
+    scope?: GameEvent["scope"]; holds?: string;
+  },
 ): GameEvent {
   const countries = [...new Set(e.countries ?? [])];
   const causes = e.causes ?? [];
@@ -75,5 +78,6 @@ export function makeEvent(
     causes,
     effects: e.effects ?? [],
     scope: e.scope ?? scopeOf(state, causes, countries),
+    ...(e.holds ? { holds: e.holds } : {}),
   };
 }

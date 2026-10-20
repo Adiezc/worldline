@@ -120,7 +120,9 @@ export class Room {
       you: { playerId, country: tag, isHost: !!me?.isHost },
       // Only the nations this player's country could proclaim.
       formables: tag ? seed.formables.filter((f) => f.formers.includes(tag)) : [],
-      calendar: seed.calendar.filter((e) => e.date >= s.date).slice(0, 24),
+      // The scenario's calendar plus the dates governments set in this game (still due, or overdue).
+      calendar: [...seed.calendar.filter((e) => e.date >= s.date), ...(s.schedule ?? [])]
+        .sort((a, b) => a.date.localeCompare(b.date)).slice(0, 24),
       theme: seed.theme ?? "modern",
       snapshots: me?.isHost ? listSnapshots(s.id) : [],
       intervenable: me?.isHost ? this.intervenable() : [],

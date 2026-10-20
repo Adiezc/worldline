@@ -36,6 +36,8 @@ export function effectReference(state: GameState, days: number) {
 {"type":"spawnCountry","name":"Republic of X","government":"provisional government","leader":"Name","provinces":[101,102],"tag":"optional","flag":"optional, e.g. gen:vertical:#1f4fa0,#f4f1e8,#c8102e (patterns: vertical, horizontal, bicolor-v, bicolor-h, nordic, canton, diagonal, triband-star)"}   secession or independence; at most 2 per turn.
 {"type":"annexCountry","target":"AAA","by":"BBB"}   needs a vassal treaty, a voluntary union, or a war in which BBB occupies 60% of AAA.
 {"type":"changeLeader","country":"AAA","leader":"Full Name","government":"optional new form of government"}
+{"type":"scheduleEvent","country":"AAA","date":"2026-06-26","kind":"election","title":"Presidential and legislative elections"}   kind election|referendum|summit|deadline|event. Records a date a government fixes for later so it is held on that day; setting the same election (or the same title) again moves it.
+{"type":"cancelScheduled","id":"sch1"}   a scheduled date is called off (a postponement with a new date is a scheduleEvent instead).
 {"type":"imposeSanctions","target":"RUS","by":["USA","GBR"]}   {"type":"liftSanctions","target":"RUS","by":["USA"]}
 {"type":"applyToOrg","orgId":"o2","country":"UKR"}   files an application; membership of orgs with admitMember power is decided by a later vote.
 {"type":"joinOrg","orgId":"o7","country":"BRA"}   only for orgs without admitMember power.   {"type":"leaveOrg","orgId":"o1","country":"HUN"}
@@ -67,8 +69,10 @@ PRINCIPLES
 - The world should visibly move: across a period of a month or more, include at least one or two structural changes somewhere in the world (a treaty, sanctions, an org application or resolution, a leadership change, a new or ended war) when the news and agendas plausibly support them.
 - VOTE OUTCOMES are facts that already happened: report their consequences, never contradict them.
 - DIPLOMACY is what governments said to each other at the table. Treat stated positions as commitments: news about them must agree with what they said, or show what changed their mind (a new defeat, pressure, a better offer) and say so. A government that refused terms does not quietly concede them in the news; one that promised or threatened something follows through or visibly backs down. A peace, cession or treaty between a [PLAYER] country and another happens only through an ACCEPTED proposal in DIPLOMACY or the player's own order: otherwise report the war going on, talks stalling, or a public offer to negotiate.
+- CALENDAR items due this period happen this period, unless an order postpones or cancels one: write each as an event dated on its day (an OVERDUE one at the start of the period) with "holds" set to its id, and decide the outcome plausibly from the country's situation and what was done to prepare. An election or referendum that changes who governs carries changeLeader (and "government" when the vote changes the form of government); this applies to [PLAYER] countries too, since the vote is the player's own decision. If an item is already reported this period, don't hold it again. On an open-ended turn, hold every item dated on or before your stopDate.
+- When an order or a government fixes a date for something later (an election, a referendum, a handover, a summit), record it with scheduleEvent in the event that announces it.
 - Every pending CALL TO ARMS must be answered this period: either a joinWar effect, or an event in which that country explicitly declines or stalls.
-- Countries marked [PLAYER] act ONLY through their own orders. Never make them declare war, sign or end treaties, join or leave organisations, impose sanctions, make peace or cede land unless their order says so. Events may still change their stats and relations.
+- Countries marked [PLAYER] act ONLY through their own orders. Never make them declare war, sign or end treaties, join or leave organisations, impose sanctions, make peace or cede land unless their order says so. Events may still change their stats and relations, and a CALENDAR vote they scheduled may change their leader.
 - Use region ids exactly as listed in REGIONS. Use war ids, treaty ids and org ids from the context.${npcs}${openEnded}
 
 ${effectReference(state, days)}
@@ -77,7 +81,7 @@ OUTPUT: one JSON object, nothing else.
 {"orderVerdicts":[{"orderId":"o1","outcome":"partial","reason":"Parliament approved half the package; the opposition blocked the rest."}],
  "events":[{"date":"2026-01-09","headline":"France and Germany sign defence-industry pact","body":"Paris and Berlin agreed to co-fund a new tank programme. Analysts call it the most ambitious joint project in a decade.","countries":["FRA","DEU"],"causes":["o1"],"effects":[{"type":"relationDelta","a":"FRA","b":"DEU","delta":6},{"type":"statDelta","country":"FRA","stat":"military","delta":1.5}]}]${days === 0 ? `,\n "stopDate":"2026-02-14"` : ""}}
 - 4-12 events (about 4-6 for a week or two, 8-12 for several months), dated between START and END, in chronological order. Keep bodies tight.
-- headline: at most 12 words, news style. body: 1-3 concrete sentences in wire-service tone. countries: the tags involved. causes: ids of the orders the event resolves ([] for world events). effects: may be [].
+- headline: at most 12 words, news style. body: 1-3 concrete sentences in wire-service tone. countries: the tags involved. causes: ids of the orders the event resolves ([] for world events). holds: id of the CALENDAR item the event holds (omit otherwise). effects: may be [].
 - orderVerdicts: exactly one per order: "success", "partial" or "fail", with a one-sentence reason. Every order also needs at least one event citing it in causes.`;
 }
 
@@ -87,7 +91,8 @@ export function directorSystem(state: GameState) {
 
 - Act as each government realistically would given its interests, means and domestic politics. Most countries do incremental things (budgets, visits, reforms, statements, exercises, trade talks); the status quo is the default, and dramatic moves need a cause in the news or the agenda.
 - ${plausible ? "Behaviour is plausible: follow real-world agendas and scheduled events, drifting only as things change." : "Behaviour is dynamic: choose freely by personality and interest, but stay coherent."}
-- Every CALENDAR entry in this period must be decided: say what happened (who won an election, what a summit agreed). If a government changes, add a changeLeader self-effect for that country.
+- Every CALENDAR entry in this period for an acting country must be decided: say what happened (who won an election, what a summit agreed) in an intent dated on the entry's day with "holds" set to its id. If a government changes, add a changeLeader self-effect for that country (with "government" when the form of government changes).
+- When a government fixes a date for something later (calls an election, a referendum), record it with a scheduleEvent self-effect: {"type":"scheduleEvent","country":"AAA","date":"YYYY-MM-DD","kind":"election","title":"Presidential election"}.
 - Never act for countries marked [PLAYER].
 - DIPLOMACY shows recent talks: governments act consistently with what they said there (follow through on promises and threats, or visibly change course for a reason).
 - Make the world move: besides incremental steps, give two to four governments a structural move this period when their agenda and the news support it: signing or ending a treaty, imposing or lifting sanctions, applying to or leaving an organisation, tabling a resolution, a coup, a crisis escalating into armed conflict, or a ceasefire. Mark those affectsOthers and name the counterpart in the summary so the adjudicator can record it.
@@ -96,13 +101,13 @@ OUTPUT: one JSON object, nothing else.
 {"intents":[
   {"country":"BRA","date":"2026-01-14","headline":"Brazil passes deficit-cutting fiscal framework","summary":"Brazil's Congress approves a fiscal framework that caps spending growth to cut the deficit.","selfEffects":[{"type":"statDelta","country":"BRA","stat":"gdp","delta":0.3},{"type":"statDelta","country":"BRA","stat":"stability","delta":-1}],"affectsOthers":false},
   {"country":"TUR","date":"2026-01-20","headline":"Turkey offers to host Russia-Ukraine talks","summary":"Ankara offers Istanbul as the venue for a new round of Russia-Ukraine talks.","selfEffects":[],"affectsOthers":true},
-  {"country":"PRT","date":"2026-01-18","headline":"Jane Doe wins Portugal's presidential election","summary":"Jane Doe wins the presidential vote held on the scheduled date.","selfEffects":[{"type":"changeLeader","country":"PRT","leader":"Jane Doe"}],"affectsOthers":false}],
+  {"country":"PRT","date":"2026-01-18","headline":"Jane Doe wins Portugal's presidential election","summary":"Jane Doe wins the presidential vote held on the scheduled date.","holds":"cal3","selfEffects":[{"type":"changeLeader","country":"PRT","leader":"Jane Doe"}],"affectsOthers":false}],
  "agendaUpdates":[{"country":"TUR","goals":["Broker a ceasefire to raise Turkish prestige","Secure Black Sea shipping"]}],
  "resolutions":[]}
 - One intent per country that does something notable this period; skip countries that simply carry on. Typically 6-15 intents.
 - date: the day it happens, inside the period. Scheduled CALENDAR items happen on their listed date.
 - headline: at most 10 words, news-wire style, naming the country. summary: one sentence of detail.
-- selfEffects may ONLY touch the acting country itself: statDelta (gdp/population in %, others in points; small: gdp ±0.1-1.5, stability ±1-5, military ±1-3), changeLeader, updateAgenda. Anything else is discarded.
+- selfEffects may ONLY touch the acting country itself: statDelta (gdp/population in %, others in points; small: gdp ±0.1-1.5, stability ±1-5, military ±1-3), changeLeader, updateAgenda, scheduleEvent. Anything else is discarded.
 - affectsOthers: true when the plan involves other countries (diplomacy, pressure, aid, deployments, treaties, sanctions, war). The adjudicator plays those out with all their effects, so leave selfEffects empty for them.
 - agendaUpdates: only when circumstances really changed a country's goals (max 4 goals). Usually [].
 - resolutions: only when a member has strong reason to table one in an organisation (use org ids and powers from the context). Usually [].`;

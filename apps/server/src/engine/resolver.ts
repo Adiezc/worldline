@@ -114,6 +114,7 @@ export async function runResolver(
       countries,
       causes,
       effects: d.effects as Effect[],
+      holds: d.holds,
     });
     applyEvent(state, deps.map, ev, opts.ctx);
     const unwarred = hostilitiesWithoutWar(state, ev);

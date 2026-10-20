@@ -57,8 +57,8 @@ export function EventFeed() {
   );
 }
 
-const KIND_ICONS: Record<CalendarEntry["kind"], IconName> = { election: "ballot", summit: "users", deadline: "clock", event: "calendar" };
-const KIND_LABELS: Record<CalendarEntry["kind"], string> = { election: "Election", summit: "Summit", deadline: "Deadline", event: "Scheduled event" };
+const KIND_ICONS: Record<CalendarEntry["kind"], IconName> = { election: "ballot", referendum: "ballot", summit: "users", deadline: "clock", event: "calendar" };
+const KIND_LABELS: Record<CalendarEntry["kind"], string> = { election: "Election", referendum: "Referendum", summit: "Summit", deadline: "Deadline", event: "Scheduled event" };
 
 /** Consolidated chronicles (newest first) beside the calendar of what is coming. */
 function Annals() {
@@ -66,7 +66,8 @@ function Annals() {
   const calendar = useGame((s) => s.view!.calendar);
   const date = useGame((s) => s.view!.date);
   const entries = annalsOf(memory);
-  const upcoming = (calendar ?? []).filter((c) => c.date >= date).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 30);
+  // Dates set in the game ("since") stay listed while overdue: they are held at the start of the next turn.
+  const upcoming = (calendar ?? []).filter((c) => c.date >= date || "since" in c).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 30);
 
   return (
     <div className="flex min-h-0 flex-1 border-t border-panel-edge/40">
@@ -87,7 +88,7 @@ function Annals() {
             <li key={`${c.date}-${i}`} className="flex gap-2" title={[KIND_LABELS[c.kind], c.note].filter(Boolean).join(" — ")}>
               <Icon name={KIND_ICONS[c.kind] ?? "calendar"} size={13} className="mt-0.5 text-gold/75" />
               <div className="min-w-0">
-                <div className="text-[10px] tracking-wide text-gold/65 uppercase tabular-nums">{fmtShortDate(c.date)}</div>
+                <div className="text-[10px] tracking-wide text-gold/65 uppercase tabular-nums">{c.date < date ? "Due now" : fmtShortDate(c.date)}</div>
                 <div className="text-[11.5px] leading-snug text-parchment/80">{c.title}</div>
               </div>
             </li>

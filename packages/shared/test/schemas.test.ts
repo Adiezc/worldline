@@ -59,7 +59,7 @@ describe("ResolverOutputSchema", () => {
       transferProvinces: true, setController: true, statDelta: true, relationDelta: true, createTreaty: true, endTreaty: true,
       declareWar: true, joinWar: true, makePeace: true, spawnCountry: true, annexCountry: true, changeLeader: true, joinOrg: true,
       leaveOrg: true, createOrg: true, proposeResolution: true, applyToOrg: true, imposeSanctions: true, liftSanctions: true,
-      updateAgenda: true, addClaim: true, dropClaim: true,
+      updateAgenda: true, addClaim: true, dropClaim: true, scheduleEvent: true, cancelScheduled: true,
     };
     const types = EffectSchema.options.map((o) => o.shape.type.value as string).sort();
     expect(types).toEqual(Object.keys(ALL).sort());

@@ -48,6 +48,11 @@ export const EffectSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("updateAgenda"), country: tag, goals: trimmed(z.string(), 5) }),
   z.object({ type: z.literal("addClaim"), claimant: tag, provinces: ids.min(1), note: z.string().default("") }),
   z.object({ type: z.literal("dropClaim"), claimant: tag, provinces: ids.optional() }),
+  z.object({
+    type: z.literal("scheduleEvent"), country: tag, date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    kind: z.enum(["election", "referendum", "summit", "deadline", "event"]).catch("event"), title: z.string().min(3),
+  }),
+  z.object({ type: z.literal("cancelScheduled"), id: z.string() }),
 ]);
 
 const EventSchema = z.object({
@@ -56,6 +61,8 @@ const EventSchema = z.object({
   body: z.string().default(""),
   countries: z.array(tag).default([]),
   causes: z.array(z.string()).default([]),
+  /** Id of the CALENDAR item this event holds. */
+  holds: z.string().optional(),
   effects: z.array(EffectSchema).default([]),
 });
 
@@ -75,6 +82,8 @@ export const DirectorOutputSchema = z.object({
     headline: z.string().optional(),
     /** Day it happens (scheduled calendar items use their real date). */
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    /** Id of the CALENDAR item this intent holds (an election's result). */
+    holds: z.string().optional(),
     /** Effects confined to the acting country (applied directly). */
     selfEffects: z.array(EffectSchema).default([]),
     /** True when the intent acts on other countries and must be adjudicated by the resolver. */

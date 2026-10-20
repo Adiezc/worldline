@@ -3,7 +3,7 @@
 
 import {
   addDays, computeTiers, countryByTag, countryIndex, DIFFICULTY, getRelation, humanTags, provincesOf,
-  type Country, type GameState, type MapIndex, type ScenarioSeed, type Tiers, type War,
+  type Country, type GameState, type MapIndex, type ScenarioSeed, type ScheduledItem, type Tiers, type War,
 } from "@worldline/shared";
 
 // ---- formatting ----
@@ -326,15 +326,28 @@ export function diplomacyBlock(state: GameState, opts: { involving?: Set<string>
   return `DIPLOMACY (recent talks between governments, latest last; accepted proposals have already taken effect):\n${blocks.join("\n")}`;
 }
 
-export function calendarIn(seed: ScenarioSeed, from: string, to: string) {
-  return (seed.calendar ?? []).filter((c) => c.date >= from && c.date <= to);
+/**
+ * What falls due between `from` and `to`: the scenario's calendar (ids `cal<index>`) and the dates
+ * governments set during the game, including ones already overdue because nobody held them.
+ */
+export function calendarIn(state: GameState, seed: ScenarioSeed, from: string, to: string): ScheduledItem[] {
+  const fixed = (seed.calendar ?? []).flatMap((c, i) => (c.date >= from && c.date <= to ? [{ ...c, id: `cal${i}`, since: "" }] : []));
+  const set = (state.schedule ?? []).filter((i) => i.date <= to);
+  return [...fixed, ...set].sort((a, b) => a.date.localeCompare(b.date));
 }
 
-export function calendarBlock(seed: ScenarioSeed, from: string, to: string) {
-  const list = calendarIn(seed, from, to);
-  if (!list.length) return "";
-  const lines = list.map((c) => `${c.date} ${c.kind} [${c.countries.join(",")}]: ${c.title}${c.note ? ` — ${c.note}` : ""}`);
-  return `CALENDAR (scheduled in this period):\n${lines.join("\n")}`;
+export function calendarBlock(state: GameState, seed: ScenarioSeed, from: string, to: string) {
+  const line = (c: ScheduledItem) => {
+    const late = c.date < from ? " OVERDUE (hold it now)" : "";
+    const origin = c.since ? ` (set ${c.since})` : "";
+    return `${c.id} ${c.date}${late} ${c.kind} [${c.countries.join(",")}]: ${c.title}${c.note ? ` — ${c.note}` : ""}${origin}`;
+  };
+  const due = calendarIn(state, seed, from, to);
+  const later = (state.schedule ?? []).filter((i) => i.date > to).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 8);
+  return [
+    due.length ? `CALENDAR (due in this period; hold each in an event with "holds" set to its id):\n${due.map(line).join("\n")}` : "",
+    later.length ? `DATES SET FOR LATER:\n${later.map(line).join("\n")}` : "",
+  ].filter(Boolean).join("\n\n");
 }
 
 export const rulesBlock = (seed: ScenarioSeed) => (seed.rules ? `SCENARIO RULES:\n${seed.rules}` : "");
@@ -372,7 +385,7 @@ export function worldContext(state: GameState, deps: { map: MapIndex; seed: Scen
     regionsBlock(state, map),
     recentEventsBlock(state),
     diplomacyBlock(state),
-    calendarBlock(seed, state.date, end),
+    calendarBlock(state, seed, state.date, end),
   ].filter(Boolean).join("\n\n");
   return { text, tiers, end, front };
 }

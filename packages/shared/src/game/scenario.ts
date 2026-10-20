@@ -3,7 +3,7 @@ import type { Country, Organization, Sanction, Treaty, War } from "./state.ts";
 export interface CalendarEntry {
   date: string;
   title: string;
-  kind: "election" | "summit" | "deadline" | "event";
+  kind: "election" | "referendum" | "summit" | "deadline" | "event";
   countries: string[];
   note?: string;
 }

@@ -53,7 +53,7 @@ export function countryContext(state: GameState, deps: EngineDeps, tag: string) 
     `ECONOMY RANK: #${rank(state, tag)} by GDP (${fmtGdp(k.gdp)})`,
     orderHistoryBlock(state, { country: tag }),
     recentEventsBlock(state, { max: 25 }),
-    calendarBlock(deps.seed, state.date, addDays(state.date, 120)),
+    calendarBlock(state, deps.seed, state.date, addDays(state.date, 120)),
   ].filter(Boolean).join("\n\n");
 }
 
