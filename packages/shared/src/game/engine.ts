@@ -501,7 +501,7 @@ export function applyEvent(state: GameState, map: MapIndex, event: GameEvent, ct
         const body = pickBody(org, effect.resolutionType);
         state.resolutions.push({
           id: nextId(state, "r"), orgId: org.id, bodyId: body.id, type: effect.resolutionType, proposer: effect.proposer,
-          target: effect.target, text: effect.text, turn: state.turn + 1, status: "pending",
+          target: effect.target, text: effect.text, turn: state.turn + 1, date: event.date, status: "pending",
         });
         ok();
         break;

@@ -10,9 +10,9 @@ import { addHuman, country, ctx, ev, makeState, MAP } from "./fixtures.ts";
 const QUOTAS = { USA: 16.49, JPN: 6.14, CHN: 6.08, DEU: 5.31, FRA: 4.03, GBR: 4.03 };
 
 /** An IMF of every country in the fixture, with real-ish quotas for the largest shareholders. */
-function withImf(s: GameState, lender: "stabilization" | "development" = "stabilization") {
+function withImf(s: GameState, lender: "stabilization" | "development" = "stabilization", id = "imf") {
   const imf: Organization = {
-    id: "imf", abbrev: "IMF", name: "International Monetary Fund", kind: "economic",
+    id, abbrev: id.toUpperCase(), name: "International Monetary Fund", kind: "economic",
     members: s.countries.map((c) => c.tag), observers: [], candidates: [], suspended: [],
     bodies: [
       { id: "governors", name: "Board of Governors", seats: [], rule: "weighted", threshold: 0.85, handles: ["admitMember", "expelMember", "custom"] },
@@ -201,14 +201,71 @@ describe("loan requests through the validator", () => {
 });
 
 describe("AI governments in crisis", () => {
-  test("the worst-off AI members ask, at most two a turn, never players, not again right after a refusal", () => {
+  /** Table a loan request the way the turn pipeline does, dated `date`. */
+  const ask = (s: GameState, tag: string, date: string, over: Partial<Resolution> = {}) =>
+    s.resolutions.push(loanRes(tag, { id: `r${s.resolutions.length}`, date, ...over }));
+  const crisis = (s: GameState) => {
+    for (const [t, v] of [["VEN", 5], ["SDN", 10], ["HTI", 12], ["LBN", 20], ["MLI", 22]] as const) country(s, t).stability = v;
+  };
+
+  test("the worst-off AI members ask first, the IMF before the World Bank, never players", () => {
     const s = makeState();
+    withImf(s, "development", "wb");
     const imf = withImf(s);
     addHuman(s, "VEN");
-    for (const [t, v] of [["VEN", 5], ["SDN", 10], ["HTI", 12], ["LBN", 20]] as const) country(s, t).stability = v;
-    expect(loanCandidates(s).map((c) => c.tag)).toEqual(["SDN", "HTI"]);
-    s.resolutions.push(loanRes("SDN", { status: "failed", turn: s.turn }));
-    expect(loanCandidates(s).map((c) => c.tag)).toEqual(["HTI", "LBN"]);
-    expect(loanCandidates(s)[0]!.org).toBe(imf);
+    crisis(s);
+    const asks = loanCandidates(s);
+    expect(asks.map((c) => c.tag)).toEqual(["SDN", "HTI"]);
+    expect(asks.every((c) => c.org === imf)).toBe(true);
+  });
+
+  test("two requests per 30 days of game time, however short the turns", () => {
+    const s = makeState();
+    const imf = withImf(s);
+    crisis(s);
+    for (const t of ["SDN", "HTI"]) {
+      ask(s, t, s.date, { status: "passed" });
+      grantLoan(s, imf, t, s.date);
+    }
+    // Day-long turns used to bring two new requests every turn.
+    for (const day of [1, 2, 10, 29]) expect(loanCandidates(s, addDays(s.date, day))).toEqual([]);
+    expect(loanCandidates(s, addDays(s.date, 30)).map((c) => c.tag)).toEqual(["VEN", "LBN"]);
+    ask(s, "VEN", addDays(s.date, 20), { status: "pending" });
+    expect(loanCandidates(s, addDays(s.date, 30)).map((c) => c.tag)).toEqual(["LBN"]);
+  });
+
+  test("one lender at a time: no World Bank request while an IMF programme runs or a request is pending", () => {
+    const s = makeState();
+    const imf = withImf(s);
+    withImf(s, "development", "wb");
+    crisis(s);
+    grantLoan(s, imf, "SDN", s.date);
+    ask(s, "HTI", s.date, { status: "pending", orgId: "wb", bodyId: "board" });
+    const later = addDays(s.date, 40);
+    expect(loanCandidates(s, later).map((c) => c.tag)).toEqual(["VEN", "LBN"]);
+    // Once the programme is over, Sudan may ask again.
+    expect(loanCandidates(s, addDays(s.loans![0]!.programmeEnd, 1)).map((c) => c.tag)).toContain("SDN");
+  });
+
+  test("a refused government waits 180 days before asking any lender again", () => {
+    const s = makeState();
+    withImf(s);
+    withImf(s, "development", "wb");
+    crisis(s);
+    ask(s, "SDN", s.date, { status: "failed" });
+    ask(s, "HTI", s.date, { status: "vetoed" });
+    expect(loanCandidates(s, addDays(s.date, 179)).map((c) => c.tag)).toEqual(["VEN", "LBN"]);
+    expect(loanCandidates(s, addDays(s.date, 180)).map((c) => c.tag)).toEqual(["VEN", "SDN"]);
+  });
+
+  test("requests from saves without dates count a turn as a month", () => {
+    const s = makeState();
+    withImf(s);
+    crisis(s);
+    s.turn = 5;
+    s.resolutions.push(loanRes("SDN", { id: "old1", turn: 5, status: "passed" }), loanRes("HTI", { id: "old2", turn: 5, status: "passed" }));
+    expect(loanCandidates(s)).toEqual([]);
+    s.turn = 6;
+    expect(loanCandidates(s)).toHaveLength(2);
   });
 });
