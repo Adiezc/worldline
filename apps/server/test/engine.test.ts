@@ -131,6 +131,9 @@ for (const [label, seed] of seeds) {
       expect(state.memory.length).toBeGreaterThanOrEqual(2);
       expect(state.usage.requests).toBeGreaterThan(10);
       expectSaneStats(state);
+      // Each turn's power ranking is kept, so the client can show the change since last turn.
+      expect(state.rankHistory?.map((h) => h.turn)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+      expect(state.rankHistory!.at(-1)!.order.length).toBe(state.countries.filter((c) => c.alive).length);
     });
 
     test("a player order gets a verdict and an event", async () => {

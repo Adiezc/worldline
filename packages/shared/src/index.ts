@@ -8,6 +8,7 @@ export * from "./game/engine.ts";
 export * from "./game/sim.ts";
 export * from "./game/votes.ts";
 export * from "./game/loans.ts";
+export * from "./game/ranking.ts";
 export * from "./game/salience.ts";
 export * from "./game/formation.ts";
 export * from "./game/projects.ts";

@@ -47,6 +47,7 @@ const PATHS = {
   pause: "M8 5v14M16 5v14",
   rewind: "M11 6l-7 6 7 6V6zM20 6l-7 6 7 6V6z",
   info: "M12 3a9 9 0 100 18 9 9 0 000-18zM12 11v6M12 7.5v.5",
+  podium: "M3 20h18M4 20v-6h5v6M9 20V9h6v11M15 20v-8h5v8M12 3.5l.7 1.4 1.5.2-1.1 1 .3 1.5-1.4-.7-1.4.7.3-1.5-1.1-1 1.5-.2.7-1.4z",
 } as const;
 
 export type IconName = keyof typeof PATHS;

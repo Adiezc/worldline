@@ -408,6 +408,8 @@ export interface GameState {
   projects?: Project[];
   /** Loans organisations granted, kept until repaid (older saves lack it). */
   loans?: Loan[];
+  /** Power ranking (tags, strongest first) as each recent turn began resolving (see ranking.ts; older saves lack it). */
+  rankHistory?: { turn: number; order: string[] }[];
   players: Player[];
   /** Pending orders this turn, keyed by player id. */
   orders: Record<string, Order[]>;

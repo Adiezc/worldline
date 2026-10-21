@@ -3,7 +3,7 @@
 // game exactly as it was.
 
 import {
-  addDays, computeTiers, countryByTag, countryIndex, daysBetween, expireCalls, getRelation, humanTags, newTurnContext, pruneSchedule, simTick,
+  addDays, computeTiers, countryByTag, countryIndex, daysBetween, expireCalls, getRelation, humanTags, newTurnContext, pruneSchedule, recordRanking, simTick,
   type GameState, type NationChange, type StatKey, type TurnResult,
 } from "@worldline/shared";
 import type { EngineDeps } from "./api.ts";
@@ -88,6 +88,8 @@ async function resolveTurn(state: GameState, deps: EngineDeps): Promise<Omit<Tur
   const days = jumpDays(state);
   const orders = Object.values(state.orders).flat().filter((o) => o.text.trim() && countryByTag(state, o.country)?.alive);
   const firstEvent = state.events.length;
+  // The ranking players saw this turn, so next turn can show who rose and fell.
+  recordRanking(state);
   const tiers = computeTiers(state, deps.map);
   // Open-ended jumps size their caps for ~2 months until the resolver picks the stop date.
   const ctx = newTurnContext(days > 0 ? days : 60, orders);

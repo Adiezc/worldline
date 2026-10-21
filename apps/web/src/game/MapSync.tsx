@@ -65,9 +65,9 @@ export function MapSync() {
       map.setLabelStyle(scenario.countries.map((c) => c.name), scenario.countries.map((c) => c.color));
       return;
     }
-    map.setPalette(computePalette(mode, { countries, relations: relations ?? {}, wars: wars ?? [], organizations: orgs ?? [], claims: view?.claims, owners: view?.owners }, { focus, orgId }));
+    map.setPalette(computePalette(mode, { countries, relations: relations ?? {}, wars: wars ?? [], organizations: orgs ?? [], claims: view?.claims, owners: view?.owners, treaties: view?.treaties }, { focus, orgId }));
     map.setLabelStyle(countries.map((c) => (c.alive === false ? "" : c.name)), countries.map((c) => c.color));
-  }, [ready, editing, scenario, countries, relations, wars, orgs, mode, focus, orgId, view?.claims, view?.owners]);
+  }, [ready, editing, scenario, countries, relations, wars, orgs, mode, focus, orgId, view?.claims, view?.owners, view?.treaties]);
 
   // Capital stars: each living country's capital while it still owns that region.
   useEffect(() => {
