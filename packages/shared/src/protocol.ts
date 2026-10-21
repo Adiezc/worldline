@@ -142,7 +142,7 @@ export interface TurnResult {
   nations: NationChange[];
 }
 
-export type ProposalDraft = Pick<Proposal, "kind" | "treatyType" | "members" | "terms" | "peace" | "cessions">;
+export type ProposalDraft = Pick<Proposal, "kind" | "treatyType" | "members" | "terms" | "peace" | "cessions" | "surrender">;
 
 
 export type ClientMessage =

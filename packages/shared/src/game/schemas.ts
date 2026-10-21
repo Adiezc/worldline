@@ -85,7 +85,7 @@ const EventSchema = z.object({
 const ProposalOutSchema = z.object({
   kind: z.enum(["treaty", "endWar", "joinOrg", "custom"]),
   treatyType: treatyType.optional(),
-  peace: z.enum(["white", "keep_occupied"]).optional(),
+  peace: z.enum(["white", "keep_occupied", "surrender"]).optional(),
   members: z.array(tag).min(2),
   terms: z.string(),
 });
