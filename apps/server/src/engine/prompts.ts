@@ -43,6 +43,7 @@ export function effectReference(state: GameState, days: number) {
 {"type":"joinOrg","orgId":"o7","country":"BRA"}   only for orgs without admitMember power.   {"type":"leaveOrg","orgId":"o1","country":"HUN"}
 {"type":"createOrg","abbrev":"ABC","name":"Full name","kind":"regional","members":["AAA","BBB"],"rule":"consensus","tradeBloc":false,"mutualDefense":false}
 {"type":"proposeResolution","orgId":"o1","resolutionType":"condemn","proposer":"FRA","target":"RUS","text":"what it says"}   proposer must be a member and the org must have that power; it is voted next turn.
+  resolutionType "loan" (lending orgs such as the IMF and World Bank): target is the member that borrows, usually the proposer itself, in financial or political crisis; not for [PLAYER] countries unless their order asks. The rules set the amount and conditions when it passes: do not add statDelta for the loan itself.
 {"type":"updateAgenda","country":"BRA","goals":["goal","goal"]}   AI countries only.
 {"type":"addClaim","claimant":"VEN","provinces":[813,814],"note":"why, in one line"}   a government formally lays claim to regions another country holds (after losing them in a war, a nationalist turn, a referendum). Rare.
 {"type":"dropClaim","claimant":"VEN","provinces":[813]}   a government renounces a claim (omit provinces to renounce all of it), e.g. in a peace treaty or a settlement.
@@ -120,10 +121,10 @@ OUTPUT: one JSON object, nothing else.
 - selfEffects may ONLY touch the acting country itself: statDelta (gdp/population in %, others in points; small: gdp ±0.1-1.5, stability ±1-5, military ±1-3), changeLeader, updateAgenda, scheduleEvent. Anything else is discarded.
 - affectsOthers: true when the plan involves other countries (diplomacy, pressure, aid, deployments, treaties, sanctions, war). The adjudicator plays those out with all their effects, so leave selfEffects empty for them.
 - agendaUpdates: only when circumstances really changed a country's goals (max 4 goals). Usually [].
-- resolutions: only when a member has strong reason to table one in an organisation (use org ids and powers from the context). Usually [].`;
+- resolutions: only when a member has strong reason to table one in an organisation (use org ids and powers from the context). Usually []. A government in a debt, currency or budget crisis may ask a lending organisation for help: {"orgId":"imf","resolutionType":"loan","proposer":"ARG","target":"ARG","text":"why it needs the money"}.`;
 }
 
-export const VOTES_SYSTEM = `You decide how governments vote on resolutions in international organisations in Worldline, a geopolitical simulation that begins in the real world. Vote as each government realistically would given its alliances, interests, record and relations with the proposer and the target. Abstaining is common for countries without a stake.
+export const VOTES_SYSTEM = `You decide how governments vote on resolutions in international organisations in Worldline, a geopolitical simulation that begins in the real world. Vote as each government realistically would given its alliances, interests, record and relations with the proposer and the target. Abstaining is common for countries without a stake. In weighted bodies (the IMF, the World Bank) votes count by each member's share of voting power; there, loans to members in trouble are routine and usually approved unless major shareholders oppose the borrower.
 
 OUTPUT: one JSON object, nothing else:
 {"votes":[{"resolutionId":"r4","country":"CHN","vote":"no","reason":"Opposes sanctions on a strategic partner."}]}

@@ -65,11 +65,11 @@ export interface War {
   calls?: { tag: string; via: string; since: number }[];
 }
 
-export type VotingRule = "consensus" | "simpleMajority" | "twoThirds" | "qualifiedMajority" | "vetoMajority";
+export type VotingRule = "consensus" | "simpleMajority" | "twoThirds" | "qualifiedMajority" | "vetoMajority" | "weighted";
 export type OrgKind = "global" | "regional" | "military" | "economic" | "forum";
 export type ResolutionType =
   | "sanction" | "condemn" | "peacekeeping" | "admitMember" | "suspendMember" | "expelMember"
-  | "tradePolicy" | "authorizeForce" | "custom";
+  | "tradePolicy" | "authorizeForce" | "loan" | "custom";
 
 export interface OrgBody {
   id: string;
@@ -79,6 +79,11 @@ export interface OrgBody {
   /** Permanent members with a veto (vetoMajority). */
   veto?: string[];
   rule: VotingRule;
+  /**
+   * weighted: share of the body's whole voting power that must vote yes (0.85 = 85%; default 0.5).
+   * Abstaining counts against, as in the IMF and World Bank.
+   */
+  threshold?: number;
   /** Resolution types decided in this body; the first body handles anything unlisted. */
   handles?: ResolutionType[];
 }
@@ -94,7 +99,12 @@ export interface Organization {
   suspended: string[];
   bodies: OrgBody[];
   powers: ResolutionType[];
-  effects: { tradeBloc?: boolean; mutualDefense?: boolean; forum?: boolean };
+  effects: { tradeBloc?: boolean; mutualDefense?: boolean; forum?: boolean; lender?: LoanKind };
+  /**
+   * Voting power in percent for weighted bodies (IMF quotas, World Bank shares). Members not listed
+   * share what is left, mostly by GDP (see voteWeights).
+   */
+  quotas?: Record<string, number>;
   /** 0–100. */
   cohesion: number;
   founded?: string;
@@ -112,6 +122,28 @@ export interface Resolution {
   status: "pending" | "passed" | "failed" | "vetoed";
   votes?: Record<string, "yes" | "no" | "abstain">;
   reasons?: Record<string, string>;
+}
+
+/** How an organisation lends: IMF-style emergency programmes or World Bank-style development loans. */
+export type LoanKind = "stabilization" | "development";
+
+/** A loan an organisation granted by resolution. Its terms are fixed by the rules (see loans.ts). */
+export interface Loan {
+  id: string;
+  orgId: string;
+  borrower: string;
+  kind: LoanKind;
+  /** USD billions. */
+  amount: number;
+  /** Share of the standard terms' effects (below 1 when the lender's cap made the loan small for the economy). */
+  scale: number;
+  /** Turn and date it was approved. */
+  turn: number;
+  date: string;
+  /** Conditions (austerity, or disbursement for development loans) apply until this date. */
+  programmeEnd: string;
+  /** Repayments weigh on growth from programmeEnd until this date. */
+  repaidBy: string;
 }
 
 export interface Sanction {
@@ -374,6 +406,8 @@ export interface GameState {
   surrenderOffers?: Record<string, number>;
   /** Long-running national efforts, active and finished (older saves lack it). */
   projects?: Project[];
+  /** Loans organisations granted, kept until repaid (older saves lack it). */
+  loans?: Loan[];
   players: Player[];
   /** Pending orders this turn, keyed by player id. */
   orders: Record<string, Order[]>;

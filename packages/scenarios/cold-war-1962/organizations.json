@@ -135,5 +135,39 @@
     "bodies": [{ "id": "conference", "name": "OPEC Conference", "seats": [], "rule": "consensus" }],
     "powers": ["custom", "tradePolicy", "admitMember"],
     "effects": {}, "cohesion": 40, "founded": "1960-09-14"
+  },
+  {
+    "id": "imf", "abbrev": "IMF", "name": "International Monetary Fund", "kind": "economic",
+    "members": ["AFG", "ARG", "AUS", "AUT", "BEL", "BOL", "BRA", "CAN", "CHL", "COL", "CRI", "CUB", "CYP", "DNK", "DOM", "ECU", "EGY", "ESP", "ETH", "FIN", "FRA", "GBR", "GHA", "GRC", "GTM", "HND", "HTI", "IDN", "IND", "IRL", "IRN", "IRQ", "ISL", "ISR", "ITA", "JOR", "JPN", "LAO", "LBN", "LBR", "LBY", "LKA", "LUX", "MAR", "MEX", "MMR", "MYS", "NGA", "NIC", "NLD", "NOR", "NPL", "NZL", "PAK", "PAN", "PER", "PHL", "PRT", "PRY", "SAU", "SDN", "SEN", "SLE", "SLV", "SOM", "SWE", "SYR", "TGO", "THA", "TUN", "TUR", "TWN", "TZA", "URY", "USA", "VEN", "YUG", "ZAF", "DEU", "KOR", "RVN", "KWT"],
+    "observers": [], "candidates": [], "suspended": [],
+    "bodies": [
+      { "id": "governors", "name": "Board of Governors", "seats": [], "rule": "weighted", "threshold": 0.8, "handles": ["admitMember", "suspendMember", "expelMember", "custom"] },
+      { "id": "board", "name": "Executive Board", "seats": [], "rule": "weighted", "threshold": 0.5, "handles": ["loan"] }
+    ],
+    "powers": ["loan", "admitMember", "suspendMember", "expelMember", "custom"],
+    "quotas": { "USA": 23, "GBR": 11, "FRA": 4.5, "DEU": 4.5, "IND": 3.5, "CAN": 3.2, "TWN": 3.2, "JPN": 2.9, "NLD": 2.4, "AUS": 2.3, "BEL": 2, "BRA": 1.7, "ARG": 1.7, "ITA": 1.6, "MEX": 1.1, "SWE": 1, "ESP": 1, "VEN": 1 },
+    "effects": { "lender": "stabilization" }, "cohesion": 62, "founded": "1945-12-27"
+  },
+  {
+    "id": "world-bank", "abbrev": "World Bank", "name": "International Bank for Reconstruction and Development (World Bank)", "kind": "economic",
+    "members": ["AFG", "ARG", "AUS", "AUT", "BEL", "BOL", "BRA", "CAN", "CHL", "COL", "CRI", "CUB", "CYP", "DNK", "DOM", "ECU", "EGY", "ESP", "ETH", "FIN", "FRA", "GBR", "GHA", "GRC", "GTM", "HND", "HTI", "IDN", "IND", "IRL", "IRN", "IRQ", "ISL", "ISR", "ITA", "JOR", "JPN", "LAO", "LBN", "LBR", "LBY", "LKA", "LUX", "MAR", "MEX", "MMR", "MYS", "NGA", "NIC", "NLD", "NOR", "NPL", "NZL", "PAK", "PAN", "PER", "PHL", "PRT", "PRY", "SAU", "SDN", "SEN", "SLE", "SLV", "SOM", "SWE", "SYR", "TGO", "THA", "TUN", "TUR", "TWN", "TZA", "URY", "USA", "VEN", "YUG", "ZAF", "DEU", "KOR", "RVN", "KWT"],
+    "observers": [], "candidates": [], "suspended": [],
+    "bodies": [
+      { "id": "governors", "name": "Board of Governors", "seats": [], "rule": "weighted", "threshold": 0.8, "handles": ["admitMember", "suspendMember", "expelMember", "custom"] },
+      { "id": "board", "name": "Board of Executive Directors", "seats": [], "rule": "weighted", "threshold": 0.5, "handles": ["loan"] }
+    ],
+    "powers": ["loan", "admitMember", "suspendMember", "expelMember", "custom"],
+    "quotas": { "USA": 27, "GBR": 11, "FRA": 4.8, "DEU": 4.8, "IND": 3.6, "CAN": 3.4, "TWN": 3.4, "JPN": 3, "ITA": 2.5, "NLD": 2.4, "AUS": 2.3, "BEL": 2, "BRA": 1.4, "ARG": 1.4 },
+    "effects": { "lender": "development" }, "cohesion": 65, "founded": "1945-12-27"
+  },
+  {
+    "id": "gatt", "abbrev": "GATT", "name": "General Agreement on Tariffs and Trade", "kind": "economic",
+    "members": ["AUS", "BEL", "BRA", "MMR", "CAN", "LKA", "CHL", "CUB", "CSK", "FRA", "IND", "LUX", "NLD", "NZL", "NOR", "PAK", "RNY", "ZAF", "GBR", "USA", "HTI", "DOM", "NIC", "IDN", "DNK", "FIN", "GRC", "ITA", "SWE", "AUT", "DEU", "PER", "TUR", "URY", "JPN", "GHA", "MYS", "NGA", "SLE", "TZA", "ISR", "PRT"],
+    "observers": ["CHE", "TUN", "YUG", "ARG"],
+    "candidates": [],
+    "suspended": [],
+    "bodies": [ { "id": "parties", "name": "Contracting Parties", "seats": [], "rule": "twoThirds" } ],
+    "powers": ["tradePolicy", "admitMember", "custom"],
+    "effects": {}, "cohesion": 55, "founded": "1948-01-01"
   }
 ]

@@ -5,6 +5,9 @@
 //     October 1962 polity with the rules in `polityOf` below (tables + a few name/latitude rules).
 //   - Hand-maintained data in the scenario folder: countries (names, colours, governments, leaders, stats),
 //     agendas, organizations, treaties, wars, sanctions, relations, calendar, formables, world-brief.md, rules.md.
+//     The IMF and World Bank (IBRD) list their October 1962 members: no Soviet bloc, and none of the states
+//     that joined from 1963 on (most of French-speaking Africa, Guinea, Congo-Léopoldville, Jamaica, Cambodia).
+//     GATT lists the 42 contracting parties of October 1962; provisional accessions are observers.
 //
 // Statistics are rough era estimates, not measured data:
 //   - GDP in current 1962 US dollars (billions). Western figures follow World Bank / OECD historical series

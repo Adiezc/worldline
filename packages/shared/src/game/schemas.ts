@@ -10,9 +10,9 @@ const ids = z.array(z.coerce.number().int().positive());
 const stat = z.enum(["gdp", "population", "stability", "military", "warExhaustion"]);
 const treatyType = z.enum(["alliance", "defensive", "trade", "nonaggression", "vassal", "customs_union"]);
 const orgKind = z.enum(["global", "regional", "military", "economic", "forum"]);
-const votingRule = z.enum(["consensus", "simpleMajority", "twoThirds", "qualifiedMajority", "vetoMajority"]);
+const votingRule = z.enum(["consensus", "simpleMajority", "twoThirds", "qualifiedMajority", "vetoMajority", "weighted"]);
 const resolutionType = z.enum([
-  "sanction", "condemn", "peacekeeping", "admitMember", "suspendMember", "expelMember", "tradePolicy", "authorizeForce", "custom",
+  "sanction", "condemn", "peacekeeping", "admitMember", "suspendMember", "expelMember", "tradePolicy", "authorizeForce", "loan", "custom",
 ]);
 
 export const EffectSchema = z.discriminatedUnion("type", [
