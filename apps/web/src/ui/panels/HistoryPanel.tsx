@@ -25,7 +25,9 @@ export function HistoryPanel({ onClose }: { onClose: () => void }) {
     setExportError(null);
     setExportNote(null);
     try {
-      const dropped = await exportGame(view.id, view.you.playerId);
+      const secret = useGame.getState().secret;
+      if (!secret) throw new Error("Reconnect to the game, then export.");
+      const dropped = await exportGame(view.id, view.you.playerId, secret);
       if (dropped) setExportNote(`To keep the file importable, it leaves out the ${dropped} oldest rewind point${dropped === 1 ? "" : "s"}.`);
     } catch (err) {
       setExportError(errorText(err, "The game server"));

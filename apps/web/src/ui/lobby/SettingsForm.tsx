@@ -17,8 +17,10 @@ const TIMERS = [
 export function SettingsForm() {
   const settings = useGame((s) => s.view!.settings);
   const isHost = useGame((s) => s.view!.you.isHost);
-  const [chain, setChain] = useState(settings.modelChain.join("\n"));
-  useEffect(() => setChain(settings.modelChain.join("\n")), [settings.modelChain]);
+  // Every view brings a new array, so follow the saved text: other updates must not wipe an edit.
+  const savedChain = settings.modelChain.join("\n");
+  const [chain, setChain] = useState(savedChain);
+  useEffect(() => setChain(savedChain), [savedChain]);
 
   const set = <K extends keyof GameSettings>(key: K, value: GameSettings[K]) => updateSettings({ [key]: value } as Partial<GameSettings>);
   const ro = !isHost;

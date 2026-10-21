@@ -375,6 +375,19 @@ function Composer({ chat, win, view, speaker }: { chat: Chat; win: ChatWindowSta
       setChatBuilder(chat.id, false);
     }
   }, [chat.messages, chat.id, sentAt, me]);
+  /** A message sent but not yet in the conversation: given back to the box if the envoy fails. */
+  const [unsent, setUnsent] = useState<{ text: string; count: number; failedBefore?: number } | null>(null);
+  const failedAt = useGame((s) => s.chatFailed[chat.id]);
+  useEffect(() => {
+    if (unsent && chat.messages.slice(unsent.count).some((m) => m.from === me)) setUnsent(null);
+  }, [chat.messages, unsent, me]);
+  useEffect(() => {
+    if (!unsent || failedAt === unsent.failedBefore) return;
+    setText((t) => t || unsent.text);
+    setUnsent(null);
+  }, [failedAt, unsent]);
+  // The server takes no messages while a turn resolves (often for minutes).
+  const turning = view.phase === "resolving";
   const [picking, setPicking] = useState(false);
   const peaceOpen = win.builder && kind === "endWar" && !!fight;
   const [treatyType, setTreatyType] = useState<TreatyType>("trade");
@@ -430,8 +443,9 @@ function Composer({ chat, win, view, speaker }: { chat: Chat; win: ChatWindowSta
         cessions: kind === "endWar" && cessions.length ? cessions : undefined, members, terms: peaceText,
       }
       : undefined;
-    if (!text.trim() && !proposal) return;
+    if ((!text.trim() && !proposal) || turning) return;
     sendChat(chat.id, text.trim(), proposal, speaker);
+    if (text.trim()) setUnsent({ text, count: chat.messages.length, failedBefore: failedAt });
     setText("");
     // The builder stays as it is until the proposal arrives, so a refusal loses nothing.
     if (proposal) setSentAt(chat.messages.length);
@@ -533,15 +547,15 @@ function Composer({ chat, win, view, speaker }: { chat: Chat; win: ChatWindowSta
               submit();
             }
           }}
-          placeholder={win.builder ? "Covering note (optional)…" : "Write a message…"}
+          placeholder={turning ? "The world is turning; send once the turn resolves…" : win.builder ? "Covering note (optional)…" : "Write a message…"}
           className="hud-input min-h-8 resize-none py-1.5 text-[12.5px] leading-snug"
         />
         <button
           type="button"
           onClick={submit}
-          disabled={!text.trim() && !(win.builder && (terms.trim() || kind === "endWar"))}
+          disabled={turning || (!text.trim() && !(win.builder && (terms.trim() || kind === "endWar")))}
           className="grid h-8 w-8 shrink-0 place-items-center rounded border border-gold/70 bg-gold/20 text-gold-bright hover:bg-gold/30 disabled:opacity-40"
-          title="Send"
+          title={turning ? "Envoys wait while the turn resolves" : "Send"}
         >
           <Icon name="send" size={14} />
         </button>

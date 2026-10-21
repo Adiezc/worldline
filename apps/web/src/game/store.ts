@@ -67,11 +67,11 @@ export interface GameStore {
   status: SocketStatus | "idle";
   statusDetail?: string;
   playerId: string | null;
+  /** The seat's secret from `welcome`, kept here too for when storage is unavailable. */
+  secret: string | null;
   view: GameView | null;
   /** Ownership before the most recent turn change, for playback. */
   preTurn: { turn: number; owners: number[]; controllers: number[] } | null;
-  /** A post-turn view arrived since the last `turn` message (so the map already shows it). */
-  viewAdvanced: boolean;
   /** Ownership playback must start from (set when the view beat the `turn` message). */
   turnBase: { owners: number[]; controllers: number[] } | null;
   progress: { stage: ProgressStage; detail?: string } | null;
@@ -109,6 +109,8 @@ export interface GameStore {
   pendingChat: { members: string[]; builder: boolean; preset?: "peace" } | null;
   /** `count` = messages in the chat when typing began; a newer reply from `from` clears it. */
   typing: Record<string, { from: string; until: number; count: number }>;
+  /** When a message to each chat last failed to get through, so its composer can give the text back. */
+  chatFailed: Record<string, number>;
   /** Front lines and troop counters on the map (persisted in localStorage). */
   showFronts: boolean;
   /** Unread diplomatic messages per chat id. */
@@ -128,9 +130,9 @@ const initial: GameStore = {
   gameId: null,
   status: "idle",
   playerId: null,
+  secret: null,
   view: null,
   preTurn: null,
-  viewAdvanced: false,
   turnBase: null,
   progress: null,
   lastResult: null,
@@ -158,6 +160,7 @@ const initial: GameStore = {
   chats: [],
   pendingChat: null,
   typing: {},
+  chatFailed: {},
   unread: {},
   showFronts: storedShowFronts(),
 };
@@ -198,7 +201,6 @@ export function applyView(view: GameView) {
     if (wentBack) {
       Object.assign(patch, {
         preTurn: null,
-        viewAdvanced: false,
         turnBase: null,
         resultOpen: false,
         mapHold: false,
@@ -215,7 +217,6 @@ export function applyView(view: GameView) {
     }
     if (turnChanged) {
       patch.preTurn = { turn: prev.turn, owners: prev.owners, controllers: prev.controllers };
-      patch.viewAdvanced = true;
       patch.prevOrders = Object.fromEntries(s.orders.map((o) => [o.id, o.text]));
     }
     // Orders: adopt the server's list unless we have local edits waiting to sync.

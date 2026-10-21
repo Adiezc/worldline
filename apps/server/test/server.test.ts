@@ -82,6 +82,57 @@ describe("accounts", () => {
     expect(codes[10]).toBe(429);
   });
 
+  test("a seat is resumed only with its secret, which no view ever carries", async () => {
+    const gameId = await newGame({ name: "Seats" });
+    const host = await new Client(PORT).connect(gameId, "Host");
+    host.send({ t: "claim", tag: "FRA" });
+    await host.until((v) => v.you.country === "FRA");
+    expect(host.secret).toMatch(/^[0-9a-f-]{36}$/);
+    // Everyone can read the host's id from the player list, but not take the seat with it.
+    const intruders: Client[] = [];
+    for (const secret of [undefined, "guess"]) {
+      const intruder = await new Client(PORT).connect(gameId, "Intruder", host.playerId, undefined, secret);
+      expect(intruder.playerId).not.toBe(host.playerId);
+      expect(intruder.view.you).toMatchObject({ country: null, isHost: false });
+      intruders.push(intruder);
+    }
+    const back = await new Client(PORT).connect(gameId, "Host", host.playerId, undefined, host.secret);
+    expect(back.view.you).toMatchObject({ playerId: host.playerId, country: "FRA", isHost: true });
+    // The secret only ever travels in its owner's welcome.
+    for (const c of [host, back, ...intruders]) {
+      for (const m of c.inbox) if (m.t !== "welcome" || c.playerId !== host.playerId) expect(JSON.stringify(m)).not.toContain(host.secret);
+    }
+    for (const c of [host, back, ...intruders]) c.close();
+  });
+
+  test("malformed messages are refused without taking the server down", async () => {
+    const gameId = await newGame({ name: "Garbage" });
+    const ws = new WebSocket(`ws://localhost:${PORT}/ws`);
+    const got: ServerMessage[] = [];
+    ws.onmessage = (e) => got.push(JSON.parse(String(e.data)));
+    await new Promise((r) => (ws.onopen = r));
+    for (const raw of ["null", "42", "[]", "\"join\"", "{\"t\":5}", "{oops"]) ws.send(raw);
+    // A join with a non-string name still joins, under a default name.
+    ws.send(JSON.stringify({ t: "join", gameId, name: 123 }));
+    for (let i = 0; i < 50 && !got.some((m) => m.t === "welcome"); i++) await Bun.sleep(50);
+    expect(got.filter((m) => m.t === "error").length).toBe(6);
+    const welcome = got.find((m) => m.t === "welcome") as Extract<ServerMessage, { t: "welcome" }>;
+    expect(welcome.view.players.find((p) => p.id === welcome.playerId)?.name).toBe("Player");
+    expect((await get("/api/health")).status).toBe(200);
+    ws.close();
+  });
+
+  test("joining a game that does not exist is answered and the socket closed, so the client stops waiting", async () => {
+    const ws = new WebSocket(`ws://localhost:${PORT}/ws`);
+    const got: ServerMessage[] = [];
+    ws.onmessage = (e) => got.push(JSON.parse(String(e.data)));
+    await new Promise((r) => (ws.onopen = r));
+    const closed = new Promise((r) => (ws.onclose = r));
+    ws.send(JSON.stringify({ t: "join", gameId: "nosuchgame", name: "Lost" }));
+    await closed;
+    expect(got).toEqual([{ t: "error", message: "Game not found" }]);
+  });
+
   test("a token restores the same player on a second device", async () => {
     const { token } = (await (await post("/api/auth/register", { username: "grace", password: "hopper1906" })).json()) as AuthResponse;
     const gameId = await newGame({ name: "Resume" });
@@ -318,21 +369,24 @@ describe("group chats", () => {
 });
 
 describe("saved-game files", () => {
-  const exportGame = (gameId: string, player?: string) =>
-    fetch(`${BASE}/api/games/${gameId}/export`, { headers: player ? { "x-worldline-player": player } : {} });
+  const exportGame = (gameId: string, player?: string, secret?: string) =>
+    fetch(`${BASE}/api/games/${gameId}/export`, { headers: { ...(player ? { "x-worldline-player": player } : {}), ...(secret ? { "x-worldline-secret": secret } : {}) } });
 
   test("only the host can export", async () => {
     const gameId = await newGame({ name: "Export Me!" });
     const host = await new Client(PORT).connect(gameId, "Host");
     const guest = await new Client(PORT).connect(gameId, "Guest");
     expect((await exportGame(gameId)).status).toBe(403);
-    expect((await exportGame(gameId, guest.playerId)).status).toBe(403);
+    expect((await exportGame(gameId, guest.playerId, guest.secret)).status).toBe(403);
     expect((await exportGame(gameId, "not-a-player")).status).toBe(403);
-    expect((await exportGame("nosuchgame", host.playerId)).status).toBe(404);
+    // Player ids are public: the host's id alone, or with another seat's secret, is not enough.
+    expect((await exportGame(gameId, host.playerId)).status).toBe(403);
+    expect((await exportGame(gameId, host.playerId, guest.secret)).status).toBe(403);
+    expect((await exportGame("nosuchgame", host.playerId, host.secret)).status).toBe(404);
     // The seat secret is never accepted from the URL, where logs would keep it.
     expect((await get(`/api/games/${gameId}/export?player=${encodeURIComponent(host.playerId)}`)).status).toBe(403);
 
-    const res = await exportGame(gameId, host.playerId);
+    const res = await exportGame(gameId, host.playerId, host.secret);
     expect(res.status).toBe(200);
     expect(res.headers.get("content-disposition")).toBe('attachment; filename="worldline-export-me-turn1.json"');
     const bundle = (await res.json()) as GameBundle;
@@ -349,11 +403,14 @@ describe("saved-game files", () => {
     await playTurns(host, "FRA", 2);
     const before = host.view;
 
-    const res = await exportGame(gameId, host.playerId);
+    const res = await exportGame(gameId, host.playerId, host.secret);
     const text = await res.text();
     // Player ids resume seats: they never leave the server.
     expect(text).not.toContain(host.playerId);
     expect(text).not.toContain(guest.playerId);
+    // Nor do seat secrets, which would let anyone with the file take a seat in the original game.
+    expect(text).not.toContain(host.secret);
+    expect(text).not.toContain(guest.secret);
     const bundle = JSON.parse(text) as GameBundle;
     expect(bundle.snapshots.map((s) => s.turn)).toEqual([1, 2]);
     expect(bundle.game.players.map((p) => p.name)).toEqual(["Host", "Guest"]);
@@ -394,7 +451,7 @@ describe("saved-game files", () => {
   test("malformed files are rejected", async () => {
     const gameId = await newGame({ name: "Template" });
     const host = await new Client(PORT).connect(gameId, "Host");
-    const good = (await (await exportGame(gameId, host.playerId)).json()) as GameBundle;
+    const good = (await (await exportGame(gameId, host.playerId, host.secret)).json()) as GameBundle;
     host.close();
     const bad = async (patch: (b: Record<string, any>) => void, match: RegExp) => {
       const b = structuredClone(good) as unknown as Record<string, any>;

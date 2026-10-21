@@ -2,8 +2,8 @@
 // every section is one line per item, capped, and limited to the countries that matter this turn.
 
 import {
-  activeProjects, addDays, computeTiers, warCollapse, countryByTag, countryIndex, DIFFICULTY, getRelation, humanTags, projectStatus, provincesOf,
-  type Country, type Effect, type GameState, type MapIndex, type ScenarioSeed, type Tiers, type War,
+  activeProjects, addDays, computeTiers, countryByTag, countryIndex, DIFFICULTY, getRelation, humanTags, projectStatus, provincesOf, warCollapse,
+  type Country, type Effect, type GameState, type MapIndex, type ScenarioSeed, type ScheduledItem, type Tiers, type War,
 } from "@worldline/shared";
 
 // ---- formatting ----
@@ -301,6 +301,20 @@ export function recentEventsBlock(state: GameState, opts: { involving?: Set<stri
 const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
 /**
+ * What players ordered in the last few turns and how each order went, so the adjudicator can
+ * credit groundwork already laid (or see a plan that keeps failing) instead of judging every
+ * order cold. `country` limits it to one player's own orders (they are private).
+ */
+export function orderHistoryBlock(state: GameState, opts: { country?: string; turns?: number; maxPerCountry?: number } = {}) {
+  const turns = opts.turns ?? 2, max = opts.maxPerCountry ?? 6;
+  const tags = opts.country ? [opts.country] : [...humanTags(state)];
+  const recent = (state.verdictLog ?? []).filter((v) => v.turn >= state.turn - turns && v.text);
+  const lines = tags.flatMap((tag) => recent.filter((v) => v.country === tag).slice(-max).map((v) =>
+    `- ${v.date} ${tag}: "${clip(v.text!.replace(/\s+/g, " "), 160)}" → ${v.outcome.toUpperCase()}: ${clip(v.reason.replace(/\s+/g, " "), 160)}`));
+  return lines.length ? `${opts.country ? "YOUR RECENT ORDERS" : "PLAYERS' EARLIER ORDERS"} (last ${turns} turns and how they went):\n${lines.join("\n")}` : "";
+}
+
+/**
  * What governments told each other in diplomatic talks recently: the last few statements and
  * every proposal with its outcome, per conversation. Turn prompts use it so the news stays
  * consistent with what was said at the table.
@@ -366,15 +380,28 @@ export function receiptBlock(state: GameState, max = 16) {
 
 const describeEffect = (e: Effect) => clip(JSON.stringify(e), 160);
 
-export function calendarIn(seed: ScenarioSeed, from: string, to: string) {
-  return (seed.calendar ?? []).filter((c) => c.date >= from && c.date <= to);
+/**
+ * What falls due between `from` and `to`: the scenario's calendar (ids `cal<index>`) and the dates
+ * governments set during the game, including ones already overdue because nobody held them.
+ */
+export function calendarIn(state: GameState, seed: ScenarioSeed, from: string, to: string): ScheduledItem[] {
+  const fixed = (seed.calendar ?? []).flatMap((c, i) => (c.date >= from && c.date <= to ? [{ ...c, id: `cal${i}`, since: "" }] : []));
+  const set = (state.schedule ?? []).filter((i) => i.date <= to);
+  return [...fixed, ...set].sort((a, b) => a.date.localeCompare(b.date));
 }
 
-export function calendarBlock(seed: ScenarioSeed, from: string, to: string) {
-  const list = calendarIn(seed, from, to);
-  if (!list.length) return "";
-  const lines = list.map((c) => `${c.date} ${c.kind} [${c.countries.join(",")}]: ${c.title}${c.note ? ` — ${c.note}` : ""}`);
-  return `CALENDAR (scheduled in this period):\n${lines.join("\n")}`;
+export function calendarBlock(state: GameState, seed: ScenarioSeed, from: string, to: string) {
+  const line = (c: ScheduledItem) => {
+    const late = c.date < from ? " OVERDUE (hold it now)" : "";
+    const origin = c.since ? ` (set ${c.since})` : "";
+    return `${c.id} ${c.date}${late} ${c.kind} [${c.countries.join(",")}]: ${c.title}${c.note ? ` — ${c.note}` : ""}${origin}`;
+  };
+  const due = calendarIn(state, seed, from, to);
+  const later = (state.schedule ?? []).filter((i) => i.date > to).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 8);
+  return [
+    due.length ? `CALENDAR (due in this period; hold each in an event with "holds" set to its id):\n${due.map(line).join("\n")}` : "",
+    later.length ? `DATES SET FOR LATER:\n${later.map(line).join("\n")}` : "",
+  ].filter(Boolean).join("\n\n");
 }
 
 export const rulesBlock = (seed: ScenarioSeed) => (seed.rules ? `SCENARIO RULES:\n${seed.rules}` : "");
@@ -421,7 +448,7 @@ export function worldContext(state: GameState, deps: { map: MapIndex; seed: Scen
     regionsBlock(state, map),
     recentEventsBlock(state),
     diplomacyBlock(state),
-    calendarBlock(seed, state.date, end),
+    calendarBlock(state, seed, state.date, end),
   ].filter(Boolean).join("\n\n");
   return { text, stable: head.length, tiers, end, front };
 }

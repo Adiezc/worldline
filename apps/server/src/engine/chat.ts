@@ -97,7 +97,7 @@ export async function sendChat(
 
   const reply: ChatMessage = { id: nextId(state, "m"), from: speaker, text: out.reply.trim(), at: state.date };
   if (out.proposal) {
-    const members = [...new Set(out.proposal.members)].filter((t) => countryByTag(state, t)?.alive);
+    const members = [...new Set(out.proposal.members)].filter((t) => chat.members.includes(t) && countryByTag(state, t)?.alive);
     if (!members.includes(speaker)) members.unshift(speaker);
     const humanMembers = chat.members.filter((m) => humans.has(m));
     const awaiting = humanMembers.filter((m) => members.includes(m));
@@ -187,13 +187,17 @@ function draftToProposal(state: GameState, map: MapIndex, chat: Chat, from: stri
   const humans = humanTags(state);
   const members = [...new Set([from, ...d.members])].filter((t) => countryByTag(state, t)?.alive);
   if (members.length < 2) throw new ProposalError("A proposal needs at least two parties.");
+  // Only governments at the table can be bound by what is agreed there.
+  const absent = members.filter((t) => !chat.members.includes(t));
+  if (absent.length) throw new ProposalError(`${absent.map((t) => nameOf(state, t)).join(", ")} ${absent.length === 1 ? "is" : "are"} not part of this conversation.`);
   const peace = d.kind === "endWar" ? (d.peace === "keep_occupied" ? "keep_occupied" : "white") : undefined;
   const cessions = d.kind === "endWar" ? draftCessions(state, map, members, peace!, d.cessions) : undefined;
   return {
     id: nextId(state, "p"), kind: d.kind, treatyType: d.kind === "treaty" ? d.treatyType ?? "nonaggression" : d.treatyType,
     peace, cessions: cessions?.length ? cessions : undefined,
     members, terms: d.terms.trim().slice(0, 1000), status: "open",
-    awaiting: chat.members.filter((m) => m !== from && humans.has(m)),
+    // Every other human party signs for itself; humans present but not party to it have no say.
+    awaiting: members.filter((m) => m !== from && humans.has(m)),
   };
 }
 

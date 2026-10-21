@@ -1,4 +1,6 @@
-import type { CalendarEntry, GameEvent, GameView } from "@worldline/shared";
+import { useMemo } from "react";
+import type { CalendarEntry, Effect, GameEvent, GameView } from "@worldline/shared";
+import { describeEffects, type EffectTone } from "../../game/effects.ts";
 import { fmtShortDate } from "../../game/format.ts";
 import { useGame } from "../../game/store.ts";
 import { CountryChip, Empty } from "../common/ui.tsx";
@@ -55,8 +57,8 @@ export function EventFeed() {
   );
 }
 
-const KIND_ICONS: Record<CalendarEntry["kind"], IconName> = { election: "ballot", summit: "users", deadline: "clock", event: "calendar" };
-const KIND_LABELS: Record<CalendarEntry["kind"], string> = { election: "Election", summit: "Summit", deadline: "Deadline", event: "Scheduled event" };
+const KIND_ICONS: Record<CalendarEntry["kind"], IconName> = { election: "ballot", referendum: "ballot", summit: "users", deadline: "clock", event: "calendar" };
+const KIND_LABELS: Record<CalendarEntry["kind"], string> = { election: "Election", referendum: "Referendum", summit: "Summit", deadline: "Deadline", event: "Scheduled event" };
 
 /** Consolidated chronicles (newest first) beside the calendar of what is coming. */
 function Annals() {
@@ -64,7 +66,8 @@ function Annals() {
   const calendar = useGame((s) => s.view!.calendar);
   const date = useGame((s) => s.view!.date);
   const entries = annalsOf(memory);
-  const upcoming = (calendar ?? []).filter((c) => c.date >= date).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 30);
+  // Dates set in the game ("since") stay listed while overdue: they are held at the start of the next turn.
+  const upcoming = (calendar ?? []).filter((c) => c.date >= date || "since" in c).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 30);
 
   return (
     <div className="flex min-h-0 flex-1 border-t border-panel-edge/40">
@@ -85,7 +88,7 @@ function Annals() {
             <li key={`${c.date}-${i}`} className="flex gap-2" title={[KIND_LABELS[c.kind], c.note].filter(Boolean).join(" — ")}>
               <Icon name={KIND_ICONS[c.kind] ?? "calendar"} size={13} className="mt-0.5 text-gold/75" />
               <div className="min-w-0">
-                <div className="text-[10px] tracking-wide text-gold/65 uppercase tabular-nums">{fmtShortDate(c.date)}</div>
+                <div className="text-[10px] tracking-wide text-gold/65 uppercase tabular-nums">{c.date < date ? "Due now" : fmtShortDate(c.date)}</div>
                 <div className="text-[11.5px] leading-snug text-parchment/80">{c.title}</div>
               </div>
             </li>
@@ -113,6 +116,34 @@ function Tab({ active, onClick, children }: { active: boolean; onClick: () => vo
   );
 }
 
+const TONES: Record<EffectTone, string> = {
+  up: "border-success/45 text-[#bfe6c0]",
+  down: "border-fail/45 text-[#f0b2aa]",
+  neutral: "border-gold/35 text-parchment/75",
+};
+
+/** What an event changed under the rules, as small chips: the first few, then a count. */
+export function EffectChips({ effects, max = 6 }: { effects: Effect[]; max?: number }) {
+  const countries = useGame((s) => s.view?.countries);
+  const organizations = useGame((s) => s.view?.organizations);
+  const notes = useMemo(() => (countries && organizations ? describeEffects(effects, { countries, organizations }) : []), [effects, countries, organizations]);
+  if (!notes.length) return null;
+  return (
+    <div className="mt-1.5 flex flex-wrap gap-1">
+      {notes.slice(0, max).map((n, i) => (
+        <span key={i} className={`rounded-sm border bg-black/20 px-1.5 text-[10.5px] leading-[18px] ${TONES[n.tone]}`}>
+          {n.text}
+        </span>
+      ))}
+      {notes.length > max && (
+        <span className="px-1 text-[10.5px] leading-[18px] text-parchment/45" title={notes.slice(max).map((n) => n.text).join("\n")}>
+          +{notes.length - max} more
+        </span>
+      )}
+    </div>
+  );
+}
+
 export function EventCard({ e, compact }: { e: GameEvent; compact?: boolean }) {
   return (
     <article className="rounded border border-panel-edge/35 bg-black/20 px-3 py-2">
@@ -121,6 +152,7 @@ export function EventCard({ e, compact }: { e: GameEvent; compact?: boolean }) {
         <h4 className="font-display text-[13px] leading-snug text-parchment">{e.headline}</h4>
       </div>
       {!compact && e.body && <p className="mt-1 text-[12px] leading-relaxed text-parchment/65 select-text">{e.body}</p>}
+      {!compact && <EffectChips effects={e.effects} />}
       {e.countries.length > 0 && (
         <div className="mt-1.5 flex flex-wrap gap-1">
           {e.countries.slice(0, 8).map((t) => (

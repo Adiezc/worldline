@@ -153,6 +153,7 @@ export class OpenRouterProvider implements AiProvider {
       tries.n++;
       await this.limiter.acquire();
       let res: Response;
+      let raw: string;
       try {
         res = await fetch(ENDPOINT, {
           method: "POST",
@@ -165,6 +166,8 @@ export class OpenRouterProvider implements AiProvider {
           body: JSON.stringify(this.body(req, chain, effort, useSchema)),
           signal: AbortSignal.timeout(timeoutFor(req.kind, effort)),
         });
+        // The body streams in under the same timeout, and a connection can drop mid-reply.
+        raw = await res.text();
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         // A stalled model will stall again: hand over to the next batch instead of re-waiting.
@@ -174,7 +177,6 @@ export class OpenRouterProvider implements AiProvider {
         break;
       }
 
-      const raw = await res.text();
       let json: OpenRouterBody | undefined;
       try { json = JSON.parse(raw); } catch { json = undefined; }
 

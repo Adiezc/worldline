@@ -1,7 +1,7 @@
 import type { Country, GameView } from "@worldline/shared";
-import { openDiplomacy, selectCountry, selectOrg, setLeftTab } from "../../game/actions.ts";
+import { claimCountry, openDiplomacy, selectCountry, selectOrg, setLeftTab } from "../../game/actions.ts";
 import { fmtRelation, fmtShortDate, relationWord } from "../../game/format.ts";
-import { relationColor } from "../../game/mapModes.ts";
+import { relationColor, SHOW_DISPUTES } from "../../game/mapModes.ts";
 import { countryMap, focusTag, relationBetween, TREATY_LABELS } from "../../game/selectors.ts";
 import { useGame } from "../../game/store.ts";
 import { getMap } from "../../map/controller.ts";
@@ -27,6 +27,9 @@ function CountryDetails({ view, c }: { view: GameView; c: Country }) {
   const me = view.you.country;
   const isMe = c.tag === me;
   const player = view.players.find((p) => p.country === c.tag);
+  // Spectators, and players whose nation is gone, may take over one that nobody leads.
+  const myNationAlive = !!me && countryMap(view.countries).get(me)?.alive !== false;
+  const canTake = view.phase === "orders" && !myNationAlive && !player && c.alive !== false;
   const rel = me && !isMe ? relationBetween(view.relations, me, c.tag) : null;
   const atWarWithMe = !!me && !isMe && view.wars.some((w) =>
     (w.attackers.includes(me) && w.defenders.includes(c.tag)) || (w.defenders.includes(me) && w.attackers.includes(c.tag)));
@@ -90,7 +93,12 @@ function CountryDetails({ view, c }: { view: GameView; c: Country }) {
       <NationStats country={c} always />
 
       <div className="mt-4 flex flex-wrap gap-1.5">
-        {!isMe && me && (
+        {canTake && (
+          <Button size="sm" variant="primary" icon="flag" onClick={() => claimCountry(c.tag)} title="Lead this nation from now on">
+            Play as {c.name}
+          </Button>
+        )}
+        {!isMe && myNationAlive && (
           <>
             <Button size="sm" variant="primary" icon="chat" onClick={() => openDiplomacy(c.tag)}>
               Open diplomacy
@@ -101,7 +109,7 @@ function CountryDetails({ view, c }: { view: GameView; c: Country }) {
             </Button>
           </>
         )}
-        {isMe && (
+        {isMe && myNationAlive && (
           <Button size="sm" variant="secondary" icon="crown" onClick={() => setLeftTab("formation")}>
             Form a nation
           </Button>
@@ -160,7 +168,7 @@ function CountryDetails({ view, c }: { view: GameView; c: Country }) {
 
       <ForcesSection tag={c.tag} />
 
-      <DisputesSection view={view} tag={c.tag} />
+      {SHOW_DISPUTES && <DisputesSection view={view} tag={c.tag} />}
 
       <SectionTitle>Treaties</SectionTitle>
       {treaties.length === 0 && <Empty>No treaties.</Empty>}

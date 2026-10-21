@@ -8,8 +8,8 @@ import {
   activeProjects, COMPLETE_AT, MAX_ACTIVE_PROJECTS, MAX_MILESTONES, MAX_NEW_PROJECTS_PER_TURN, MAX_SETBACK, projectPace,
 } from "./projects.ts";
 import {
-  addDays, atWar, countryByTag, countryIndex, getRelation, humanTags, nextId, relKey, warsOf,
-  type Difficulty, type Effect, type GameEvent, type GameState, type StatKey,
+  addDays, atWar, countryByTag, countryIndex, daysBetween, getRelation, humanTags, nextId, relKey, warsOf,
+  type Difficulty, type Effect, type GameEvent, type GameState, type ScheduledItem, type StatKey,
 } from "./state.ts";
 import { pickColor } from "./colors.ts";
 import { cleanGenFlag, deriveFlag } from "./flags.ts";
@@ -57,6 +57,8 @@ export interface TurnContext {
    * pace; a hold line limits how many of its regions the enemy can take.
    */
   operations?: { orderId: string; country: string; kind: "offensive" | "hold"; allowed: Set<number>; cap: number; used: number }[];
+  /** Scenario calendar entries due this turn (ids `cal<index>`), which events may hold too. */
+  calendar?: ScheduledItem[];
   /** Projects started this turn, per country. */
   projectsStarted?: Map<string, number>;
   /** Progress granted this turn, per project id. */
@@ -113,6 +115,12 @@ export function applyEvent(state: GameState, map: MapIndex, event: GameEvent, ct
   const humans = humanTags(state);
   const causedBy = new Set(event.causes.map((id) => ctx.orderCountry.get(id)).filter((t): t is string => !!t));
   const humanOk = (tag: string) => !humans.has(tag) || causedBy.has(tag);
+  // An event holding a scheduled vote speaks for the country that set it: its result may change
+  // that country's leader and government even when a player runs it and gave no order this turn.
+  const holding = event.holds
+    ? [...(state.schedule ?? []), ...(ctx.calendar ?? [])].find((i) => i.id === event.holds && i.date <= event.date)
+    : undefined;
+  const heldFor = new Set(holding?.countries ?? []);
   const c = caps(state, ctx);
   const rejected: { effect: Effect; reason: string }[] = [];
   const clamped: { effect: Effect; reason: string }[] = [];
@@ -411,11 +419,20 @@ export function applyEvent(state: GameState, map: MapIndex, event: GameEvent, ct
       case "changeLeader": {
         const k = countryByTag(state, effect.country);
         if (!k?.alive) { reject("unknown country"); break; }
-        if (humans.has(k.tag) && !causedBy.has(k.tag) && k.stability >= 30) { reject(`${k.tag} is player-controlled and stable`); break; }
+        // Players run the nation, not its leader: a player's leader can die, be killed or resign
+        // whenever the story supports it. The form of government changes only by the player's
+        // order, a scheduled vote, or real instability.
+        const govLocked = humans.has(k.tag) && !causedBy.has(k.tag) && !heldFor.has(k.tag) && k.stability >= 30;
         k.leader = effect.leader;
-        if (effect.government) k.government = effect.government;
         // A collapsed government's successor is now named.
         if (state.successions?.some((x) => x.country === k.tag)) state.successions = state.successions.filter((x) => x.country !== k.tag);
+        if (effect.government && effect.government !== k.government && govLocked) {
+          const { government: _, ...leaderOnly } = effect;
+          applied.push(leaderOnly);
+          noteClamp(`${k.tag} is player-controlled and stable; its form of government stays`);
+          break;
+        }
+        if (effect.government) k.government = effect.government;
         ok();
         break;
       }
@@ -624,8 +641,40 @@ export function applyEvent(state: GameState, map: MapIndex, event: GameEvent, ct
         ok();
         break;
       }
+      case "scheduleEvent": {
+        if (!alive(effect.country)) { reject("unknown country"); break; }
+        if (!humanOk(effect.country)) { reject(`${effect.country} is player-controlled; it sets dates only by its own orders`); break; }
+        if (effect.date < event.date || daysBetween(event.date, effect.date) > MAX_SCHEDULE_DAYS) { reject("the date must fall within three years after the event"); break; }
+        state.schedule ??= [];
+        const title = effect.title.trim().slice(0, 140);
+        // Setting a date again for the same vote or event moves it (a postponement).
+        const same = state.schedule.find((i) => i.countries[0] === effect.country && i.kind === effect.kind &&
+          (effect.kind === "election" || i.title.toLowerCase() === title.toLowerCase()));
+        if (same) {
+          same.date = effect.date;
+          same.title = title;
+        } else {
+          if (state.schedule.filter((i) => i.countries[0] === effect.country).length >= MAX_SCHEDULED) { reject("too many dates already set"); break; }
+          state.schedule.push({ id: nextId(state, "sch"), date: effect.date, kind: effect.kind, title, countries: [effect.country], since: event.date });
+        }
+        ok();
+        break;
+      }
+      case "cancelScheduled": {
+        const item = state.schedule?.find((i) => i.id === effect.id);
+        if (!item) { reject("no such scheduled item"); break; }
+        const blocked = item.countries.find((t) => !humanOk(t));
+        if (blocked) { reject(`${blocked} is player-controlled; only its own orders call off its dates`); break; }
+        state.schedule = state.schedule!.filter((i) => i !== item);
+        ok();
+        break;
+      }
     }
   }
+
+  // A held item is done; an event can't hold what isn't due yet.
+  if (holding) state.schedule = (state.schedule ?? []).filter((i) => i.id !== holding.id);
+  else delete event.holds;
 
   // Ending a war hands occupied land back to its owner unless the peace transferred it.
   for (const w of endedWars) {
@@ -661,6 +710,15 @@ export function applyEvent(state: GameState, map: MapIndex, event: GameEvent, ct
 }
 
 const MAX_CLAIM_REGIONS = 20;
+const MAX_SCHEDULE_DAYS = 3 * 365;
+const MAX_SCHEDULED = 8;
+/** Days a date may stay overdue (nobody held it) before it is dropped. */
+const OVERDUE_DAYS = 60;
+
+/** Drop dates long past that were never held. */
+export function pruneSchedule(state: GameState) {
+  if (state.schedule?.length) state.schedule = state.schedule.filter((i) => daysBetween(i.date, state.date) <= OVERDUE_DAYS);
+}
 
 /**
  * Keep every living country's capital in a region it owns: a capital lost to annexation or cession

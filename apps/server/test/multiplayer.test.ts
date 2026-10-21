@@ -1,6 +1,6 @@
 // End-to-end: real server process, two WebSocket players, mock AI, in-memory database.
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import type { TurnResult } from "@worldline/shared";
+import type { GameView, TurnResult } from "@worldline/shared";
 import { Client as BaseClient, startServer } from "./fixtures/server.ts";
 
 const PORT = 3900 + Math.floor(Math.random() * 90);
@@ -59,6 +59,9 @@ test("two players play a turn together", async () => {
   expect(ra.result.verdicts.map((v) => v.orderId)).toEqual(["o1"]);
   expect(rb.result.verdicts.map((v) => v.orderId)).toEqual(["o2"]);
   expect(ra.result.verdicts[0].text).toContain("defence procurement");
+  // ...and only their own nation's turn report.
+  expect(ra.result.nations.map((n) => n.tag)).toEqual(["FRA"]);
+  expect(rb.result.nations.map((n) => n.tag)).toEqual(["DEU"]);
 
   const after = await alice.until((v) => v.turn === 2 && v.phase === "orders");
   expect(after.date).toBe("2026-04-01");
@@ -68,17 +71,19 @@ test("two players play a turn together", async () => {
   const bobId = bob.playerId;
   bob.ws.close();
   await alice.until((v) => v.players.find((p) => p.id === bobId)?.connected === false);
-  const bob2 = await new Client().connect(created.gameId, "Bob", bobId);
+  const bob2 = await new Client().connect(created.gameId, "Bob", bobId, undefined, bob.secret);
   expect(bob2.view.you.country).toBe("DEU");
 
   // Diplomacy with an AI nation.
+  // Found by its members: AI governments may already have written to either player unprompted.
+  const withItaly = (v: GameView) => v.chats.find((c) => c.members.includes("ITA") && c.members.includes("FRA"));
   alice.send({ t: "chat.open", with: ["ITA"] });
-  const withChat = await alice.until((v) => v.chats.length === 1);
-  alice.send({ t: "chat.send", chatId: withChat.chats[0].id, text: "Shall we deepen our trade ties?" });
-  const replied = await alice.until((v) => (v.chats[0]?.messages.length ?? 0) >= 2);
-  expect(replied.chats[0].messages.at(-1)?.from).toBe("ITA");
+  const withChat = await alice.until((v) => !!withItaly(v));
+  alice.send({ t: "chat.send", chatId: withItaly(withChat)!.id, text: "Shall we deepen our trade ties?" });
+  const replied = await alice.until((v) => (withItaly(v)?.messages.length ?? 0) >= 2);
+  expect(withItaly(replied)!.messages.at(-1)?.from).toBe("ITA");
   // Bob does not see France's chat.
-  expect(bob2.view.chats.length).toBe(0);
+  expect(bob2.view.chats.some((c) => c.members.includes("FRA"))).toBe(false);
 
   // A UN resolution proposed by France gets voted on next turn.
   const un = after.organizations.find((o) => o.id === "un");

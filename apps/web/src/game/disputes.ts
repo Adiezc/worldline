@@ -5,6 +5,7 @@ import type { Claim, GameView, MapIndex } from "@worldline/shared";
 import { getMap } from "../map/controller.ts";
 import { useMap } from "../store.ts";
 import { mapIndexFor } from "./fronts.ts";
+import { SHOW_DISPUTES } from "./mapModes.ts";
 import { useGame } from "./store.ts";
 
 /**
@@ -36,7 +37,7 @@ export function pushDisputes() {
   if (!map) return;
   const { view, mapMode } = useGame.getState();
   const { meta, editing } = useMap.getState();
-  if (!view || !meta || editing || !view.claims?.length) {
+  if (!SHOW_DISPUTES || !view || !meta || editing || !view.claims?.length) {
     map.setClaims(null, null);
     return;
   }

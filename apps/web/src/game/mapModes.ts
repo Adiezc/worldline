@@ -4,7 +4,13 @@ import { relationBetween } from "./selectors.ts";
 
 export type MapMode = "political" | "relations" | "orgs" | "wars" | "disputes" | "gdp" | "stability";
 
-export const MAP_MODES: { id: MapMode; label: string }[] = [
+/**
+ * Disputes on the map (dashed claim lines, the Disputes map mode, tooltip and country panel lines)
+ * are switched off for now; flip this to show them. Claims stay in the game state and the AI still sees them.
+ */
+export const SHOW_DISPUTES = false;
+
+const ALL_MODES: { id: MapMode; label: string }[] = [
   { id: "political", label: "Political" },
   { id: "relations", label: "Relations" },
   { id: "orgs", label: "Organisations" },
@@ -13,6 +19,7 @@ export const MAP_MODES: { id: MapMode; label: string }[] = [
   { id: "gdp", label: "GDP" },
   { id: "stability", label: "Stability" },
 ];
+export const MAP_MODES = ALL_MODES.filter((m) => SHOW_DISPUTES || m.id !== "disputes");
 
 export const MODE_COLORS = {
   neutral: "#8f8a7e",

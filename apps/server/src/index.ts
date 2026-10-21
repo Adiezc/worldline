@@ -142,15 +142,17 @@ const server = Bun.serve<SocketData>({
       }
     }
 
-    // Host only: the player id is the secret the host's client keeps for this game. It comes in a
-    // header, not the URL, so it stays out of proxy, tunnel and access logs.
+    // Host only. Player ids are public (every view lists them), so the host's seat secret proves it.
+    // Both come in headers, not the URL, so they stay out of proxy, tunnel and access logs.
     const ex = path.match(/^\/api\/games\/([a-z0-9]+)\/export$/);
     if (ex && req.method === "GET") {
       const room = rooms.peek(ex[1]);
       const game = room?.state ?? loadGame(ex[1]);
       if (!game) return json({ error: "Game not found" }, 404);
       const player = req.headers.get("x-worldline-player");
-      if (!player || !game.players.some((p) => p.id === player && p.isHost)) return json({ error: "Only the host can export the game." }, 403);
+      const secret = req.headers.get("x-worldline-secret");
+      const host = game.players.find((p) => p.id === player && p.isHost);
+      if (!host || !host.secret || host.secret !== secret) return json({ error: "Only the host can export the game." }, 403);
       // Mid-turn the state is half-applied; the turn's start is in the snapshots, but wait for its end.
       if (room?.resolving) return json({ error: "Wait for the turn to resolve, then export." }, 409);
       try {
@@ -267,32 +269,37 @@ const server = Bun.serve<SocketData>({
       try {
         msg = JSON.parse(String(raw)) as ClientMessage;
       } catch {
+        msg = null as unknown as ClientMessage;
+      }
+      // Anything but an object with a string type is refused: a throw in this handler would take
+      // the whole server, and every game on it, down.
+      if (!msg || typeof msg !== "object" || typeof msg.t !== "string") {
         ws.send(JSON.stringify({ t: "error", message: "Malformed message" }));
         return;
       }
-      if (msg.t === "join") {
-        let room;
-        try {
-          room = typeof msg.gameId === "string" ? rooms.get(msg.gameId) : null;
-        } catch (e) {
-          ws.send(JSON.stringify({ t: "error", message: errorText(e) }));
+      try {
+        if (msg.t === "join") {
+          const room = typeof msg.gameId === "string" ? rooms.get(msg.gameId) : null;
+          if (!room) {
+            // Closing is what tells the client to stop waiting and show why it could not join.
+            ws.send(JSON.stringify({ t: "error", message: "Game not found" }));
+            ws.close();
+            return;
+          }
+          // An invalid or expired token just joins anonymously.
+          const user = typeof msg.token === "string" ? userForToken(msg.token) : null;
+          room.join(ws, msg, user);
           return;
         }
+        const room = ws.data.gameId ? rooms.get(ws.data.gameId) : null;
         if (!room) {
-          ws.send(JSON.stringify({ t: "error", message: "Game not found" }));
+          ws.send(JSON.stringify({ t: "error", message: "Join a game first" }));
           return;
         }
-        // An invalid or expired token just joins anonymously.
-        const user = typeof msg.token === "string" ? userForToken(msg.token) : null;
-        room.join(ws, msg, user);
-        return;
+        room.handle(ws, msg).catch((e) => ws.send(JSON.stringify({ t: "error", message: errorText(e) })));
+      } catch (e) {
+        ws.send(JSON.stringify({ t: "error", message: errorText(e) }));
       }
-      const room = ws.data.gameId ? rooms.get(ws.data.gameId) : null;
-      if (!room) {
-        ws.send(JSON.stringify({ t: "error", message: "Join a game first" }));
-        return;
-      }
-      room.handle(ws, msg).catch((e) => ws.send(JSON.stringify({ t: "error", message: errorText(e) })));
     },
     close(ws) {
       const room = ws.data.gameId ? rooms.get(ws.data.gameId) : null;

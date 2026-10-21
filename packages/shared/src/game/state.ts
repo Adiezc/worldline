@@ -1,6 +1,7 @@
 // Authoritative game state. Countries are addressed by tag in anything the AI sees and by
 // index in map arrays (owners/controllers), so the renderer can stay index-based.
 import type { Operation } from "./operations.ts";
+import type { CalendarEntry } from "./scenario.ts";
 
 export type Difficulty = "easy" | "normal" | "hard" | "realistic";
 export type AiBehaviour = "plausible" | "dynamic";
@@ -144,6 +145,8 @@ export type Effect =
   | { type: "updateAgenda"; country: string; goals: string[] }
   | { type: "addClaim"; claimant: string; provinces: number[]; note: string }
   | { type: "dropClaim"; claimant: string; provinces?: number[] }
+  | { type: "scheduleEvent"; country: string; date: string; kind: CalendarEntry["kind"]; title: string }
+  | { type: "cancelScheduled"; id: string }
   | { type: "startProject"; country: string; name: string; goal: string; months: number; milestones: string[] }
   | { type: "advanceProject"; projectId: string; progress: number; milestone?: number; note?: string }
   | { type: "endProject"; projectId: string; outcome: "completed" | "failed" | "abandoned" }
@@ -201,6 +204,8 @@ export interface GameEvent {
   rejected?: { effect: Effect; reason: string }[];
   /** Effects that were applied, but scaled down to the per-turn caps. */
   clamped?: { effect: Effect; reason: string }[];
+  /** Id of the calendar item (an election, a referendum) this event holds. */
+  holds?: string;
   /** Map changes produced by this event, for client playback. */
   mapDiff?: { province: number; owner: number; controller: number }[];
   scope: "player" | "world";
@@ -235,6 +240,8 @@ export interface Player {
   isHost: boolean;
   connected: boolean;
   ready: boolean;
+  /** Proves a returning client owns this seat (ids are public). Server-side; only its owner gets it. */
+  secret?: string;
 }
 
 export interface ChatMessage {
@@ -284,6 +291,16 @@ export interface Chat {
    * AI side with each reply, so long negotiations stay consistent after old messages scroll out.
    */
   summary?: string;
+}
+
+/**
+ * A date a government set during the game (an election, a referendum, a summit), kept so the
+ * resolver holds it when the day comes. Scenario calendar entries get ids too (`cal<index>`).
+ */
+export interface ScheduledItem extends CalendarEntry {
+  id: string;
+  /** Game date it was set on. */
+  since: string;
 }
 
 /** A country's claim on regions another country holds (a disputed territory). */
@@ -344,6 +361,8 @@ export interface GameState {
   formed?: string[];
   /** Territorial claims on land others hold. Informational: shown on the map and given to the AI. */
   claims?: Claim[];
+  /** Dates governments set during the game, until they are held (older saves may lack it). */
+  schedule?: ScheduledItem[];
   /** Every nuclear detonation so far (older saves lack it). */
   nuclearStrikes?: NuclearStrike[];
   /**

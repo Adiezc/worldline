@@ -1,4 +1,5 @@
 import { useMap } from "../store.ts";
+import { SHOW_DISPUTES } from "../game/mapModes.ts";
 import { useGame } from "../game/store.ts";
 
 /** Region name and owner under the cursor, from the live view (or the static start map). */
@@ -27,7 +28,7 @@ export function Tooltip() {
         {owner?.name ?? "Unclaimed"}
       </div>
       {controller && controller !== owner && <div className="mt-0.5 text-xs text-red-300/85">Occupied by {controller.name}</div>}
-      {view?.claims?.filter((c) => c.provinces.includes(id)).map((c) => (
+      {SHOW_DISPUTES && view?.claims?.filter((c) => c.provinces.includes(id)).map((c) => (
         <div key={c.id} className="mt-0.5 text-xs text-amber-200/80">
           Claimed by {view.countries.find((k) => k.tag === c.claimant)?.name ?? c.claimant}
         </div>

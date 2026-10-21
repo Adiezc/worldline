@@ -7,12 +7,12 @@ import { ApiError } from "./api.ts";
 export const MAX_GAME_FILE = 60 * 1024 * 1024;
 
 /**
- * Download the game as a JSON file. The server only serves it to the host's player id, sent in a
- * header so it stays out of URLs and logs. Returns how many of the oldest turns' rewind points were
- * left out to keep the file importable.
+ * Download the game as a JSON file. The server only serves it to the host's seat (player id and
+ * secret), sent in headers so they stay out of URLs and logs. Returns how many of the oldest
+ * turns' rewind points were left out to keep the file importable.
  */
-export async function exportGame(gameId: string, playerId: string) {
-  const res = await send(`/api/games/${encodeURIComponent(gameId)}/export`, { headers: { "x-worldline-player": playerId } });
+export async function exportGame(gameId: string, playerId: string, secret: string) {
+  const res = await send(`/api/games/${encodeURIComponent(gameId)}/export`, { headers: { "x-worldline-player": playerId, "x-worldline-secret": secret } });
   const dropped = Number(res.headers.get("x-worldline-dropped-turns")) || 0;
   const name = res.headers.get("content-disposition")?.match(/filename="([^"]+)"/)?.[1] ?? "worldline-game.json";
   const url = URL.createObjectURL(await res.blob());

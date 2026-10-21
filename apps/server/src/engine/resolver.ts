@@ -8,7 +8,7 @@ import {
   type Outreach, type TurnContext,
 } from "@worldline/shared";
 import type { EngineDeps } from "./api.ts";
-import { nameOf, receiptBlock, worldContext } from "./context.ts";
+import { nameOf, orderHistoryBlock, receiptBlock, worldContext } from "./context.ts";
 import type { NpcIntent } from "./director.ts";
 import { clampDate, makeEvent } from "./game.ts";
 import { callJson } from "./llm.ts";
@@ -45,6 +45,7 @@ export async function runResolver(
 
   const sections = [
     world.text,
+    orderHistoryBlock(state),
     orders.length
       ? `ORDERS (from players; give each a verdict):\n${orders.map((o) => `${o.id} [${o.country}] ${o.operation ? "(battle plan, see OPERATIONS) " : ""}${o.text}`).join("\n")}`
       : "ORDERS: none this turn.",
@@ -123,6 +124,7 @@ export async function runResolver(
       countries,
       causes,
       effects: d.effects as Effect[],
+      holds: d.holds,
     });
     applyEvent(state, deps.map, ev, opts.ctx);
     const unwarred = hostilitiesWithoutWar(state, ev);

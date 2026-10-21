@@ -15,7 +15,7 @@ const PHASES = new Set(["lobby", "orders", "resolving"]);
 export class BundleError extends Error {}
 
 /**
- * The file for a game. Player ids resume a seat, so they are swapped for aliases; pending orders and
+ * The file for a game. Player ids are swapped for aliases and seat secrets dropped; pending orders and
  * votes are dropped (an import clears them anyway). Snapshots come newest first, one stored row at a
  * time; when the file would outgrow the import limit the oldest are left out (`dropped`), so long
  * games lose early rewind points rather than becoming unimportable.
@@ -35,7 +35,8 @@ export function exportBundle(game: GameState, snapshotsNewestFirst: Iterable<str
   const head = scrub(JSON.stringify({
     format: BUNDLE_FORMAT,
     exportedAt: new Date().toISOString(),
-    game: { ...game, players: game.players.map((p) => ({ ...p, connected: false, ready: false })), orders: {}, jumpVotes: {}, turnDeadline: undefined },
+    // Seat secrets resume a seat in the original game, so they never leave the server.
+    game: { ...game, players: game.players.map(({ secret: _, ...p }) => ({ ...p, connected: false, ready: false })), orders: {}, jumpVotes: {}, turnDeadline: undefined },
   }));
   let size = Buffer.byteLength(head) + 32;
   if (size > limit) throw new BundleError(`This game is too large to export (${Math.ceil(size / 1024 / 1024)} MB; ${limit / 1024 / 1024} MB max).`);
