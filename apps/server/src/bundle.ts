@@ -209,6 +209,10 @@ function checkState(v: unknown, at: string, regions: number): GameState {
     number(p.progress, `${here}.progress`);
     objects(p.milestones, `${here}.milestones`);
   });
+  if (s.rankHistory != null) objects(s.rankHistory, `${at}.rankHistory`).forEach((h, i) => {
+    integer(h.turn, `${at}.rankHistory[${i}].turn`, 0);
+    strings(h.order, `${at}.rankHistory[${i}].order`);
+  });
   list(s.players, `${at}.players`);
   obj(s.orders, `${at}.orders`);
   obj(s.jumpVotes, `${at}.jumpVotes`);

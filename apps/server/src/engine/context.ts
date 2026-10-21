@@ -2,8 +2,8 @@
 // every section is one line per item, capped, and limited to the countries that matter this turn.
 
 import {
-  activeProjects, addDays, computeTiers, countryByTag, countryIndex, DIFFICULTY, getRelation, humanTags, projectStatus, provincesOf, warCollapse,
-  type Country, type Effect, type GameState, type MapIndex, type ScenarioSeed, type ScheduledItem, type Tiers, type War,
+  activeProjects, addDays, computeTiers, countryByTag, countryIndex, DIFFICULTY, getRelation, humanTags, powerRanking, projectStatus, provincesOf, rankMap, TIER_LABELS, warCollapse,
+  type Country, type NationRank, type Effect, type GameState, type MapIndex, type ScenarioSeed, type ScheduledItem, type Tiers, type War,
 } from "@worldline/shared";
 
 // ---- formatting ----
@@ -47,12 +47,13 @@ export function orgsOf(state: GameState, tag: string) {
     .map((o) => (o.suspended.includes(tag) ? `${o.abbrev}(suspended)` : o.abbrev));
 }
 
-/** Full line: identity, stats, memberships and (for AI nations) agenda. */
-export function countryDetail(state: GameState, c: Country, humans = humanTags(state)) {
+/** Full line: identity, power rank, stats, memberships and (for AI nations) agenda. */
+export function countryDetail(state: GameState, c: Country, humans = humanTags(state), ranks = rankMap(powerRanking(state))) {
   const human = humans.has(c.tag);
   const orgs = orgsOf(state, c.tag);
+  const rank = ranks.get(c.tag);
   const parts = [
-    `${c.tag} ${c.name}${human ? " [PLAYER]" : ""} — ${c.government}, led by ${c.leader}`,
+    `${c.tag} ${c.name}${human ? " [PLAYER]" : ""} — ${c.government}, led by ${c.leader}` + (rank ? `, ${TIER_LABELS[rank.tier]} #${rank.rank}` : ""),
     `GDP ${fmtGdp(c.gdp)}, pop ${fmtPop(c.population)}, stability ${r0(c.stability)}, military ${r0(c.military)}` +
       (c.warExhaustion >= 1 ? `, war exhaustion ${r0(c.warExhaustion)}` : "") + (c.nuclear ? ", nuclear" : ""),
   ];
@@ -68,13 +69,22 @@ export const countryBrief = (c: Country) => `${c.tag} ${c.name} ${fmtGdp(c.gdp)}
 export function countriesBlock(state: GameState, focus: string[], others: string[]) {
   const humans = humanTags(state);
   const live = (t: string) => countryByTag(state, t)?.alive;
-  const detail = focus.filter(live).map((t) => countryDetail(state, countryByTag(state, t)!, humans));
+  const ranking = powerRanking(state);
+  const ranks = rankMap(ranking);
+  const detail = focus.filter(live).map((t) => countryDetail(state, countryByTag(state, t)!, humans, ranks));
   const brief = [...new Set(others)]
     .filter((t) => live(t) && !focus.includes(t))
     .map((t) => countryBrief(countryByTag(state, t)!) + (humans.has(t) ? " [PLAYER]" : ""));
-  let out = `COUNTRIES IN FOCUS:\n${detail.join("\n")}`;
+  let out = `${rankingLine(ranking)}\n\nCOUNTRIES IN FOCUS:\n${detail.join("\n")}`;
   if (brief.length) out += `\nOTHER COUNTRIES (tag name gdp stability military):\n${brief.join("\n")}`;
   return out;
+}
+
+/** The great and major powers in rank order, so the narrative weighs them accordingly. */
+export function rankingLine(ranking: NationRank[]) {
+  const tier = (t: NationRank["tier"]) => ranking.filter((r) => r.tier === t).map((r) => r.tag).join(" ");
+  return `POWER RANKING (strongest first): Great Powers ${tier("great") || "none"}; Major Powers ${tier("major") || "none"}. ` +
+    "Other nations are Regional or Minor Powers.";
 }
 
 /** Top-N economies outside the given set, for one-line summaries. */

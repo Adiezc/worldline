@@ -59,7 +59,7 @@ export interface ChatWindowState {
   preset?: "peace";
 }
 
-export type LeftTab = "orders" | "advisor" | "orgs" | "formation" | "projects" | "history";
+export type LeftTab = "orders" | "advisor" | "orgs" | "formation" | "projects" | "rankings" | "history";
 export type FeedTab = "player" | "world" | "annals";
 
 export interface GameStore {

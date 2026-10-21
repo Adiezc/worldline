@@ -14,6 +14,7 @@ const ICONS: Record<MapMode, IconName> = {
   disputes: "globe",
   gdp: "sparkle",
   stability: "flag",
+  rank: "podium",
 };
 
 /** Bottom-right: map mode buttons with a small legend. */

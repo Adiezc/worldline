@@ -1,8 +1,9 @@
 // Map modes recolour countries by index; the renderer only ever sees a palette.
-import type { Country, GameView } from "@worldline/shared";
+import { TIER_LABELS, type Country, type GameView } from "@worldline/shared";
+import { rankingOf, TIER_COLORS } from "./ranking.ts";
 import { relationBetween } from "./selectors.ts";
 
-export type MapMode = "political" | "relations" | "orgs" | "wars" | "disputes" | "gdp" | "stability";
+export type MapMode = "political" | "relations" | "orgs" | "wars" | "disputes" | "gdp" | "stability" | "rank";
 
 /**
  * Disputes on the map (dashed claim lines, the Disputes map mode, tooltip and country panel lines)
@@ -18,6 +19,7 @@ const ALL_MODES: { id: MapMode; label: string }[] = [
   { id: "disputes", label: "Disputes" },
   { id: "gdp", label: "GDP" },
   { id: "stability", label: "Stability" },
+  { id: "rank", label: "Power rank" },
 ];
 export const MAP_MODES = ALL_MODES.filter((m) => SHOW_DISPUTES || m.id !== "disputes");
 
@@ -63,7 +65,9 @@ export interface ModeContext {
 }
 
 export function computePalette(
-  mode: MapMode, view: Pick<GameView, "countries" | "relations" | "wars" | "organizations"> & Partial<Pick<GameView, "claims" | "owners">>, ctx: ModeContext,
+  mode: MapMode,
+  view: Pick<GameView, "countries" | "relations" | "wars" | "organizations"> & Partial<Pick<GameView, "claims" | "owners" | "treaties">>,
+  ctx: ModeContext,
 ): string[] {
   const countries = view.countries as Country[];
   const each = (fn: (c: Country) => string) => countries.map((c) => (c.alive === false ? MODE_COLORS.neutral : fn(c)));
@@ -128,6 +132,15 @@ export function computePalette(
 
     case "stability":
       return each((c) => ramp(STABILITY_RAMP, c.stability / 100));
+
+    case "rank": {
+      if (!view.owners) return each(() => MODE_COLORS.neutral);
+      const { byTag } = rankingOf({ countries, owners: view.owners, treaties: view.treaties ?? [], organizations: view.organizations });
+      return each((c) => {
+        const r = byTag.get(c.tag);
+        return r ? TIER_COLORS[r.tier] : MODE_COLORS.neutral;
+      });
+    }
   }
 }
 
@@ -157,6 +170,8 @@ export function legendFor(mode: MapMode): { color: string; label: string }[] | {
       return { ramp: GDP_RAMP, lo: "Small", hi: "Large (log)" };
     case "stability":
       return { ramp: STABILITY_RAMP, lo: "Unstable", hi: "Stable" };
+    case "rank":
+      return (Object.keys(TIER_COLORS) as (keyof typeof TIER_COLORS)[]).map((t) => ({ color: TIER_COLORS[t], label: TIER_LABELS[t].replace(" Power", "") }));
     default:
       return null;
   }

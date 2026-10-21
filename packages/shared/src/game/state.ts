@@ -374,6 +374,8 @@ export interface GameState {
   surrenderOffers?: Record<string, number>;
   /** Long-running national efforts, active and finished (older saves lack it). */
   projects?: Project[];
+  /** Power ranking (tags, strongest first) as each recent turn began resolving (see ranking.ts; older saves lack it). */
+  rankHistory?: { turn: number; order: string[] }[];
   players: Player[];
   /** Pending orders this turn, keyed by player id. */
   orders: Record<string, Order[]>;

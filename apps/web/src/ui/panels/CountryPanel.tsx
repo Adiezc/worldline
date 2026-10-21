@@ -1,4 +1,4 @@
-import type { Country, GameView } from "@worldline/shared";
+import { rankChange, TIER_LABELS, type Country, type GameView } from "@worldline/shared";
 import { claimCountry, openDiplomacy, selectCountry, selectOrg, setLeftTab } from "../../game/actions.ts";
 import { fmtRelation, fmtShortDate, relationWord } from "../../game/format.ts";
 import { relationColor, SHOW_DISPUTES } from "../../game/mapModes.ts";
@@ -12,6 +12,8 @@ import { Government } from "../common/Government.tsx";
 import { NationStats } from "../common/NationStats.tsx";
 import { Icon } from "../common/Icon.tsx";
 import { ForcesSection } from "./ForcesSection.tsx";
+import { partsTitle, RankChange } from "./RankingsPanel.tsx";
+import { TIER_TONES, useRank } from "../../game/ranking.ts";
 
 export function CountryPanel() {
   const open = useGame((s) => s.countryOpen);
@@ -77,6 +79,8 @@ function CountryDetails({ view, c }: { view: GameView; c: Country }) {
       <Government country={c} className="mb-3" />
 
       <RegionLine view={view} tag={c.tag} />
+
+      <PowerRankLine view={view} tag={c.tag} />
 
       {rel !== null && (
         <div className="mb-3 flex items-center justify-between rounded border border-panel-edge/40 bg-black/20 px-3 py-2">
@@ -248,6 +252,26 @@ function CountryDetails({ view, c }: { view: GameView; c: Country }) {
         </button>
       )}
     </Panel>
+  );
+}
+
+/** Place in the power ranking, its tier and the change since last turn; opens the full ranking. */
+function PowerRankLine({ view, tag }: { view: GameView; tag: string }) {
+  const r = useRank(tag);
+  if (!r) return null;
+  return (
+    <button
+      onClick={() => setLeftTab("rankings")}
+      title={`${partsTitle(r)}. Click for the full ranking.`}
+      className="mb-3 flex w-full items-center justify-between rounded border border-panel-edge/40 bg-black/20 px-3 py-2 text-left hover:border-gold/50"
+    >
+      <span className="hud-label">Power ranking</span>
+      <span className="flex items-center gap-2 text-[13px]">
+        <span className="font-semibold text-parchment tabular-nums">#{r.rank}</span>
+        <RankChange change={rankChange(view, tag, r.rank)} />
+        <Badge tone={TIER_TONES[r.tier]}>{TIER_LABELS[r.tier]}</Badge>
+      </span>
+    </button>
   );
 }
 

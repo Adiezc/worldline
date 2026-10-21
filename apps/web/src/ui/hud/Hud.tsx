@@ -14,6 +14,7 @@ import { OrgPanel } from "../panels/OrgPanel.tsx";
 import { FormationPanel } from "../panels/FormationPanel.tsx";
 import { ProjectsPanel } from "../panels/ProjectsPanel.tsx";
 import { HistoryPanel } from "../panels/HistoryPanel.tsx";
+import { RankingsPanel } from "../panels/RankingsPanel.tsx";
 import { CountryPanel } from "../panels/CountryPanel.tsx";
 import { EventFeed } from "../panels/EventFeed.tsx";
 import { ChatDock, ChatList } from "../chat/ChatDock.tsx";
@@ -61,6 +62,7 @@ export function Hud() {
         <IconButton icon="columns" label="Organisations" active={tab === "orgs"} onClick={() => toggleLeftTab("orgs")} badge={pendingVotes} />
         <IconButton icon="project" label={`Projects${activeProjects ? ` (${activeProjects})` : ""}`} active={tab === "projects"} onClick={() => toggleLeftTab("projects")} badge={overdueProjects} />
         <IconButton icon="crown" label="Form a nation" active={tab === "formation"} onClick={() => toggleLeftTab("formation")} />
+        <IconButton icon="podium" label="Power rankings" active={tab === "rankings"} onClick={() => toggleLeftTab("rankings")} />
         {isHost && <IconButton icon="history" label={`History${snapshotCount ? ` (${snapshotCount} saved turns)` : ""} — rewind`} active={tab === "history"} onClick={() => toggleLeftTab("history")} />}
         <div className="gilt-rule my-1 w-7" />
         <IconButton icon="chat" label="Diplomatic channels" active={chatList} onClick={() => setChatList(!chatList)} badge={awaitingReplies + unreadChats} />
@@ -75,6 +77,7 @@ export function Hud() {
           {tab === "orgs" && <OrgPanel onClose={() => setLeftTab(null)} />}
           {tab === "formation" && <FormationPanel onClose={() => setLeftTab(null)} />}
           {tab === "projects" && <ProjectsPanel onClose={() => setLeftTab(null)} />}
+          {tab === "rankings" && <RankingsPanel onClose={() => setLeftTab(null)} />}
           {tab === "history" && <HistoryPanel onClose={() => setLeftTab(null)} />}
         </div>
       )}
