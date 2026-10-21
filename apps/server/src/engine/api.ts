@@ -30,6 +30,12 @@ export interface AiRequest {
    * caching put a cache breakpoint there; the system prompt is always treated as cacheable.
    */
   cacheUpto?: number;
+  /**
+   * The reply so far, after each streamed chunk, for callers that show it while it is written
+   * (diplomacy chat). Providers that can't stream call it once with the whole text, or not at all;
+   * a retried attempt starts again from the beginning.
+   */
+  onText?: (text: string) => void;
   maxTokens?: number;
   temperature?: number;
   /** "setting" uses the host's reasoning effort; "off" disables reasoning for speed (the default). */
@@ -94,9 +100,12 @@ export interface EngineApi {
   runTurn(state: GameState, deps: EngineDeps): Promise<TurnResult>;
   /** Human message to a chat; appends the human message and, for AI members, their reply. */
   /** `speaker` picks which AI member answers in a group chat (default: the most relevant one). */
-  sendChat(state: GameState, deps: EngineDeps, opts: { chatId: string; playerId: string; text: string; proposal?: ProposalDraft; speaker?: string }): Promise<void>;
+  /** `onReply` receives the AI reply as it is written (streaming providers). */
+  sendChat(state: GameState, deps: EngineDeps, opts: { chatId: string; playerId: string; text: string; proposal?: ProposalDraft; speaker?: string; onReply?: (from: string, text: string) => void }): Promise<void>;
   openChat(state: GameState, opts: { from: string; with: string[] }): string;
   respondProposal(state: GameState, opts: { chatId: string; proposalId: string; byTag: string; accept: boolean; map?: MapIndex }): { ok: boolean; message: string };
+  /** The AI government that made an offer answers the player's decision on it (false: nobody to answer). */
+  reactToDecision(state: GameState, deps: EngineDeps, opts: { chatId: string; proposalId: string; byTag: string; onReply?: (from: string, text: string) => void }): Promise<boolean>;
   advisor(state: GameState, deps: EngineDeps, opts: { country: string; question?: string }): Promise<string>;
   polish(state: GameState, deps: EngineDeps, opts: { country: string; text: string }): Promise<string>;
   brainstorm(state: GameState, deps: EngineDeps, opts: { country: string }): Promise<string[]>;

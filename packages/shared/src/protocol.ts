@@ -174,6 +174,8 @@ export type ServerMessage =
   | { t: "turn"; result: TurnResult }
   | { t: "ai"; reqId: string; kind: "advisor" | "polish" | "brainstorm"; ok: boolean; text?: string; ideas?: string[]; error?: string }
   | { t: "chat.typing"; chatId: string; from: string; stop?: boolean }
+  /** An AI reply as it is being written; the view that follows carries the finished message. */
+  | { t: "chat.stream"; chatId: string; from: string; text: string }
   | { t: "toast"; level: "info" | "warn" | "error"; text: string }
   | { t: "error"; message: string };
 

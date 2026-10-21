@@ -212,7 +212,7 @@ function director(c: DirectorCtx, rng: Rng) {
   return { intents, agendaUpdates: [], resolutions: [] };
 }
 
-function chat(c: { speaker: string; speakerName: string; player: string; playerName: string; relation: number; hasProposal: boolean; peace?: { exhaustion: number; landLost: number; unheldDemand?: number } }) {
+function chat(c: { speaker: string; speakerName: string; player: string; playerName: string; relation: number; hasProposal: boolean; reaction?: "accepted" | "rejected"; peace?: { exhaustion: number; landLost: number; unheldDemand?: number } }) {
   const r = c.relation ?? 0;
   const tone = r > 40 ? "warm" : r > 0 ? "neutral" : r > -40 ? "cold" : "hostile";
   const reply = {
@@ -225,6 +225,13 @@ function chat(c: { speaker: string; speakerName: string; player: string; playerN
     speaker: c.speaker, reply, tone, relationDelta: { warm: 2, neutral: 1, cold: 0, hostile: -1 }[tone],
     memory: `${c.playerName} opened talks with ${c.speakerName}${c.hasProposal ? " and tabled a proposal" : ""}; ${c.speakerName} answered in a ${tone} tone.`,
   };
+  // Answering the player's decision on our own offer.
+  if (c.reaction) {
+    out.reply = c.reaction === "accepted"
+      ? `${c.speakerName} welcomes the agreement and will see that it is honoured.`
+      : `${c.speakerName} regrets ${c.playerName}'s answer. Our door stays open.`;
+    return out;
+  }
   if (c.hasProposal) {
     // Peace is judged on the war, not on friendship: exhausted or losing sides settle.
     // Demands for land the enemy has not taken only pass when this side is close to collapse.
@@ -306,10 +313,17 @@ export class MockProvider implements AiProvider {
 
   async complete(req: AiRequest): Promise<AiResponse> {
     const delay = Number(process.env.MOCK_AI_DELAY_MS ?? 0);
-    if (delay > 0) await new Promise((r) => setTimeout(r, delay));
     this.used++;
     const out = respond(req, seeded(`${req.kind}\n${req.user}`));
     const text = typeof out === "string" ? out : JSON.stringify(out);
+    if (req.onText) {
+      // Write it out in pieces across the delay, as a streaming model would.
+      const pieces = 12;
+      for (let i = 1; i <= pieces; i++) {
+        if (delay > 0) await new Promise((r) => setTimeout(r, delay / pieces));
+        req.onText(text.slice(0, Math.ceil((text.length * i) / pieces)));
+      }
+    } else if (delay > 0) await new Promise((r) => setTimeout(r, delay));
     return {
       text,
       usage: { model: "mock", promptTokens: Math.ceil((req.system.length + req.user.length) / 4), completionTokens: Math.ceil(text.length / 4) },

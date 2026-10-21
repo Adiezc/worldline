@@ -2,7 +2,7 @@
 
 import type { EngineApi } from "./api.ts";
 import { advisor, brainstorm, polish } from "./advisor.ts";
-import { openChat, respondProposal, sendChat } from "./chat.ts";
+import { openChat, reactToDecision, respondProposal, sendChat } from "./chat.ts";
 import { createGame } from "./game.ts";
 import { intervene } from "./intervene.ts";
 import { runTurn, startDirectorPlan } from "./pipeline.ts";
@@ -15,6 +15,7 @@ export const engine: EngineApi = {
   sendChat,
   openChat,
   respondProposal,
+  reactToDecision,
   advisor,
   polish,
   brainstorm,

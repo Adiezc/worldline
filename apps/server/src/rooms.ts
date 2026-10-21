@@ -395,9 +395,12 @@ export class Room {
         }
         const aiMember = speaker ?? chat.members.find((m) => m !== myTag && !humans.has(m));
         if (aiMember) this.broadcastTo(chat.members, { t: "chat.typing", chatId: chat.id, from: aiMember });
+        const stream = this.replyStream(chat.members, chat.id);
         try {
-          await engine.sendChat(s, deps, { chatId: msg.chatId, playerId: me.id, text: String(msg.text ?? "").slice(0, 2000), proposal: msg.proposal, speaker });
+          await engine.sendChat(s, deps, { chatId: msg.chatId, playerId: me.id, text: String(msg.text ?? "").slice(0, 2000), proposal: msg.proposal, speaker, onReply: stream.push });
+          stream.done();
         } catch (e) {
+          stream.done();
           if (aiMember) this.broadcastTo(chat.members, { t: "chat.typing", chatId: chat.id, from: aiMember, stop: true });
           // Rule refusals (e.g. land that would be cut off) are the player's to fix, not a lost envoy.
           fail(e instanceof Error && e.name === "ProposalError" ? e.message : `The envoy could not get through: ${errorText(e)}`);
@@ -408,8 +411,25 @@ export class Room {
       case "proposal.respond": {
         if (!myTag) return;
         const r = engine.respondProposal(s, { chatId: msg.chatId, proposalId: msg.proposalId, byTag: myTag, accept: msg.accept, map: this.deps.map });
-        if (!r.ok) fail(r.message);
-        else this.send(ws, { t: "toast", level: "info", text: r.message });
+        if (!r.ok) return fail(r.message);
+        this.send(ws, { t: "toast", level: "info", text: r.message });
+        // Show the decision at once; the government that made the offer then answers it.
+        this.changed();
+        const chat = s.chats.find((c) => c.id === msg.chatId);
+        const author = chat?.messages.find((m) => m.proposal?.id === msg.proposalId)?.from;
+        if (!chat || !author || humanTags(s).has(author)) return;
+        this.broadcastTo(chat.members, { t: "chat.typing", chatId: chat.id, from: author });
+        const stream = this.replyStream(chat.members, chat.id);
+        try {
+          const answered = await engine.reactToDecision(s, deps, { chatId: chat.id, proposalId: msg.proposalId, byTag: myTag, onReply: stream.push });
+          stream.done();
+          if (!answered) this.broadcastTo(chat.members, { t: "chat.typing", chatId: chat.id, from: author, stop: true });
+        } catch (e) {
+          stream.done();
+          // A missing reaction loses nothing: the decision already stands.
+          this.log("warn", `reaction to ${myTag}'s decision failed: ${errorText(e)}`);
+          this.broadcastTo(chat.members, { t: "chat.typing", chatId: chat.id, from: author, stop: true });
+        }
         return this.changed();
       }
 
@@ -491,6 +511,37 @@ export class Room {
     deleteSnapshotsAfter(next.id, next.turn);
     this.armTimer();
     saveGame(next);
+  }
+
+  /**
+   * Forwards an AI reply to a chat's members while it is written, at most every 80 ms (the latest
+   * piece always goes out). `done` drops anything still queued, so nothing arrives after the
+   * finished message.
+   */
+  private replyStream(members: string[], chatId: string) {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let queued: { from: string; text: string } | null = null;
+    let last = 0;
+    const flush = () => {
+      timer = null;
+      if (!queued) return;
+      this.broadcastTo(members, { t: "chat.stream", chatId, ...queued });
+      queued = null;
+      last = Date.now();
+    };
+    return {
+      push: (from: string, text: string) => {
+        queued = { from, text };
+        const wait = 80 - (Date.now() - last);
+        if (wait <= 0) flush();
+        else timer ??= setTimeout(flush, wait);
+      },
+      done: () => {
+        if (timer) clearTimeout(timer);
+        timer = null;
+        queued = null;
+      },
+    };
   }
 
   private broadcastTo(tags: string[], msg: ServerMessage) {

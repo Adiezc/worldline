@@ -107,10 +107,18 @@ export interface GameStore {
   feedTab: FeedTab;
   chats: ChatWindowState[];
   pendingChat: { members: string[]; builder: boolean; preset?: "peace" } | null;
-  /** `count` = messages in the chat when typing began; a newer reply from `from` clears it. */
-  typing: Record<string, { from: string; until: number; count: number }>;
+  /**
+   * `count` = messages in the chat when typing began; a newer reply from `from` clears it.
+   * `text`: the reply so far while it streams in.
+   */
+  typing: Record<string, { from: string; until: number; count: number; text?: string }>;
   /** When a message to each chat last failed to get through, so its composer can give the text back. */
   chatFailed: Record<string, number>;
+  /**
+   * The message each chat is sending, shown at once as a pending bubble until the server's view
+   * carries it (`count` = messages when it was sent; `at` = Date.now(), compared with chatFailed).
+   */
+  outgoing: Record<string, { text: string; terms?: string; count: number; at: number }>;
   /** Front lines and troop counters on the map (persisted in localStorage). */
   showFronts: boolean;
   /** Unread diplomatic messages per chat id. */
@@ -161,6 +169,7 @@ const initial: GameStore = {
   pendingChat: null,
   typing: {},
   chatFailed: {},
+  outgoing: {},
   unread: {},
   showFronts: storedShowFronts(),
 };
