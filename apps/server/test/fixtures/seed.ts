@@ -65,6 +65,17 @@ export async function buildFixtureSeed(): Promise<ScenarioSeed> {
       powers: ["sanction", "condemn", "peacekeeping", "admitMember", "suspendMember", "expelMember", "tradePolicy", "authorizeForce", "custom"],
       effects: { forum: true }, cohesion: 55, founded: "1945-10-24",
     },
+    {
+      id: "imf", abbrev: "IMF", name: "International Monetary Fund", kind: "economic",
+      members: all.filter((t) => t !== "PRK"), observers: [], candidates: [], suspended: [],
+      bodies: [
+        { id: "governors", name: "Board of Governors", seats: [], rule: "weighted", threshold: 0.85, handles: ["admitMember", "expelMember", "custom"] },
+        { id: "board", name: "Executive Board", seats: [], rule: "weighted", threshold: 0.5, handles: ["loan"] },
+      ],
+      powers: ["loan", "admitMember", "expelMember", "custom"],
+      quotas: { USA: 16.49, JPN: 6.14, CHN: 6.08, DEU: 5.31, FRA: 4.03, GBR: 4.03 },
+      effects: { lender: "stabilization" }, cohesion: 62, founded: "1945-12-27",
+    },
   ];
 
   return {

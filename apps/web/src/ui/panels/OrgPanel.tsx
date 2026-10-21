@@ -1,8 +1,11 @@
 import { useMemo, useState } from "react";
-import { NEEDS_TARGET, type GameView, type Organization, type OrgBody, type Resolution, type ResolutionType } from "@worldline/shared";
+import {
+  LOAN_TERMS, loanBlocker, loanOffer, money, NEEDS_TARGET, pickBody, voteWeights,
+  type GameView, type Organization, type OrgBody, type Resolution, type ResolutionType,
+} from "@worldline/shared";
 import { proposeResolution, selectOrg, setMapMode, voteResolution } from "../../game/actions.ts";
 import { fmtShortDate } from "../../game/format.ts";
-import { countryMap, ORG_KIND_LABELS, RESOLUTION_LABELS, RULE_LABELS } from "../../game/selectors.ts";
+import { countryMap, ORG_KIND_LABELS, RESOLUTION_LABELS, ruleLabel } from "../../game/selectors.ts";
 import { useGame } from "../../game/store.ts";
 import { Badge, Bar, Button, CountryChip, Empty, Field, Panel, SectionTitle } from "../common/ui.tsx";
 import { Flag } from "../common/Flag.tsx";
@@ -116,6 +119,8 @@ function OrgDetail({ view, org, onClose }: { view: GameView; org: Organization; 
 
       {me && org.members.includes(me) && !org.suspended.includes(me) && org.powers.length > 0 && <ProposeForm view={view} org={org} />}
 
+      {org.powers.includes("loan") && <Lending view={view} org={org} me={me} />}
+
       <SectionTitle>Bodies</SectionTitle>
       <ul className="space-y-2">
         {org.bodies.map((b) => (
@@ -124,8 +129,9 @@ function OrgDetail({ view, org, onClose }: { view: GameView; org: Organization; 
               <span className="truncate font-display text-[12.5px] text-parchment">{b.name}</span>
               {me && sitsIn(org, b, me) && <Badge>Your seat</Badge>}
             </div>
-            <div className="mt-0.5 text-[11px] text-parchment/55">{RULE_LABELS[b.rule]}</div>
+            <div className="mt-0.5 text-[11px] text-parchment/55">{ruleLabel(b)}</div>
             <div className="mt-0.5 text-[11px] text-parchment/40">{b.seats.length ? `${b.seats.length} seats` : "All members sit"}</div>
+            {b.rule === "weighted" && <VotingPower view={view} org={org} body={b} me={me} />}
             {b.veto && b.veto.length > 0 && (
               <div className="mt-1 flex flex-wrap items-center gap-1 text-[10.5px] text-parchment/50">
                 Veto:
@@ -182,7 +188,7 @@ function OrgDetail({ view, org, onClose }: { view: GameView; org: Organization; 
       {past.length === 0 && <Empty>None yet.</Empty>}
       <ul className="space-y-2">
         {past.map((r) => (
-          <PastResolution key={r.id} r={r} />
+          <PastResolution key={r.id} r={r} org={org} />
         ))}
       </ul>
     </Panel>
@@ -216,7 +222,7 @@ function PendingResolution({ r, org, me }: { r: Resolution; org: Organization; m
   return (
     <li className="rounded border border-partial/35 bg-partial/[0.05] px-2.5 py-2">
       <ResolutionHead r={r} />
-      {body && <div className="mt-1 text-[10.5px] text-parchment/40">{body.name} · {RULE_LABELS[body.rule]}</div>}
+      {body && <div className="mt-1 text-[10.5px] text-parchment/40">{body.name} · {ruleLabel(body)}</div>}
       {canVote && (
         <div className="mt-2 flex gap-1.5">
           {(["yes", "no", "abstain"] as const).map((v) => (
@@ -238,10 +244,14 @@ function PendingResolution({ r, org, me }: { r: Resolution; org: Organization; m
 
 const VOTE_COLORS = { yes: "#6fbf73", no: "#d0574d", abstain: "#8f8a7e" };
 
-function PastResolution({ r }: { r: Resolution }) {
+function PastResolution({ r, org }: { r: Resolution; org: Organization }) {
   const countries = useGame((s) => s.view!.countries);
   const votes = Object.entries(r.votes ?? {});
   const count = (v: string) => votes.filter(([, x]) => x === v).length;
+  // Weighted bodies count shares, not heads (at today's weights, which drift a little with GDP).
+  const body = bodyFor(org, r);
+  const weights = body?.rule === "weighted" ? voteWeights({ countries }, org, body) : null;
+  const yesShare = weights ? votes.filter(([, v]) => v === "yes").reduce((s, [t]) => s + (weights.get(t) ?? 0), 0) : 0;
   const tone = r.status === "passed" ? "green" : r.status === "vetoed" ? "amber" : "red";
   return (
     <li className="rounded border border-panel-edge/35 bg-black/15 px-2.5 py-2">
@@ -250,6 +260,7 @@ function PastResolution({ r }: { r: Resolution }) {
         {votes.length > 0 && (
           <span className="text-[10.5px] text-parchment/50 tabular-nums">
             <span className="text-[#9fd6a1]">{count("yes")} yes</span> · <span className="text-[#ec9d94]">{count("no")} no</span> · {count("abstain")} abst.
+            {weights && <> · {pct(yesShare)} of votes</>}
           </span>
         )}
       </div>
@@ -286,7 +297,7 @@ function ProposeForm({ view, org }: { view: GameView; org: Organization }) {
   // The server refuses these without a target, so ask for one up front (and only offer sensible ones).
   const needsTarget = NEEDS_TARGET.includes(type);
   const targets = type === "admitMember" ? countries.filter((c) => !org.members.includes(c.tag))
-    : type === "suspendMember" || type === "expelMember" ? countries.filter((c) => org.members.includes(c.tag))
+    : type === "suspendMember" || type === "expelMember" || type === "loan" ? countries.filter((c) => org.members.includes(c.tag))
     : countries;
   const chosen = targets.some((c) => c.tag === target) ? target : "";
   const canTable = !!text.trim() && (!needsTarget || !!chosen);
@@ -342,5 +353,99 @@ function ProposeForm({ view, org }: { view: GameView; org: Organization }) {
         </Button>
       </div>
     </form>
+  );
+}
+
+const pct = (v: number) => `${Math.round(v * 10) / 10}%`;
+
+/** Who holds the votes in a weighted body, and how much the player's country has. */
+function VotingPower({ view, org, body, me }: { view: GameView; org: Organization; body: OrgBody; me: string | null }) {
+  const weights = useMemo(() => voteWeights(view, org, body), [view, org, body]);
+  const top = [...weights].sort((a, b) => b[1] - a[1]).slice(0, 6);
+  const mine = me ? weights.get(me) : undefined;
+  return (
+    <div className="mt-1 text-[10.5px] text-parchment/50">
+      <div className="flex flex-wrap items-center gap-1">
+        Largest:
+        {top.map(([t, w]) => (
+          <span key={t} className="inline-flex items-center gap-0.5">
+            <CountryChip tag={t} small /> <span className="tabular-nums">{pct(w)}</span>
+          </span>
+        ))}
+      </div>
+      {mine !== undefined && <div className="mt-0.5">Your vote: <span className="tabular-nums text-parchment/75">{pct(mine)}</span></div>}
+    </div>
+  );
+}
+
+/** Loans: asking for one for your own country, and who is borrowing now. */
+function Lending({ view, org, me }: { view: GameView; org: Organization; me: string | null }) {
+  const [purpose, setPurpose] = useState("");
+  const loans = (view.loans ?? []).filter((l) => l.orgId === org.id && l.repaidBy > view.date);
+  const member = !!me && org.members.includes(me);
+  const offer = me ? loanOffer(view, org, me) : null;
+  const why = me ? loanBlocker(view, org, me) : null;
+  const body = pickBody(org, "loan");
+  const t = offer?.terms ?? LOAN_TERMS.stabilization;
+  const sign = (v: number) => (v > 0 ? `+${v}` : `${v}`);
+  const name = me ? countryMap(view.countries).get(me)?.name ?? me : "";
+
+  return (
+    <>
+      <SectionTitle>Lending</SectionTitle>
+      {member && offer && (
+        <div className="rounded border border-gold/40 bg-gold/[0.04] p-3">
+          <div className="font-display text-[12.5px] tracking-wide text-gold-bright">
+            {offer.kind === "stabilization" ? "Emergency loan" : "Development loan"} · about {money(offer.amount)}
+          </div>
+          <ul className="mt-1.5 space-y-0.5 text-[11px] leading-snug text-parchment/65">
+            <li>On approval: GDP {sign(offer.gdp)}%, stability {sign(offer.stability)}.</li>
+            {offer.kind === "stabilization" ? (
+              <li>Conditions: austerity for {t.programmeMonths} months (growth {sign(t.programmeGrowth)} pts/yr, stability pulled down).</li>
+            ) : (
+              <li>Projects for {t.programmeMonths} months: growth {sign(t.programmeGrowth)} pts/yr.</li>
+            )}
+            <li>Then repayments for {t.repayYears} years: growth {sign(t.repayGrowth)} pts/yr.</li>
+            {offer.scale < 1 && <li className="text-parchment/45">Your economy is large for this lender, so the loan is capped and its effects scaled down.</li>}
+          </ul>
+          <div className="mt-1.5 text-[10.5px] text-parchment/40">Decided by the {body.name} · {ruleLabel(body)}</div>
+          {why ? (
+            <p className="mt-2 text-[11px] text-partial">{why.replaceAll(me!, name)}</p>
+          ) : (
+            <form
+              className="mt-2 flex gap-1.5"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const goal = purpose.trim().replace(/^to /i, "");
+                proposeResolution(org.id, "loan", `${name} requests a loan of about ${money(offer.amount)} from the ${org.abbrev}${goal ? ` to ${goal}` : ""}.`, me!);
+                setPurpose("");
+              }}
+            >
+              <input className="hud-input flex-1" value={purpose} onChange={(e) => setPurpose(e.target.value)} placeholder="Purpose (optional)" />
+              <Button type="submit" size="sm" variant="primary">
+                Request loan
+              </Button>
+            </form>
+          )}
+        </div>
+      )}
+      {loans.length === 0 ? (
+        <Empty>No loans outstanding.</Empty>
+      ) : (
+        <ul className="mt-2 space-y-1">
+          {loans.map((l) => (
+            <li key={l.id} className="flex items-center gap-2 text-[11px] text-parchment/55">
+              <CountryChip tag={l.borrower} small />
+              <span className="tabular-nums">{money(l.amount)}</span>
+              <span className="truncate">
+                {l.programmeEnd > view.date
+                  ? `${l.kind === "stabilization" ? "austerity" : "projects"} until ${fmtShortDate(l.programmeEnd)}`
+                  : `repaying until ${fmtShortDate(l.repaidBy)}`}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
   );
 }

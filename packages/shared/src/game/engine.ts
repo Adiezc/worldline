@@ -2,6 +2,7 @@
 // pass. The LLM proposes, this decides. Effects are processed in order, so a declareWar earlier
 // in an event legitimises an occupation later in the same event.
 
+import { loanBlocker } from "./loans.ts";
 import type { MapIndex } from "./mapIndex.ts";
 import { applyNuclearStrike, MAX_STRIKES_PER_TURN, strikeProvince } from "./nuclear.ts";
 import {
@@ -489,6 +490,12 @@ export function applyEvent(state: GameState, map: MapIndex, event: GameEvent, ct
         if (!humanOk(effect.proposer)) { reject(`${effect.proposer} is player-controlled`); break; }
         if (effect.target !== undefined && !alive(effect.target)) { reject("unknown target"); break; }
         if (!effect.target && TARGETED.has(effect.resolutionType)) { reject(`${effect.resolutionType} needs a target`); break; }
+        if (effect.resolutionType === "loan") {
+          // The borrower asks for itself, so a player's country only borrows when its player says so.
+          if (!humanOk(effect.target!)) { reject(`${effect.target} is player-controlled and did not ask for a loan`); break; }
+          const why = loanBlocker(state, org, effect.target!);
+          if (why) { reject(why); break; }
+        }
         const body = pickBody(org, effect.resolutionType);
         state.resolutions.push({
           id: nextId(state, "r"), orgId: org.id, bodyId: body.id, type: effect.resolutionType, proposer: effect.proposer,
@@ -896,7 +903,7 @@ export function sanctioning(state: GameState, by: string, target: string) {
 }
 
 /** Resolution types that make no sense without a target country. */
-const TARGETED = new Set<string>(["sanction", "condemn", "admitMember", "suspendMember", "expelMember"]);
+const TARGETED = new Set<string>(["sanction", "condemn", "admitMember", "suspendMember", "expelMember", "loan"]);
 
 export function uniqueTag(state: GameState, seed: string) {
   const letters = seed.toUpperCase().replace(/[^A-Z]/g, "");

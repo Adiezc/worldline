@@ -29,6 +29,11 @@
 //
 // G7: the EU also attends G7 summits as a non-enumerated member; G20: the EU and AU are members too, but
 // organisation members must be country tags, so only the 19 countries are listed.
+// IMF and World Bank: "@UN" plus Kosovo minus the UN members that never joined ("-CUB" syntax). `quotas`
+// are rounded voting shares (percent) for the largest shareholders; the rest share what is left by GDP.
+// WTO: "@UN" plus Taiwan (Chinese Taipei) minus the 31 UN members outside it; Hong Kong, Macao and the EU
+// are WTO members too but not map countries. Votes are two-thirds, not consensus: a 163-member
+// consensus body would put every member in the AI vote call.
 
 import { join } from "node:path";
 import {
@@ -335,15 +340,18 @@ const NON_UN = new Set(["TWN", "KOS", "SOL", "CYN", "PSX", "VAT", "KAS", "PGA"])
 const EU = orgsRaw.find((o) => o.id === "eu")!.members as string[];
 const GROUPS: Record<string, string[]> = { "@UN": TAGS.filter((t) => !NON_UN.has(t)), "@EU": EU };
 
+/** Tags, groups ("@UN") and exclusions ("-CUB" drops Cuba from whatever the list adds). */
 function tags(list: string[] | string, where: string): string[] {
   const arr = typeof list === "string" ? [list] : list;
   const out: string[] = [];
+  const drop = new Set<string>();
   for (const t of arr) {
     if (GROUPS[t]) out.push(...GROUPS[t]!);
+    else if (t.startsWith("-") && TAGSET.has(t.slice(1))) drop.add(t.slice(1));
     else if (TAGSET.has(t)) out.push(t);
     else warn(`${where}: unknown tag ${t} (dropped)`);
   }
-  return [...new Set(out)];
+  return [...new Set(out)].filter((t) => !drop.has(t));
 }
 
 // ---------- Organisations ----------

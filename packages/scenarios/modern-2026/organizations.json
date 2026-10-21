@@ -210,5 +210,42 @@
     "bodies": [ { "id": "summit", "name": "Leaders' Summit", "seats": [], "rule": "consensus" } ],
     "powers": ["condemn", "custom"],
     "effects": { "forum": true }, "cohesion": 45, "founded": "2017-11-12"
+  },
+  {
+    "id": "imf", "abbrev": "IMF", "name": "International Monetary Fund", "kind": "economic",
+    "members": ["@UN", "KOS", "-CUB", "-PRK", "-MCO"],
+    "observers": [], "candidates": [], "suspended": [],
+    "bodies": [
+      { "id": "governors", "name": "Board of Governors", "seats": [], "rule": "weighted", "threshold": 0.85, "handles": ["admitMember", "suspendMember", "expelMember", "custom"] },
+      { "id": "board", "name": "Executive Board", "seats": [], "rule": "weighted", "threshold": 0.5, "handles": ["loan"] }
+    ],
+    "powers": ["loan", "admitMember", "suspendMember", "expelMember", "custom"],
+    "quotas": { "USA": 16.49, "JPN": 6.14, "CHN": 6.08, "DEU": 5.31, "FRA": 4.03, "GBR": 4.03, "ITA": 3.02, "IND": 2.63, "RUS": 2.59, "BRA": 2.22, "CAN": 2.22, "SAU": 2.01, "ESP": 1.92, "MEX": 1.8, "NLD": 1.76, "KOR": 1.73, "AUS": 1.33, "BEL": 1.3, "CHE": 1.17, "TUR": 0.95, "IDN": 0.95, "SWE": 0.9, "POL": 0.85, "AUT": 0.8, "SGP": 0.79, "NOR": 0.77, "MYS": 0.75, "IRN": 0.73, "IRL": 0.71, "DNK": 0.7, "THA": 0.69, "ARG": 0.67, "ZAF": 0.64, "NGA": 0.53 },
+    "effects": { "lender": "stabilization" }, "cohesion": 62, "founded": "1945-12-27"
+  },
+  {
+    "id": "world-bank", "abbrev": "World Bank", "name": "International Bank for Reconstruction and Development (World Bank)", "kind": "economic",
+    "members": ["@UN", "KOS", "-CUB", "-PRK", "-MCO", "-AND", "-LIE"],
+    "observers": [], "candidates": [], "suspended": [],
+    "bodies": [
+      { "id": "governors", "name": "Board of Governors", "seats": [], "rule": "weighted", "threshold": 0.85, "handles": ["admitMember", "suspendMember", "expelMember", "custom"] },
+      { "id": "board", "name": "Board of Executive Directors", "seats": [], "rule": "weighted", "threshold": 0.5, "handles": ["loan"] }
+    ],
+    "powers": ["loan", "admitMember", "suspendMember", "expelMember", "custom"],
+    "quotas": { "USA": 15.5, "JPN": 7.4, "CHN": 6, "DEU": 4.2, "FRA": 3.9, "GBR": 3.9, "IND": 3, "RUS": 2.8, "SAU": 2.8, "ITA": 2.7, "CAN": 2.6, "BRA": 2.1, "NLD": 1.9, "KOR": 1.7, "ESP": 1.7, "MEX": 1.6, "BEL": 1.6, "CHE": 1.5, "AUS": 1.5, "IDN": 1, "TUR": 1, "SWE": 0.9 },
+    "effects": { "lender": "development" }, "cohesion": 65, "founded": "1945-12-27"
+  },
+  {
+    "id": "wto", "abbrev": "WTO", "name": "World Trade Organization", "kind": "economic",
+    "members": ["@UN", "TWN", "-DZA", "-AND", "-AZE", "-BHS", "-BLR", "-BTN", "-BIH", "-GNQ", "-ETH", "-IRN", "-IRQ", "-LBN", "-LBY", "-STP", "-SRB", "-SOM", "-SDN", "-SDS", "-SYR", "-TKM", "-UZB", "-ERI", "-KIR", "-MHL", "-FSM", "-MCO", "-NRU", "-PRK", "-PLW", "-SMR", "-TUV"],
+    "observers": ["DZA", "AND", "AZE", "BHS", "BLR", "BTN", "BIH", "GNQ", "ETH", "IRN", "IRQ", "LBN", "LBY", "STP", "SRB", "SOM", "SDN", "SDS", "SYR", "TKM", "UZB", "VAT"],
+    "candidates": [
+      { "tag": "UZB", "since": "1994-12-08", "note": "Accession talks in their final stage; aims to join in 2026" },
+      { "tag": "ETH", "since": "2003-01-13", "note": "Accession talks revived in 2023" }
+    ],
+    "suspended": [],
+    "bodies": [ { "id": "council", "name": "General Council", "seats": [], "rule": "twoThirds" } ],
+    "powers": ["tradePolicy", "admitMember", "custom"],
+    "effects": {}, "cohesion": 35, "founded": "1995-01-01"
   }
 ]

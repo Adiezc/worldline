@@ -2,7 +2,7 @@
 // out, and broken nations asking players for terms. Neither waits for the model to think of it.
 
 import {
-  AFTER_COLLAPSE, countryByTag, governmentFalls, humanTags, nextId, SURRENDER_REPEAT, warCollapse,
+  AFTER_COLLAPSE, countryByTag, governmentFalls, humanTags, loanCandidates, loanOffer, money, nextId, pickBody, SURRENDER_REPEAT, warCollapse,
   type ChatMessage, type GameEvent, type GameState,
 } from "@worldline/shared";
 import { openChat } from "./chat.ts";
@@ -37,6 +37,27 @@ export function collapseGovernments(state: GameState, date: string): GameEvent[]
     events.push(ev);
   }
   return events;
+}
+
+/**
+ * AI governments in crisis ask a lending organisation (the IMF first) for an emergency loan. The
+ * request is voted at the end of the next turn, so players sitting in the body can vote on it.
+ */
+export function requestLoans(state: GameState, date: string): GameEvent[] {
+  return loanCandidates(state).map(({ tag, org }) => {
+    const name = countryByTag(state, tag)!.name;
+    const offer = loanOffer(state, org, tag);
+    const text = offer.kind === "stabilization"
+      ? `${name} requests an emergency loan of about ${money(offer.amount)} to stabilise its finances, accepting the ${org.abbrev}'s conditions.`
+      : `${name} requests about ${money(offer.amount)} in ${org.abbrev} lending to rebuild and keep public services running.`;
+    state.resolutions.push({
+      id: nextId(state, "r"), orgId: org.id, bodyId: pickBody(org, "loan").id, type: "loan", proposer: tag, target: tag,
+      text, turn: state.turn + 1, status: "pending", votes: {},
+    });
+    const ev = makeEvent(state, { date, headline: `${name} asks the ${org.abbrev} for a loan`, body: text, countries: [tag] });
+    state.events.push(ev);
+    return ev;
+  });
 }
 
 /**

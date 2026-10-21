@@ -1,6 +1,7 @@
 // Deterministic background simulation run after each turn's events, so the numbers move even
 // when the AI narrates nothing about a country.
 
+import { loanDrag } from "./loans.ts";
 import { falloutDrag } from "./nuclear.ts";
 import { countryIndex, getRelation, relKey, warsOf, type GameState } from "./state.ts";
 
@@ -27,10 +28,12 @@ export function simTick(state: GameState, days: number) {
     const sanctions = sanctionCount.get(k.tag) ?? 0;
     // Contaminated land and wrecked cities drag on the economy and morale for about a year.
     const fallout = falloutDrag(state, k.tag, state.date);
+    // IMF and World Bank loans: austerity or investment while the programme runs, repayments after.
+    const loans = loanDrag(state, k.tag, state.date);
 
     // GDP: trend growth bent by stability, war, sanctions and trade-bloc membership.
     const growth = 2.4 + (k.stability - 55) / 18 - k.warExhaustion / 30 - (wars.length ? 1.2 : 0)
-      - occShare * 8 - sanctions * 1.6 - fallout + (blocMembers.has(k.tag) ? 0.4 : 0);
+      - occShare * 8 - sanctions * 1.6 - fallout + (blocMembers.has(k.tag) ? 0.4 : 0) + loans.growth;
     // Floor growth: a base of (1 + g/100) <= 0 raised to a fractional power is NaN.
     k.gdp = Math.max(0.01, r2(k.gdp * Math.pow(1 + Math.max(-50, growth) / 100, years)));
 
@@ -40,7 +43,7 @@ export function simTick(state: GameState, days: number) {
     k.population = Math.max(0.001, r2(k.population * Math.pow(1 + popGrowth / 100, years)));
 
     // Stability drifts to a target pulled down by war exhaustion, occupation and sanctions.
-    const target = 58 - k.warExhaustion * 0.35 - occShare * 30 - sanctions * 4 - fallout * 1.5;
+    const target = 58 - k.warExhaustion * 0.35 - occShare * 30 - sanctions * 4 - fallout * 1.5 + loans.stability;
     k.stability = r2(clamp(k.stability + (target - k.stability) * Math.min(1, 0.05 * months), 0, 100));
 
     // War exhaustion builds while fighting (faster when occupied) and fades in peace. Growth slows

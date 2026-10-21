@@ -178,7 +178,10 @@ function checkState(v: unknown, at: string, regions: number): GameState {
   objects(s.sanctions, `${at}.sanctions`).forEach((x, i) => strings(x.by, `${at}.sanctions[${i}].by`));
   objects(s.organizations, `${at}.organizations`).forEach((o, i) => {
     for (const k of ["members", "observers", "suspended"]) strings(o[k], `${at}.organizations[${i}].${k}`);
-    objects(o.bodies, `${at}.organizations[${i}].bodies`);
+    objects(o.bodies, `${at}.organizations[${i}].bodies`).forEach((b, j) => {
+      if (b.threshold != null) number(b.threshold, `${at}.organizations[${i}].bodies[${j}].threshold`);
+    });
+    if (o.quotas != null) for (const [t, q] of Object.entries(obj(o.quotas, `${at}.organizations[${i}].quotas`))) number(q, `${at}.organizations[${i}].quotas.${t}`);
   });
   objects(s.resolutions, `${at}.resolutions`);
   objects(s.events, `${at}.events`).forEach((e, i) => {
@@ -208,6 +211,14 @@ function checkState(v: unknown, at: string, regions: number): GameState {
     for (const k of ["id", "country", "name", "status", "started", "due"]) string(p[k], `${here}.${k}`);
     number(p.progress, `${here}.progress`);
     objects(p.milestones, `${here}.milestones`);
+  });
+  if (s.loans != null) objects(s.loans, `${at}.loans`).forEach((l, i) => {
+    const here = `${at}.loans[${i}]`;
+    for (const k of ["id", "orgId", "borrower"]) string(l[k], `${here}.${k}`);
+    for (const k of ["date", "programmeEnd", "repaidBy"]) if (!validDate(l[k])) fail(`${here}.${k} must be a valid YYYY-MM-DD date.`);
+    if (l.kind !== "stabilization" && l.kind !== "development") fail(`${here}.kind must be "stabilization" or "development".`);
+    number(l.amount, `${here}.amount`);
+    number(l.scale, `${here}.scale`);
   });
   if (s.rankHistory != null) objects(s.rankHistory, `${at}.rankHistory`).forEach((h, i) => {
     integer(h.turn, `${at}.rankHistory[${i}].turn`, 0);
