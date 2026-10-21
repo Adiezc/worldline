@@ -6,6 +6,8 @@
 [![License: AGPL v3](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 [![Built with Bun](https://img.shields.io/badge/built%20with-Bun-f9f1e1.svg)](https://bun.sh)
 
+![The Worldline political map of the world on 31 January 2026, with the turn bar at the top and the chronicle at the bottom](docs/images/world-map.jpg)
+
 Worldline starts on 1 January 2026 (or 1 October 1962, or any world you build in the editor) on a political map in the style of Victoria 3. Each turn you and your friends give orders such as "open talks with Brazil on a rail corridor", "move two divisions to the border" or "call a snap election". An AI World Director plans what every other government does, a resolver turns everyone's orders into events, and a deterministic rules engine checks every effect before it touches the map: it refuses or scales down anything the world's state doesn't allow.
 
 It runs entirely on your machine. Without an API key it uses an offline mock, so you can try every feature for free; with a key it works with OpenRouter, Anthropic, OpenAI, Gemini or any local OpenAI-compatible model.
@@ -22,6 +24,43 @@ It runs entirely on your machine. Without an API key it uses an offline mock, so
 - **Time travel.** The host can rewind to any earlier turn, or stop a turn at a chosen event and intervene.
 - **Scenario editor.** Paint regions, edit nations and publish your own starting worlds at `/editor`.
 - **Saved games.** Export a whole game, with every turn, as one JSON file and import it as a new game.
+
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%">
+      <img src="docs/images/diplomacy.jpg" alt="Germany's orders panel showing last turn's verdicts, next to a diplomatic chat with France">
+      <br><sub><b>Orders and diplomacy.</b> Last turn's verdicts on the left, a negotiation with France on the right.</sub>
+    </td>
+    <td width="50%">
+      <img src="docs/images/turn-report.jpg" alt="The turn report: each order with its outcome, the nation's stat changes, and the month's events">
+      <br><sub><b>Turn report.</b> How each order went, what changed for your nation, and what happened in the world.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="docs/images/lobby.jpg" alt="The game lobby with France claimed, its leader, stats and agenda, and the host's rules panel">
+      <br><sub><b>Lobby.</b> Claim a nation by clicking the map; the host sets difficulty, turn length and the model chain.</sub>
+    </td>
+    <td width="50%">
+      <img src="docs/images/relations-map.jpg" alt="The relations map mode, colouring Europe from hostile to friendly relative to Germany">
+      <br><sub><b>Map modes.</b> Relations, organisations, wars, GDP and stability, here relations with Germany.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="docs/images/map-close-up.jpg" alt="A close-up of Germany and its neighbours showing province borders and terrain relief">
+      <br><sub><b>Close up.</b> Provinces stay sharp when zoomed in, over Natural Earth shaded relief.</sub>
+    </td>
+    <td width="50%">
+      <img src="docs/images/scenario-editor.jpg" alt="The scenario editor with the nation list, scenario settings and painting tools">
+      <br><sub><b>Scenario editor.</b> Repaint borders, edit nations and save your own starting world.</sub>
+    </td>
+  </tr>
+</table>
+
+<sub>Screenshots were taken with the offline mock AI, so the event and chat text is simpler than a real model writes.</sub>
 
 ## Quick start
 
