@@ -2,8 +2,8 @@
 // (veto holders, consensus bodies, swing states) through one batched LLM call. Counting is exact.
 
 import {
-  bodyOf, countryByTag, enactResolution, getRelation, heuristicVote, humanTags, keyVoters, NEEDS_TARGET, nextId, pickBody, tally,
-  votersOf, VotesOutputSchema,
+  bodyOf, countryByTag, enactResolution, getRelation, heuristicVote, humanTags, keyVoters, loanBlocker, loanOffer, money, NEEDS_TARGET, nextId, pickBody, tally,
+  voteWeights, votersOf, VotesOutputSchema, weightedThreshold,
   type GameEvent, type GameState, type Organization, type Resolution, type ResolutionResult, type ResolutionType, type Vote,
 } from "@worldline/shared";
 import type { EngineDeps } from "./api.ts";
@@ -28,6 +28,7 @@ const LABEL: Record<ResolutionType, [string, string]> = {
   expelMember: ["expulsion", "of"],
   tradePolicy: ["trade measure", "on"],
   authorizeForce: ["use of force", "against"],
+  loan: ["loan", "for"],
   custom: ["resolution", "on"],
 };
 
@@ -64,7 +65,7 @@ export async function runVotes(state: GameState, deps: EngineDeps): Promise<Vote
       }
     }
     const t = tally(state, org, body, votes);
-    if (t.status === "passed") enactResolution(state, org, r, votes, state.date);
+    const outcome = t.status === "passed" ? enactResolution(state, org, r, votes, state.date) : undefined;
     r.status = t.status;
     r.votes = votes;
     r.reasons = reasons;
@@ -78,13 +79,13 @@ export async function runVotes(state: GameState, deps: EngineDeps): Promise<Vote
     const ev = makeEvent(state, {
       date: state.date,
       headline,
-      body: `"${r.text}" Vote ${t.summary}.${notable ? ` ${notable}` : ""}`,
+      body: `"${r.text}" Vote ${t.summary}.${outcome ? ` ${outcome}` : ""}${notable ? ` ${notable}` : ""}`,
       countries: [r.proposer, ...(r.target ? [r.target] : [])],
     });
     state.events.push(ev);
     events.push(ev);
     results.push({ resolutionId: r.id, orgAbbrev: org.abbrev, status: t.status, summary: t.summary, text: r.text });
-    facts.push(`${org.abbrev} ${body.name} ${t.status.toUpperCase()} ${r.type}${r.target ? ` (target ${r.target})` : ""} proposed by ${r.proposer}: ${t.summary}`);
+    facts.push(`${org.abbrev} ${body.name} ${t.status.toUpperCase()} ${r.type}${r.target ? ` (target ${r.target})` : ""} proposed by ${r.proposer}: ${t.summary}${outcome ? `. ${outcome} (already applied by the rules)` : ""}`);
   }
   return { results, events, facts };
 }
@@ -97,16 +98,19 @@ async function askKeyVoters(state: GameState, deps: EngineDeps, plans: Plan[]) {
   const asked = plans.filter((p) => p.org && p.keys.length);
   if (!asked.length) return out;
 
-  const hint = (voter: string, r: Resolution, veto: boolean) => {
+  const hint = (voter: string, r: Resolution, veto: boolean, weight?: number) => {
     const bits = [`rel. proposer ${getRelation(state, voter, r.proposer)}`];
     if (r.target) bits.push(`rel. target ${getRelation(state, voter, r.target)}`);
     if (veto) bits.push("veto");
+    if (weight !== undefined) bits.push(`${Math.round(weight * 10) / 10}% of votes`);
     return `${voter} (${bits.join(", ")})`;
   };
   const lines = asked.map(({ r, org, body, keys }) => {
     const veto = new Set(body!.veto ?? []);
-    return `${r.id} in ${org!.abbrev} ${body!.name} [${body!.rule}]: ${r.type}${r.target ? ` targeting ${r.target} ${nameOf(state, r.target)}` : ""}, ` +
-      `proposed by ${r.proposer} ${nameOf(state, r.proposer)}: "${r.text}"\n  voters: ${keys.map((k) => hint(k, r, veto.has(k))).join("; ")}`;
+    const weights = body!.rule === "weighted" ? voteWeights(state, org!, body!) : undefined;
+    const rule = weights ? `weighted, ${Math.round(weightedThreshold(body!) * 100)}% of voting power needed` : body!.rule;
+    return `${r.id} in ${org!.abbrev} ${body!.name} [${rule}]: ${r.type}${r.target ? ` targeting ${r.target} ${nameOf(state, r.target)}` : ""}, ` +
+      `proposed by ${r.proposer} ${nameOf(state, r.proposer)}: "${r.text}"\n  voters: ${keys.map((k) => hint(k, r, veto.has(k), weights?.get(k))).join("; ")}`;
   });
   const involved = new Set(asked.flatMap(({ r }) => [r.proposer, ...(r.target ? [r.target] : [])]));
   const user = [
@@ -163,6 +167,12 @@ export function proposeResolution(
     if ((opts.resolutionType === "suspendMember" || opts.resolutionType === "expelMember") && !org.members.includes(target)) {
       return { ok: false, message: `${target} is not a member.` };
     }
+    if (opts.resolutionType === "loan") {
+      // Another player's country borrows only when its own player asks.
+      if (target !== opts.proposer && humanTags(state).has(target)) return { ok: false, message: `Only ${target}'s government can ask for its loan.` };
+      const why = loanBlocker(state, org, target);
+      if (why) return { ok: false, message: why };
+    }
   }
   const dup = state.resolutions.some((r) => r.status === "pending" && r.orgId === org.id && r.type === opts.resolutionType && r.target === target);
   if (dup) return { ok: false, message: "An identical resolution is already pending." };
@@ -175,6 +185,10 @@ export function proposeResolution(
   // The sponsor votes for its own text unless it later says otherwise.
   if (votersOf(org, body).includes(opts.proposer)) r.votes![opts.proposer] = "yes";
   state.resolutions.push(r);
+  if (r.type === "loan") {
+    const offer = loanOffer(state, org, target!);
+    return { ok: true, message: `Loan request of about ${money(offer.amount)} tabled in the ${org.abbrev} ${body.name}; it is voted when this turn resolves.` };
+  }
   return { ok: true, message: `Resolution tabled in the ${org.abbrev} ${body.name}; it is voted when this turn resolves.` };
 }
 

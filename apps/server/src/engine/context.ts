@@ -2,7 +2,7 @@
 // every section is one line per item, capped, and limited to the countries that matter this turn.
 
 import {
-  activeProjects, addDays, computeTiers, countryByTag, countryIndex, DIFFICULTY, getRelation, humanTags, projectStatus, provincesOf, warCollapse,
+  activeProjects, addDays, computeTiers, countryByTag, countryIndex, DIFFICULTY, getRelation, humanTags, money, projectStatus, provincesOf, voteWeights, warCollapse, weightedThreshold,
   type Country, type Effect, type GameState, type MapIndex, type ScenarioSeed, type ScheduledItem, type Tiers, type War,
 } from "@worldline/shared";
 
@@ -178,6 +178,11 @@ export function orgsBlock(state: GameState, opts: { focus?: Set<string>; maxMemb
     const bodies = o.bodies.map((b) => {
       const seats = b.seats.length ? `${b.seats.length} seats` : "all members";
       const veto = b.veto?.length ? `, veto ${b.veto.join("/")}` : "";
+      if (b.rule === "weighted") {
+        const w = [...voteWeights(state, o, b)].sort((x, y) => y[1] - x[1]).slice(0, 5).map(([t, v]) => `${t} ${r0(v * 10) / 10}%`).join(" ");
+        const handles = b.handles?.length ? `, decides ${b.handles.join("/")}` : "";
+        return `${b.id} "${b.name}" (${seats}, weighted vote, ${r0(weightedThreshold(b) * 100)}% of voting power needed, largest ${w}${handles})`;
+      }
       const handles = b.handles?.length ? `, decides ${b.handles.join("/")}` : "";
       return `${b.id} "${b.name}" (${seats}, ${b.rule}${veto}${handles})`;
     }).join("; ");
@@ -185,6 +190,10 @@ export function orgsBlock(state: GameState, opts: { focus?: Set<string>; maxMemb
     if (o.candidates.length) s += `; candidates ${o.candidates.map((c) => c.tag).join(" ")}`;
     if (o.suspended.length) s += `; suspended ${o.suspended.join(" ")}`;
     lines.push(s);
+    const loans = (state.loans ?? []).filter((l) => l.orgId === o.id && l.repaidBy > state.date);
+    if (loans.length) {
+      lines.push(`  loans: ${loans.map((l) => `${l.borrower} ${money(l.amount)} (${l.programmeEnd > state.date ? `programme to ${l.programmeEnd}` : `repaying to ${l.repaidBy}`})`).join("; ")}`);
+    }
     for (const r of state.resolutions.filter((x) => x.orgId === o.id)) {
       const what = `${r.type}${r.target ? ` on ${r.target}` : ""} by ${r.proposer}: "${r.text}"`;
       if (r.status === "pending") lines.push(`  pending ${r.id} [${r.bodyId}] ${what} (vote turn ${r.turn})`);

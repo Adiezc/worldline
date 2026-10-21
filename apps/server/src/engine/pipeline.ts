@@ -10,7 +10,7 @@ import type { EngineDeps } from "./api.ts";
 import { deliverOutreach } from "./chat.ts";
 import { consolidate, needsConsolidation } from "./consolidate.ts";
 import { calendarIn, windowEnd } from "./context.ts";
-import { collapseGovernments, offerSurrenders } from "./crisis.ts";
+import { collapseGovernments, offerSurrenders, requestLoans } from "./crisis.ts";
 import { proclaimFormables } from "./formation.ts";
 import { planDirector, runDirector, type NpcIntent } from "./director.ts";
 import { makeEvent } from "./game.ts";
@@ -130,6 +130,8 @@ async function resolveTurn(state: GameState, deps: EngineDeps): Promise<Omit<Tur
   }
   // Once the period's events and the drift are in: governments at rock bottom fall.
   collapseGovernments(state, toDate);
+  // Governments in crisis turn to the IMF or the World Bank; the request is voted next turn.
+  requestLoans(state, toDate);
 
   // Chronological log for playback; effects were already applied in validation order.
   const fresh = state.events.splice(firstEvent).map((e, i) => ({ e, i }));

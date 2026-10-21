@@ -1,6 +1,6 @@
 // Read helpers over the GameView (pure functions + small hooks).
-import type { Country, GameView, VotingRule } from "@worldline/shared";
-import { relKey } from "@worldline/shared";
+import type { Country, GameView, OrgBody, VotingRule } from "@worldline/shared";
+import { relKey, weightedThreshold } from "@worldline/shared";
 import { useGame } from "./store.ts";
 
 const lookups = new WeakMap<Country[], Map<string, Country>>();
@@ -36,7 +36,12 @@ export const RULE_LABELS: Record<VotingRule, string> = {
   twoThirds: "Two-thirds majority",
   qualifiedMajority: "Qualified majority",
   vetoMajority: "Majority, permanent members hold a veto",
+  weighted: "Weighted by voting power",
 };
+
+/** The rule in words, with the bar a weighted vote must clear. */
+export const ruleLabel = (b: OrgBody) =>
+  b.rule === "weighted" ? `Weighted by voting power, ${Math.round(weightedThreshold(b) * 100)}% needed` : RULE_LABELS[b.rule];
 
 export const RESOLUTION_LABELS: Record<string, string> = {
   sanction: "Sanctions",
@@ -47,6 +52,7 @@ export const RESOLUTION_LABELS: Record<string, string> = {
   expelMember: "Expel member",
   tradePolicy: "Trade policy",
   authorizeForce: "Authorise force",
+  loan: "Loan",
   custom: "Custom resolution",
 };
 

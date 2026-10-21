@@ -107,10 +107,11 @@ const TAG = /^[A-Z][A-Z0-9]{1,7}$/;
 const COLOR = /^#[0-9a-f]{6}$/i;
 const TREATY_TYPES = new Set(["alliance", "defensive", "trade", "nonaggression", "vassal", "customs_union"]);
 const ORG_KINDS = new Set(["global", "regional", "military", "economic", "forum"]);
-const RULES = new Set(["consensus", "simpleMajority", "twoThirds", "qualifiedMajority", "vetoMajority"]);
+const RULES = new Set(["consensus", "simpleMajority", "twoThirds", "qualifiedMajority", "vetoMajority", "weighted"]);
 const RES_TYPES = new Set<ResolutionType>([
-  "sanction", "condemn", "peacekeeping", "admitMember", "suspendMember", "expelMember", "tradePolicy", "authorizeForce", "custom",
+  "sanction", "condemn", "peacekeeping", "admitMember", "suspendMember", "expelMember", "tradePolicy", "authorizeForce", "loan", "custom",
 ]);
+const LENDERS = new Set(["stabilization", "development"]);
 const CAL_KINDS = new Set(["election", "summit", "deadline", "event"]);
 const STATS = { gdp: [0.01, 1e6, 10], population: [0.001, 5000, 5], stability: [0, 100, 50], military: [0, 100, 20], warExhaustion: [0, 100, 0] } as const;
 
@@ -249,10 +250,14 @@ export function validateScenario(body: unknown, provinceCount: number): Scenario
       return [{
         id: str(bd.id, 40) || id("body"), name: str(bd.name, 80) || "Council", seats, rule: bd.rule as OrgBody["rule"],
         ...(veto.length ? { veto } : {}), ...(handles.length ? { handles } : {}),
+        ...(bd.rule === "weighted" && bd.threshold !== undefined ? { threshold: num(bd.threshold, 0.01, 1, 0.5) } : {}),
       }];
     });
     if (!bodies.length) bodies.push({ id: id("body"), name: "Council", seats: [], rule: "consensus" });
     const effects = isObj(o.effects) ? o.effects : {};
+    // Voting power in percent, for members only.
+    const quotas = Object.fromEntries(Object.entries(isObj(o.quotas) ? o.quotas : {})
+      .filter(([t]) => members.includes(t)).map(([t, v]) => [t, num(v, 0, 100, 0)]).filter(([, v]) => (v as number) > 0));
     return [{
       id: str(o.id, 40) || id("org"), abbrev, name: str(o.name, 120) || abbrev,
       kind: (ORG_KINDS.has(String(o.kind)) ? o.kind : "regional") as Organization["kind"],
@@ -262,7 +267,11 @@ export function validateScenario(body: unknown, provinceCount: number): Scenario
       suspended: validList(o.suspended).filter((t) => members.includes(t)),
       bodies,
       powers: arr(o.powers).filter((p): p is ResolutionType => RES_TYPES.has(p as ResolutionType)),
-      effects: { tradeBloc: effects.tradeBloc === true || undefined, mutualDefense: effects.mutualDefense === true || undefined, forum: effects.forum === true || undefined },
+      effects: {
+        tradeBloc: effects.tradeBloc === true || undefined, mutualDefense: effects.mutualDefense === true || undefined, forum: effects.forum === true || undefined,
+        lender: LENDERS.has(String(effects.lender)) ? (effects.lender as Organization["effects"]["lender"]) : undefined,
+      },
+      ...(Object.keys(quotas).length ? { quotas } : {}),
       cohesion: num(o.cohesion, 0, 100, 70),
       ...(validDate(o.founded) ? { founded: o.founded as string } : {}),
     }];

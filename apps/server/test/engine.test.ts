@@ -244,6 +244,44 @@ for (const [label, seed] of seeds) {
       expect(engine.castVote(state, { resolutionId: r.id, country: "USA", vote: "no" }).ok).toBe(false);
     });
 
+    test("a player's IMF loan request is voted by stake and pays out", async () => {
+      const state = newGame(seed, [["p1", "ARG"]]);
+      const imf = state.organizations.find((o) => o.id === "imf")!;
+      expect(imf.bodies.every((b) => b.rule === "weighted")).toBe(true);
+      const res = engine.proposeResolution(state, { orgId: "imf", proposer: "ARG", resolutionType: "loan", target: "ARG", text: "Argentina requests a loan." });
+      expect(res.ok).toBe(true);
+      expect(res.message).toContain("Executive Board");
+      // Not twice, and not on another player's behalf.
+      expect(engine.proposeResolution(state, { orgId: "imf", proposer: "ARG", resolutionType: "loan", target: "ARG", text: "Again." }).ok).toBe(false);
+      const r = state.resolutions.at(-1)!;
+      expect(r).toMatchObject({ type: "loan", bodyId: "board", target: "ARG" });
+
+      const turn = await engine.runTurn(state, depsFor(seed));
+      expect(state.resolutions.find((x) => x.id === r.id)!.status).toBe("passed");
+      expect(state.loans?.map((l) => l.borrower)).toEqual(["ARG"]);
+      expect(turn.votes.find((v) => v.resolutionId === r.id)?.summary).toContain("of voting power in favour");
+      const news = turn.events.find((e) => e.headline.includes("approves loan"));
+      expect(news?.body).toContain("The IMF lends $");
+      // The programme blocks a second loan until it ends.
+      expect(engine.proposeResolution(state, { orgId: "imf", proposer: "ARG", resolutionType: "loan", target: "ARG", text: "More." }).message).toContain("programme running");
+    });
+
+    test("AI governments in crisis ask the IMF for a loan, voted next turn", async () => {
+      const state = newGame(seed, [["p1", "USA"]]);
+      const sick = state.countries.find((c) => c.tag === "PAK")!;
+      sick.stability = 12;
+      const turn = await engine.runTurn(state, depsFor(seed));
+      const asks = state.resolutions.filter((r) => r.type === "loan" && r.status === "pending");
+      expect(asks.length).toBeGreaterThan(0);
+      expect(asks.length).toBeLessThanOrEqual(2);
+      for (const r of asks) {
+        expect(r.turn).toBe(state.turn);
+        expect(r.target).toBe(r.proposer);
+        expect(r.target).not.toBe("USA");
+        expect(turn.events.some((e) => e.headline.includes(`asks the IMF`) && e.countries.includes(r.target!))).toBe(true);
+      }
+    });
+
     test("formation: an order proclaims the nation once its whole territory is held", async () => {
       const state = newGame(seed, [["p1", "DEU"]]);
       const aut = countryIndex(state, "AUT"), deu = countryIndex(state, "DEU");
