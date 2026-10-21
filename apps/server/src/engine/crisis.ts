@@ -44,7 +44,7 @@ export function collapseGovernments(state: GameState, date: string): GameEvent[]
  * request is voted at the end of the next turn, so players sitting in the body can vote on it.
  */
 export function requestLoans(state: GameState, date: string): GameEvent[] {
-  return loanCandidates(state).map(({ tag, org }) => {
+  return loanCandidates(state, date).map(({ tag, org }) => {
     const name = countryByTag(state, tag)!.name;
     const offer = loanOffer(state, org, tag);
     const text = offer.kind === "stabilization"
@@ -52,7 +52,7 @@ export function requestLoans(state: GameState, date: string): GameEvent[] {
       : `${name} requests about ${money(offer.amount)} in ${org.abbrev} lending to rebuild and keep public services running.`;
     state.resolutions.push({
       id: nextId(state, "r"), orgId: org.id, bodyId: pickBody(org, "loan").id, type: "loan", proposer: tag, target: tag,
-      text, turn: state.turn + 1, status: "pending", votes: {},
+      text, turn: state.turn + 1, date, status: "pending", votes: {},
     });
     const ev = makeEvent(state, { date, headline: `${name} asks the ${org.abbrev} for a loan`, body: text, countries: [tag] });
     state.events.push(ev);

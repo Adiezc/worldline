@@ -180,7 +180,7 @@ export function proposeResolution(
   const body = pickBody(org, opts.resolutionType);
   const r: Resolution = {
     id: nextId(state, "r"), orgId: org.id, bodyId: body.id, type: opts.resolutionType, proposer: opts.proposer,
-    target, text, turn: state.turn, status: "pending", votes: {},
+    target, text, turn: state.turn, date: state.date, status: "pending", votes: {},
   };
   // The sponsor votes for its own text unless it later says otherwise.
   if (votersOf(org, body).includes(opts.proposer)) r.votes![opts.proposer] = "yes";

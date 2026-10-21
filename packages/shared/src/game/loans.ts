@@ -1,7 +1,9 @@
 // Lending by international organisations (the IMF, the World Bank). A passed loan resolution gives
 // the borrower money and calm now and conditions later; the rules decide both, never the model.
 
-import { addDays, countryByTag, humanTags, nextId, type GameState, type Loan, type LoanKind, type Organization } from "./state.ts";
+import {
+  addDays, countryByTag, daysBetween, humanTags, nextId, type GameState, type Loan, type LoanKind, type Organization, type Resolution,
+} from "./state.ts";
 
 export interface LoanTerms {
   /** Loan size as a share of the borrower's GDP, and the most an organisation lends at once (USD bn). */
@@ -34,10 +36,14 @@ export const LOAN_TERMS: Record<LoanKind, LoanTerms> = {
 
 /** AI governments at or below this stability ask a lender for help. */
 export const LOAN_CRISIS_STABILITY = 25;
-/** Turns before a refused borrower asks the same organisation again. */
-export const LOAN_RETRY_TURNS = 4;
-/** Most loan requests AI governments table per turn. */
+/**
+ * AI governments table at most MAX_LOAN_REQUESTS loan requests in any LOAN_REQUEST_WINDOW days of game
+ * time. Counted in days, not turns: with turns a day long, a per-turn cap let crises queue up daily.
+ */
 export const MAX_LOAN_REQUESTS = 2;
+export const LOAN_REQUEST_WINDOW = 30;
+/** Days before a government whose request was refused asks any lender again. */
+export const LOAN_RETRY_DAYS = 180;
 
 export const lenderKind = (org: Organization): LoanKind => org.effects.lender ?? "stabilization";
 
@@ -117,24 +123,33 @@ export function loanDrag(state: GameState, tag: string, date: string) {
 }
 
 /**
- * AI governments in crisis that should ask a lender for help this turn, worst first: members of a
- * lending organisation with stability at or below LOAN_CRISIS_STABILITY, no programme running, no
- * request pending and no refusal in the last few turns. Emergency (IMF) lenders come first.
+ * AI governments in crisis that should ask a lender for help on `date`, worst first: members of a
+ * lending organisation with stability at or below LOAN_CRISIS_STABILITY. Emergency (IMF) lenders come
+ * first. A government deals with one lender at a time: none asks while any of its programmes runs or
+ * any of its requests is pending, nor for LOAN_RETRY_DAYS after a refusal. All of them together stay
+ * within MAX_LOAN_REQUESTS per LOAN_REQUEST_WINDOW days.
  */
-export function loanCandidates(state: GameState) {
+export function loanCandidates(state: GameState, date = state.date) {
   const humans = humanTags(state);
+  const asks = state.resolutions.filter((r) => r.type === "loan");
+  // Requests from before dates were recorded count a turn as a month.
+  const age = (r: Resolution) => (r.date ? daysBetween(r.date, date) : (state.turn - r.turn) * 30);
+  const budget = MAX_LOAN_REQUESTS - asks.filter((r) => !humans.has(r.proposer) && age(r) < LOAN_REQUEST_WINDOW).length;
+  if (budget <= 0) return [];
   const lenders = state.organizations
     .filter((o) => o.powers.includes("loan"))
     .sort((a, b) => Number(lenderKind(a) !== "stabilization") - Number(lenderKind(b) !== "stabilization"));
+  const busy = (tag: string) =>
+    (state.loans ?? []).some((l) => l.borrower === tag && l.programmeEnd > date) ||
+    asks.some((r) => r.target === tag && (r.status === "pending" || ((r.status === "failed" || r.status === "vetoed") && age(r) < LOAN_RETRY_DAYS)));
   const out: { tag: string; org: Organization }[] = [];
   const inCrisis = state.countries
-    .filter((k) => k.alive && !humans.has(k.tag) && k.stability <= LOAN_CRISIS_STABILITY)
+    .filter((k) => k.alive && !humans.has(k.tag) && k.stability <= LOAN_CRISIS_STABILITY && !busy(k.tag))
     .sort((a, b) => a.stability - b.stability);
   for (const k of inCrisis) {
-    const org = lenders.find((o) => !loanBlocker(state, o, k.tag) && !state.resolutions.some((r) =>
-      r.orgId === o.id && r.type === "loan" && r.target === k.tag && state.turn - r.turn < LOAN_RETRY_TURNS));
+    const org = lenders.find((o) => !loanBlocker(state, o, k.tag));
     if (org) out.push({ tag: k.tag, org });
-    if (out.length >= MAX_LOAN_REQUESTS) break;
+    if (out.length >= budget) break;
   }
   return out;
 }

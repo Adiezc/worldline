@@ -119,6 +119,8 @@ export interface Resolution {
   target?: string;
   text: string;
   turn: number;
+  /** Game date it was tabled (older saves lack it). */
+  date?: string;
   status: "pending" | "passed" | "failed" | "vetoed";
   votes?: Record<string, "yes" | "no" | "abstain">;
   reasons?: Record<string, string>;
