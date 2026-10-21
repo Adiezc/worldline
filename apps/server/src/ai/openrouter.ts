@@ -6,6 +6,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { AiCallInfo, AiProvider, AiRequest, AiResponse } from "../engine/api.ts";
+import { readSse } from "./sse.ts";
 
 const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
 const PER_MINUTE = 20;
@@ -153,7 +154,8 @@ export class OpenRouterProvider implements AiProvider {
       tries.n++;
       await this.limiter.acquire();
       let res: Response;
-      let raw: string;
+      let raw = "";
+      let json: OpenRouterBody | undefined;
       try {
         res = await fetch(ENDPOINT, {
           method: "POST",
@@ -167,7 +169,8 @@ export class OpenRouterProvider implements AiProvider {
           signal: AbortSignal.timeout(timeoutFor(req.kind, effort)),
         });
         // The body streams in under the same timeout, and a connection can drop mid-reply.
-        raw = await res.text();
+        if (req.onText && res.ok && (res.headers.get("content-type") ?? "").includes("text/event-stream")) json = await readSse(res, req.onText) as OpenRouterBody;
+        else raw = await res.text();
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         // A stalled model will stall again: hand over to the next batch instead of re-waiting.
@@ -177,8 +180,7 @@ export class OpenRouterProvider implements AiProvider {
         break;
       }
 
-      let json: OpenRouterBody | undefined;
-      try { json = JSON.parse(raw); } catch { json = undefined; }
+      if (raw) try { json = JSON.parse(raw); } catch { json = undefined; }
 
       if (!res.ok || json?.error) {
         const status = res.ok ? Number(json?.error?.code) || 502 : res.status;
@@ -231,6 +233,8 @@ export class OpenRouterProvider implements AiProvider {
       messages: cacheMarked(req, chain[0]),
       // With reasoning on, max_tokens covers the thinking too, so leave headroom for it.
       max_tokens: (req.maxTokens ?? 2000) + (REASONING_HEADROOM[effort] ?? 0),
+      // Streamed when someone is watching the reply being written; usage then comes in the last chunk.
+      ...(req.onText ? { stream: true, usage: { include: true } } : {}),
       temperature: req.temperature ?? 0.7,
       // Some models (e.g. Nemotron) reason by default, so "none" must be sent explicitly.
       reasoning: !effort || effort === "none" ? { enabled: false } : { effort, exclude: true },

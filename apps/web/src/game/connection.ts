@@ -129,6 +129,16 @@ function handleMessage(msg: ServerMessage) {
         return { typing: { ...st.typing, [msg.chatId]: { from: msg.from, until: Date.now() + 15000, count } } };
       });
       break;
+    case "chat.stream":
+      useGame.setState((st) => {
+        const prev = st.typing[msg.chatId];
+        const chat = st.view?.chats.find((c) => c.id === msg.chatId);
+        const count = prev?.from === msg.from ? prev.count : chat?.messages.length ?? 0;
+        // A piece that trails the finished message (already in the view) is ignored.
+        if (!prev && chat?.messages.slice(count).some((m) => m.from === msg.from)) return {};
+        return { typing: { ...st.typing, [msg.chatId]: { from: msg.from, until: Date.now() + 20000, count, text: msg.text } } };
+      });
+      break;
     case "toast":
       toast(msg.text, msg.level);
       break;

@@ -39,6 +39,7 @@ function ChatWindow({ chat, win, view }: { chat: Chat; win: ChatWindowState; vie
   const group = others.length >= 2;
   const title = group ? `Conference · ${others.length + (me ? 1 : 0)} nations` : others.map((t) => byTag.get(t)?.name ?? t).join(", ") || "Chat";
   const typing = useTyping(chat.id);
+  const streamed = useGame((s) => (typing ? s.typing[chat.id]?.text : undefined));
   const listRef = useRef<HTMLDivElement>(null);
   // A visible window means the messages are read.
   useEffect(() => {
@@ -47,11 +48,25 @@ function ChatWindow({ chat, win, view }: { chat: Chat; win: ChatWindowState; vie
   const humans = useMemo(() => new Set(view.players.map((p) => p.country).filter(Boolean)), [view.players]);
   const aiMembers = others.filter((t) => !humans.has(t));
   const [speaker, setSpeaker] = useState("");
+  // The message on its way: shown at once, dropped once the view carries it or it fails.
+  const outgoing = useGame((s) => s.outgoing[chat.id]);
+  const failedAt = useGame((s) => s.chatFailed[chat.id]);
+  const delivered = !!outgoing && chat.messages.slice(outgoing.count).some((m) => m.from === me);
+  const failed = !!outgoing && (failedAt ?? 0) > outgoing.at;
+  useEffect(() => {
+    if (!delivered && !failed) return;
+    useGame.setState((s) => {
+      const next = { ...s.outgoing };
+      delete next[chat.id];
+      return { outgoing: next };
+    });
+  }, [delivered, failed, chat.id]);
+  const pending = outgoing && !delivered && !failed ? outgoing : null;
 
   useEffect(() => {
     const el = listRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [chat.messages.length, win.minimized, typing]);
+  }, [chat.messages.length, win.minimized, typing, pending, streamed]);
 
   return (
     <section className={`hud-panel pointer-events-auto flex ${group ? "w-[330px]" : "w-[300px]"} flex-col overflow-hidden animate-hud-in ${win.minimized ? "h-10" : "h-[440px] max-h-[calc(100vh-140px)]"}`}>
@@ -110,7 +125,20 @@ function ChatWindow({ chat, win, view }: { chat: Chat; win: ChatWindowState; vie
             {chat.messages.map((m) => (
               <Message key={m.id} m={m} chatId={chat.id} view={view} mine={m.from === me} />
             ))}
-            {typing && (
+            {pending && me && <PendingMessage text={pending.text} terms={pending.terms} country={byTag.get(me) ?? { tag: me }} />}
+            {typing && streamed ? (
+              // The reply as it is being written, growing in place until the finished message lands.
+              <div className="flex gap-2">
+                <Flag country={byTag.get(typing) ?? { tag: typing }} size={18} className="mt-0.5" />
+                <div className="flex max-w-[85%] min-w-0 flex-col">
+                  <div className="text-[10.5px] text-parchment/45"><span className="font-semibold text-parchment/70">{byTag.get(typing)?.name ?? typing}</span> is writing…</div>
+                  <div className="mt-0.5 rounded bg-black/30 px-2.5 py-1.5 text-left text-[12.5px] leading-snug whitespace-pre-line text-parchment/90">
+                    {streamed}
+                    <span className="ml-0.5 inline-block h-3 w-1.5 translate-y-0.5 animate-hud-pulse bg-parchment/50" />
+                  </div>
+                </div>
+              </div>
+            ) : typing && (
               <div className="flex items-center gap-1.5 text-[11px] text-parchment/50 italic">
                 <Flag country={byTag.get(typing) ?? { tag: typing }} size={12} />
                 {byTag.get(typing)?.name ?? typing} is typing
@@ -122,6 +150,25 @@ function ChatWindow({ chat, win, view }: { chat: Chat; win: ChatWindowState; vie
         </>
       )}
     </section>
+  );
+}
+
+/** Your message as soon as you send it, faded with "Sending…" until the server confirms it. */
+function PendingMessage({ text, terms, country }: { text: string; terms?: string; country: Parameters<typeof Flag>[0]["country"] }) {
+  return (
+    <div className="flex flex-row-reverse gap-2 opacity-60">
+      <Flag country={country} size={18} className="mt-0.5" />
+      <div className="flex max-w-[85%] min-w-0 flex-col items-end text-right">
+        <div className="text-[10.5px] text-parchment/45 italic">Sending…</div>
+        {text && <div className="mt-0.5 rounded bg-gold/15 px-2.5 py-1.5 text-left text-[12.5px] leading-snug whitespace-pre-line text-parchment">{text}</div>}
+        {terms && (
+          <div className="mt-1 w-full rounded border border-gold/30 px-2.5 py-1.5 text-left text-[12px] text-parchment/75">
+            <Icon name="scroll" size={12} className="mr-1 inline text-gold" />
+            {terms}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -430,21 +477,24 @@ function Composer({ chat, win, view, speaker }: { chat: Chat; win: ChatWindowSta
   if (!me) return <div className="border-t border-panel-edge/40 px-3 py-2 text-[11px] text-parchment/40 italic">Spectators cannot speak.</div>;
 
   const cessions = peaceOpen && fight ? cessionsFor(view, me, fight.enemies, members, picked) : [];
+  // Naming land keeps the front where it stands too (the server applies the same rule).
+  const peaceTerms: PeaceTerms = cessions.length ? "keep_occupied" : peace;
   const unheldCount = cessions.reduce((n, c) => n + (c.to === me ? unheld(view, fight?.war, c).length : 0), 0);
 
   const submit = () => {
     // Without written terms, the treaty text spells out the land clauses and the base terms.
     const peaceText = kind === "endWar" && !terms.trim()
-      ? [...cessions.map((c) => cessionSentence(view, c)), PEACE_LABELS[peace].terms].join(" ")
+      ? [...cessions.map((c) => cessionSentence(view, c)), PEACE_LABELS[peaceTerms].terms].join(" ")
       : terms.trim();
     const proposal: ProposalDraft | undefined = win.builder && peaceText
       ? {
-        kind, treatyType: kind === "treaty" ? treatyType : undefined, peace: kind === "endWar" ? peace : undefined,
+        kind, treatyType: kind === "treaty" ? treatyType : undefined, peace: kind === "endWar" ? peaceTerms : undefined,
         cessions: kind === "endWar" && cessions.length ? cessions : undefined, members, terms: peaceText,
       }
       : undefined;
     if ((!text.trim() && !proposal) || turning) return;
     sendChat(chat.id, text.trim(), proposal, speaker);
+    useGame.setState((s) => ({ outgoing: { ...s.outgoing, [chat.id]: { text: text.trim(), terms: proposal?.terms, count: chat.messages.length, at: Date.now() } } }));
     if (text.trim()) setUnsent({ text, count: chat.messages.length, failedBefore: failedAt });
     setText("");
     // The builder stays as it is until the proposal arrives, so a refusal loses nothing.
@@ -466,8 +516,11 @@ function Composer({ chat, win, view, speaker }: { chat: Chat; win: ChatWindowSta
               </select>
             </Field>
             {kind === "endWar" && (
-              <Field label="Other occupied land">
-                <select className="hud-input py-1 text-[12px]" value={peace} onChange={(e) => setPeace(e.target.value as PeaceTerms)}>
+              <Field label="Other occupied land" hint={cessions.length ? "With regions named, each side also keeps what it holds." : undefined}>
+                <select
+                  className="hud-input py-1 text-[12px]" value={peaceTerms} disabled={cessions.length > 0}
+                  onChange={(e) => setPeace(e.target.value as PeaceTerms)}
+                >
                   {Object.entries(PEACE_LABELS).map(([k, l]) => (
                     <option key={k} value={k}>
                       {l.label}

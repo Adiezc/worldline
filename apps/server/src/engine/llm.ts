@@ -87,6 +87,36 @@ function parseWith(text: string, schema: Schema): { ok: true; value: unknown } |
 
 const stripThinking = (text: string) => text.replace(/<think>[\s\S]*?<\/think>/gi, "");
 
+const ESCAPES: Record<string, string> = { n: "\n", t: "\t", r: "", b: "", f: "", '"': '"', "\\": "\\", "/": "/" };
+
+/**
+ * The text of string field `key` in a JSON object still being written, decoded as far as it goes
+ * (null until the field starts). Lets a chat show a reply while the model writes the rest.
+ */
+export function partialJsonString(raw: string, key: string): string | null {
+  const s = raw.replace(/<think>[\s\S]*?(<\/think>|$)/gi, "");
+  const m = new RegExp(`"${key}"\\s*:\\s*"`).exec(s);
+  if (!m) return null;
+  let out = "";
+  for (let i = m.index + m[0].length; i < s.length; i++) {
+    const ch = s[i];
+    if (ch === '"') break;
+    if (ch !== "\\") { out += ch; continue; }
+    const next = s[i + 1];
+    if (next === undefined) break; // an escape cut off mid-way: wait for the rest
+    if (next === "u") {
+      const hex = s.slice(i + 2, i + 6);
+      if (hex.length < 4) break;
+      out += String.fromCharCode(parseInt(hex, 16));
+      i += 5;
+    } else {
+      out += ESCAPES[next] ?? next;
+      i++;
+    }
+  }
+  return out;
+}
+
 /** Pull the outermost JSON object out of a reply that may carry fences, prose or reasoning. */
 export function extractJson(text: string): unknown {
   let s = stripThinking(text).trim();

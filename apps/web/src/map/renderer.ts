@@ -1,5 +1,6 @@
 import { BORDER_QUANT, type BordersData } from "@worldline/shared";
-import { fillFrag, fillVert, frontFrag, frontVert, lineFrag, lineVert, meshFrag, meshVert } from "./shaders.ts";
+import { fillFrag, fillVert, frontFrag, frontVert, lakeFrag, lakeVert, lineFrag, lineVert, meshFrag, meshVert } from "./shaders.ts";
+import type { LakeMesh } from "./lakes.ts";
 import { theme, type MapTheme } from "./theme.ts";
 
 export interface Camera {
@@ -47,6 +48,9 @@ export class MapRenderer {
   private meshProg!: WebGLProgram;
   private meshVao: WebGLVertexArrayObject | null = null;
   private meshIndexCount = 0;
+  private lakeProg!: WebGLProgram;
+  private lakeVao: WebGLVertexArrayObject | null = null;
+  private lakeIndexCount = 0;
   private borders: BordersData = { arcs: [] };
   /** Border arc indices by province pair (min * 65536 + max), built on first use. */
   private arcsByPair: Map<number, number[]> | null = null;
@@ -95,6 +99,7 @@ export class MapRenderer {
     this.lineProg = program(gl, lineVert, lineFrag);
     this.frontProg = program(gl, frontVert, frontFrag);
     this.meshProg = program(gl, meshVert, meshFrag);
+    this.lakeProg = program(gl, lakeVert, lakeFrag);
     this.fillVao = gl.createVertexArray()!;
 
     gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
@@ -146,6 +151,23 @@ export class MapRenderer {
     gl.bindVertexArray(null);
     this.meshVao = vao;
     this.meshIndexCount = I;
+  }
+
+  /** Lake triangles from mapgen (lakes.mesh.bin), drawn as water over the land. */
+  setLakes(mesh: LakeMesh) {
+    const gl = this.gl;
+    const vao = gl.createVertexArray()!;
+    gl.bindVertexArray(vao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ARRAY_BUFFER, mesh.positions, gl.STATIC_DRAW);
+    const loc = gl.getAttribLocation(this.lakeProg, "aPos");
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc, 2, gl.UNSIGNED_SHORT, false, 0, 0);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, mesh.indices, gl.STATIC_DRAW);
+    gl.bindVertexArray(null);
+    this.lakeVao = vao;
+    this.lakeIndexCount = mesh.indices.length;
   }
 
   /** True while front lines are drawn (the view then animates). */
@@ -375,6 +397,18 @@ export class MapRenderer {
       for (const off of offsets) {
         gl.uniform1f(this.loc(this.meshProg, "uOffsetX"), off);
         gl.drawElements(gl.TRIANGLES, this.meshIndexCount, gl.UNSIGNED_INT, 0);
+      }
+    }
+
+    // Lakes over the land, at every zoom (the province bitmap paints them as land).
+    if (this.lakeVao) {
+      gl.useProgram(this.lakeProg);
+      this.bindLand(this.lakeProg, dpr);
+      gl.uniform1f(this.loc(this.lakeProg, "uQuant"), BORDER_QUANT);
+      gl.bindVertexArray(this.lakeVao);
+      for (const off of offsets) {
+        gl.uniform1f(this.loc(this.lakeProg, "uOffsetX"), off);
+        gl.drawElements(gl.TRIANGLES, this.lakeIndexCount, gl.UNSIGNED_INT, 0);
       }
     }
 

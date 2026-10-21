@@ -303,6 +303,28 @@ void main() {
   outColor = vec4(finish(col, world, 1.0), 1.0);
 }`;
 
+// Lakes: water triangles from mapgen drawn over the land fill (the province bitmap has land
+// under them). Same sea as the ocean, a touch lighter, with the same relief-free finish.
+export const lakeVert = common + /* glsl */ `
+in vec2 aPos;      // map px × uQuant
+uniform float uQuant;
+uniform float uOffsetX;
+out vec2 vWorld;
+void main() {
+  vec2 world = aPos / uQuant + vec2(uOffsetX, 0.0);
+  vec2 p = (world - uCenter) * uZoom;
+  gl_Position = vec4(p.x / (uViewport.x * 0.5), -p.y / (uViewport.y * 0.5), 0.5, 1.0);
+  vWorld = world;
+}`;
+
+export const lakeFrag = landLib + /* glsl */ `
+in vec2 vWorld;
+out vec4 outColor;
+void main() {
+  vec2 world = vec2(mod(vWorld.x, uMapSize.x), vWorld.y);
+  outColor = vec4(finish(oceanColor(world) * 1.06, world, 0.0), 1.0);
+}`;
+
 // Border lines: one capsule per segment (round joins). Hard edges inside the capsule; the
 // multisampled framebuffer smooths them, and a per-kind depth keeps overlapping joints from
 // blending twice.

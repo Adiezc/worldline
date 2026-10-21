@@ -4,6 +4,7 @@
 // which is why the turn prompts put their stable parts first.
 
 import type { AiRequest, AiResponse } from "../engine/api.ts";
+import { readSse } from "./sse.ts";
 
 export type CompatId = "openai" | "gemini" | "local";
 
@@ -50,9 +51,11 @@ export class CompatBackend {
         if (attempt < MAX_RETRIES) { await sleep(2000 * 3 ** attempt); continue; }
         break;
       }
-      const raw = await res.text();
+      const streamed = !!req.onText && res.ok && (res.headers.get("content-type") ?? "").includes("text/event-stream");
+      const raw = streamed ? "" : await res.text();
       let json: CompatBody | undefined;
-      try { json = JSON.parse(raw); } catch { json = undefined; }
+      if (streamed) json = await readSse(res, req.onText!) as CompatBody;
+      else try { json = JSON.parse(raw); } catch { json = undefined; }
       if (!res.ok) {
         const msg = typeof json?.error === "string" ? json.error : json?.error?.message ?? raw.slice(0, 300);
         lastError = `${this.cfg.id} ${res.status}: ${msg}`;
@@ -86,6 +89,7 @@ export class CompatBackend {
       model,
       messages: [{ role: "system", content: req.system }, { role: "user", content: req.user }],
       response_format: jsonMode ? { type: "json_object" } : undefined,
+      ...(req.onText ? { stream: true, stream_options: { include_usage: true } } : {}),
     };
     const tokens = (req.maxTokens ?? 2000) + (thinking ? 8000 : 0);
     // OpenAI's reasoning models take max_completion_tokens and only the default temperature.

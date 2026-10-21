@@ -36,14 +36,16 @@ export class AnthropicBackend {
       : [{ type: "text", text: req.user }];
     const fallback = FALLBACK_MODELS.has(model);
     // Streamed so long resolver turns never hit an HTTP timeout.
-    const msg = await this.client.beta.messages.stream({
+    const stream = this.client.beta.messages.stream({
       model,
       max_tokens: (req.maxTokens ?? 2000) + THINKING_HEADROOM[effort],
       system: [{ type: "text", text: req.system, cache_control: { type: "ephemeral" } }],
       messages: [{ role: "user", content: user }],
       ...(NO_EFFORT.test(model) ? {} : { output_config: { effort } }),
       ...(fallback ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const } : {}),
-    }).finalMessage();
+    });
+    if (req.onText) stream.on("text", (_delta, snapshot) => req.onText!(snapshot));
+    const msg = await stream.finalMessage();
 
     if (msg.stop_reason === "refusal") throw new Error(`Anthropic declined the request (${msg.stop_details?.category ?? "no category"})`);
     const text = msg.content.map((b) => (b.type === "text" ? b.text : "")).join("");

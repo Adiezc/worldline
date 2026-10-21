@@ -67,6 +67,12 @@ The generated files are committed. To regenerate them, download the Natural Eart
 mkdir -p tools/mapgen/data/raw && cd tools/mapgen/data/raw && for f in ne_10m_admin_1_states_provinces ne_10m_admin_0_countries; do curl -sSLO "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/$f.geojson"; done
 ```
 
+Lakes come from Natural Earth's 1:10m lakes (`src/lakes.ts` turns them into `lakes.mesh.bin`, drawn as water over the land, so province ids are untouched):
+
+```bash
+mkdir -p tools/mapgen/data/raw/lakes && curl -sSL -o tools/mapgen/data/raw/lakes/ne_10m_lakes.geojson https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_lakes.geojson
+```
+
 Terrain relief comes from Natural Earth's 1:50m shaded relief, also public domain:
 
 ```bash
