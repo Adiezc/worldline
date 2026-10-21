@@ -2,6 +2,7 @@
   "name": "@worldline/mapgen",
   "version": "0.0.0",
   "private": true,
+  "license": "AGPL-3.0-only",
   "type": "module",
   "scripts": {
     "build": "bun run src/build.ts && bun run src/lakes.ts && bun run src/relief.ts && bun run src/scenario-modern.ts && bun run src/scenario-seed.ts && bun run src/scenario-coldwar.ts",

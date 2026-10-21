@@ -16,6 +16,8 @@ type Health = { state: "loading" } | { state: "offline" } | { state: "ok"; data:
 type Catalogue = { list: ScenarioInfo[]; offline: boolean; error?: string } | null;
 
 const ERA_LABELS: Record<string, string> = { modern: "Modern", coldwar: "Cold War", custom: "Custom" };
+// AGPL section 13: everyone playing on a server can get its source. Forks point this at their own repository.
+const SOURCE_URL = import.meta.env.VITE_SOURCE_URL || "https://github.com/gazarrillo/worldline";
 
 export function MainMenu() {
   const [health, setHealth] = useState<Health>({ state: "loading" });
@@ -484,6 +486,10 @@ function HealthFooter({ health }: { health: Health }) {
           </span>
         </>
       )}
+      <span className="h-3 w-px bg-panel-edge" />
+      <a href={SOURCE_URL} target="_blank" rel="noreferrer" className="hover:text-gold-bright hover:underline">
+        Source
+      </a>
     </div>
   );
 }
