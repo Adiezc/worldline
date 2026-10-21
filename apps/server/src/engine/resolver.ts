@@ -2,13 +2,13 @@
 // shared validator (applyEvent), so the model can be wrong without breaking the rules.
 
 import {
-  atWar,
-  addDays, applyEvent, countryByTag, daysBetween, humanTags, occupyCap, planOperations, ResolverOutputSchema, STANCE_LABELS,
+  activeProjects, atWar,
+  addDays, applyEvent, countryByTag, daysBetween, FORTUNES, humanTags, occupyCap, planOperations, ResolverOutputSchema, STANCE_LABELS,
   type Effect, type GameEvent, type GameState, type MapIndex, type OperationPlan, type Order, type OrderVerdict, type Tiers,
-  type TurnContext,
+  type Outreach, type TurnContext,
 } from "@worldline/shared";
 import type { EngineDeps } from "./api.ts";
-import { nameOf, orderHistoryBlock, worldContext } from "./context.ts";
+import { nameOf, orderHistoryBlock, receiptBlock, worldContext } from "./context.ts";
 import type { NpcIntent } from "./director.ts";
 import { clampDate, makeEvent } from "./game.ts";
 import { callJson } from "./llm.ts";
@@ -19,6 +19,8 @@ export interface ResolverResult {
   events: GameEvent[];
   /** Last day of the turn (stopDate for open-ended jumps). */
   end: string;
+  /** Messages AI governments send players unprompted; delivered once the turn commits. */
+  outreach: Outreach[];
 }
 
 const MAX_EVENTS = 24;
@@ -54,6 +56,7 @@ export async function runResolver(
       : "",
     opts.voteFacts.length ? `VOTE OUTCOMES (facts):\n${opts.voteFacts.map((f) => `- ${f}`).join("\n")}` : "",
     calls.length ? `CALLS TO ARMS to answer this period: ${calls.map((c) => `${c.tag} for ${c.warId} (via ${c.via})`).join(", ")}` : "",
+    receiptBlock(state),
     `TASK: Write what happens from ${state.date} to ${world.end}${days === 0 ? " (or your stopDate)" : ""}. Return the JSON object.`,
   ];
 
@@ -62,6 +65,7 @@ export async function runResolver(
     schemaName: "ResolverOutput",
     system: resolverSystem(state, days, economy),
     user: sections.filter(Boolean).join("\n\n"),
+    cacheUpto: world.stable,
     maxTokens: 12000,
     temperature: 0.7,
     reasoning: "setting",
@@ -80,6 +84,12 @@ export async function runResolver(
       calls,
       intents: opts.intents,
       economy,
+      projects: activeProjects(state).filter((p) => humans.has(p.country)).map((p) => ({ id: p.id, country: p.country, name: p.name, progress: p.progress })),
+      // Orders from nuclear powers at war, with the enemy they could strike.
+      strikes: orders.flatMap((o) => {
+        const w = countryByTag(state, o.country)?.nuclear ? state.wars.find((x) => x.attackers.includes(o.country) || x.defenders.includes(o.country)) : undefined;
+        return w ? [{ orderId: o.id, country: o.country, target: (w.attackers.includes(o.country) ? w.defenders : w.attackers)[0] }] : [];
+      }),
     },
   }, nonEmptyTurn(orders.length, days));
 
@@ -138,24 +148,39 @@ export async function runResolver(
     const o = orders.find((x) => x.id === v.orderId);
     if (o) Object.assign(v, { country: o.country, text: o.text }, o.operation ? { operation: o.operation } : {});
   }
-  return { verdicts, events, end };
+  return { verdicts, events, end, outreach: humans.size ? out.outreach : [] };
 }
 
-/** Battle plans for the prompt: odds, axis by name and id, and the limits the engine enforces. */
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+/**
+ * Battle plans for the prompt: the situation to judge, the fortune the engine rolled, the axis by
+ * name and id, and the limits the engine enforces. No force counts: the model weighs strength.
+ */
 function operationsBlock(state: GameState, map: MapIndex, plans: OperationPlan[]) {
   const region = (id: number) => `${map.names[id] ?? "region"} (${id})`;
+  const side = (tag: string) => {
+    const c = countryByTag(state, tag);
+    return c ? `${c.name} (${tag}: military ${Math.round(c.military)}, stability ${Math.round(c.stability)}, war exhaustion ${Math.round(c.warExhaustion)})` : tag;
+  };
+  const fortune = (p: OperationPlan) => `FORTUNE OF WAR (rolled by the engine; honour it): ${p.fortune.toUpperCase()}, ${FORTUNES[p.fortune].text}.`;
+  const month = MONTHS[Number(state.date.slice(5, 7)) - 1] ?? "";
   const lines = plans.map((p) => {
-    const enemy = p.enemyTag ? `${nameOf(state, p.enemyTag)} (${p.enemyTag})` : "the enemy";
+    const enemy = p.enemyTag ? side(p.enemyTag) : "the enemy";
     if (p.kind === "hold") {
-      return `${p.orderId} [${p.country}] HOLD LINE "${p.name}": ${p.divisions} divisions dig in on ${p.route.map(region).join(", ")}` +
-        `${p.enemyDivisions ? ` facing ~${p.enemyDivisions} enemy divisions of ${enemy}` : ""}. Whatever else happens, the enemy can take at most ${p.cap} of these regions this period; prepared defences make attacks on them costly.`;
+      return `${p.orderId} [${p.country}] HOLD LINE "${p.name}": ${side(p.country)} digs in on ${p.route.map(region).join(", ")} against ${enemy}.\n` +
+        `  ${fortune(p)} Whatever else happens, the enemy can take at most ${p.cap} of these regions this period; prepared defences make attacks on them costly.`;
     }
-    const odds = p.divisions / Math.max(1, p.enemyDivisions);
-    const outlook = odds >= 1.5 ? "favourable odds" : odds >= 0.8 ? "roughly even odds" : "poor odds";
-    return `${p.orderId} [${p.country}] OFFENSIVE "${p.name}": ${p.divisions} divisions vs ~${p.enemyDivisions} of ${enemy} (${outlook}), stance ${STANCE_LABELS[p.stance].toLowerCase()}.\n` +
-      `  Axis: ${p.route.map(region).join(" → ")}.\n` +
+    const owner = (id: number) => state.countries[state.owners[id]]?.tag;
+    const homeSoil = p.route.slice(1).some((id) => owner(id) === p.enemyTag);
+    const dugIn = plans.some((h) => h.kind === "hold" && h.country === p.enemyTag && h.route.some((id) => p.allowed.includes(id)));
+    return `${p.orderId} [${p.country}] OFFENSIVE "${p.name}" by ${side(p.country)} against ${enemy}, stance ${STANCE_LABELS[p.stance].toLowerCase()}.\n` +
+      `  Axis: ${p.route.map(region).join(" → ")} (${p.route.length - 1} regions deep).\n` +
+      `  Judge it from the situation: both sides' real military strength, equipment and allies; morale and war exhaustion; supply over that depth; ` +
+      `terrain and rivers along the axis; the season (${month})${homeSoil ? "; the defenders fight on home soil" : ""}${dugIn ? "; the defenders have dug in on a hold line across it" : ""}; air power; and this period's events.\n` +
+      `  ${fortune(p)}\n` +
       `  It may take ONLY these regions (the axis and its flanks): ${p.allowed.join(", ")}. At most ${p.cap} this period, nearest the jump-off first; ` +
-      `with ${outlook} a realistic result is often fewer, or none against a prepared defence. Record gains as setController (controller ${p.country}) with cause ${p.orderId}; ` +
+      `taking fewer, or none, is right when the situation and fortune say so. Record gains as setController (controller ${p.country}) with cause ${p.orderId}; ` +
       `report losses, and add warExhaustion for ${p.country}${p.stance === "allout" ? " (heavier for an all-out push)" : ""}.`;
   });
   return `OPERATIONS (battle plans players drew on the map; adjudicate each like a war correspondent with a staff map):\n${lines.join("\n")}`;

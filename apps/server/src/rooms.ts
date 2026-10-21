@@ -4,7 +4,7 @@
 
 import type { ServerWebSocket } from "bun";
 import {
-  DEFAULT_SETTINGS, countryByTag, pruneClaims, relocateCapitals, sanitizeOperation, type ClientMessage, type GameSettings, type GameState, type GameView,
+  DEFAULT_SETTINGS, countryByTag, humanTags, pruneClaims, relocateCapitals, sanitizeOperation, type ClientMessage, type GameSettings, type GameState, type GameView,
   type MapIndex, type ScenarioSeed, type ServerMessage,
 } from "@worldline/shared";
 import { engine, jumpDays, turnEvents } from "./engine/index.ts";
@@ -106,6 +106,7 @@ export class Room {
     const { orders, chats, events, jumpVotes, ...rest } = s;
     const seed = this.deps.seed(s.scenarioId);
     const quota = this.deps.ai.quota();
+    const humans = humanTags(s);
     return {
       ...rest,
       players: s.players.map(({ secret: _secret, ...p }) => p),
@@ -113,7 +114,10 @@ export class Room {
       // Orders are private, and verdicts quote them: only your own.
       lastVerdicts: s.lastVerdicts.filter((v) => !v.country || v.country === tag),
       verdictLog: (s.verdictLog ?? []).filter((v) => v.country === tag).slice(-60),
-      chats: tag ? chats.filter((c) => c.members.includes(tag)) : [],
+      // The running record is the AI side's private memory of the talks, so it stays on the server.
+      chats: tag ? chats.filter((c) => c.members.includes(tag)).map(({ summary: _, ...c }) => c) : [],
+      // Players' projects come from their private orders: only your own, plus the AI nations' public ones.
+      projects: (s.projects ?? []).filter((p) => p.country === tag || !humans.has(p.country)),
       events: events.slice(-VIEW_EVENTS),
       eventCount: events.length,
       jumpVotes,
@@ -126,7 +130,7 @@ export class Room {
       theme: seed.theme ?? "modern",
       snapshots: me?.isHost ? listSnapshots(s.id) : [],
       intervenable: me?.isHost ? this.intervenable() : [],
-      ai: { provider: this.deps.ai.name, usedToday: quota.usedToday, dailyLimit: quota.dailyLimit },
+      ai: { provider: this.deps.ai.name, backends: [...(this.deps.ai.configured ?? [])], usedToday: quota.usedToday, dailyLimit: quota.dailyLimit },
       allyOperations: tag ? this.allyOperations(playerId, tag) : [],
     };
   }
@@ -243,7 +247,7 @@ export class Room {
    * already queued when a turn is called still run: the turn waits for them. */
   private static MUTATING = new Set<ClientMessage["t"]>([
     "claim", "settings", "start", "orders", "jump", "chat.open", "chat.send", "proposal.respond",
-    "org.propose", "org.vote",
+    "org.propose", "org.vote", "project.abandon",
     "rewind", "intervene",
   ]);
   private lock: Promise<unknown> = Promise.resolve();
@@ -414,6 +418,14 @@ export class Room {
         const r = engine.proposeResolution(s, { orgId: msg.orgId, proposer: myTag, resolutionType: msg.resolutionType, target: msg.target, text: msg.text.slice(0, 1000) });
         if (!r.ok) fail(r.message);
         else this.broadcast({ t: "toast", level: "info", text: r.message });
+        return this.changed();
+      }
+
+      case "project.abandon": {
+        if (!myTag) return;
+        const r = engine.abandonProject(s, { country: myTag, projectId: String(msg.projectId), map: this.deps.map });
+        if (!r.ok) fail(r.message);
+        else this.send(ws, { t: "toast", level: "info", text: r.message });
         return this.changed();
       }
 
@@ -599,6 +611,16 @@ export class RoomManager {
     return room;
   }
 
+  /** Store an imported game (already validated) under a fresh id with its snapshots, then open it
+   * through `get` so it gets the same recovery and backfills as any saved game. */
+  import(game: GameState, snapshots: GameState[]) {
+    const id = shortId();
+    for (const s of [...snapshots, game]) s.id = id;
+    for (const s of snapshots) saveSnapshot(s);
+    saveGame(game);
+    return this.get(id)!;
+  }
+
   get(id: string): Room | null {
     let room = this.rooms.get(id);
     if (room) return room;
@@ -635,7 +657,7 @@ function backfillCapitals(state: GameState, seed: ScenarioSeed, map: MapIndex) {
   relocateCapitals(state, map);
 }
 
-function sanitizeSettings(s: GameSettings): GameSettings {
+export function sanitizeSettings(s: GameSettings): GameSettings {
   const d = DEFAULT_SETTINGS;
   return {
     difficulty: ["easy", "normal", "hard", "realistic"].includes(s.difficulty) ? s.difficulty : d.difficulty,

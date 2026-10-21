@@ -5,6 +5,7 @@
 //
 // Costs one director + one resolver call per model (paid models bill your OpenRouter credits).
 
+import "../src/env.ts";
 import { Database } from "bun:sqlite";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";

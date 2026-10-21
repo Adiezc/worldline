@@ -55,6 +55,8 @@ interface ResolverCtx {
   front: { warId: string; province: number; by: string; controller: string; name?: string }[];
   intents: { country: string; summary: string }[];
   operations?: { orderId: string; country: string; kind: "offensive" | "hold"; route: number[]; cap: number }[];
+  projects?: { id: string; country: string; name: string; progress: number }[];
+  strikes?: { orderId: string; country: string; target: string }[];
 }
 
 function resolver(c: ResolverCtx, rng: Rng) {
@@ -81,6 +83,18 @@ function resolver(c: ResolverCtx, rng: Rng) {
     ];
     const partner = npcs.length && rng() < 0.4 ? pick(rng, npcs) : undefined;
     if (partner && partner !== o.country) effects.push({ type: "relationDelta", a: o.country, b: partner, delta: 3 });
+    // Orders to use nuclear weapons become strikes; the engine works out what they cost.
+    const strike = c.strikes?.find((s) => s.orderId === o.id);
+    if (strike && /\b(nuclear|nukes?|warheads?|atomic|thermonuclear)\b/i.test(o.text)) {
+      effects.push({ type: "nuclearStrike", by: o.country, target: strike.target, scale: /thermonuclear|cit(y|ies)|capital|strategic/i.test(o.text) ? "strategic" : "tactical" });
+    }
+    // Orders that launch something big become projects.
+    if (/\b(programme|program|project|build|construct|reform|develop)/i.test(o.text)) {
+      effects.push({
+        type: "startProject", country: o.country, name: clip(o.text.replace(/\s+/g, " "), 60), goal: "Deliver what the order set out to do.",
+        months: 12, milestones: ["Funding approved", "Work under way", "Delivered"],
+      });
+    }
     events.push({
       date: date(),
       headline: `${name(o.country)} moves ahead: ${clip(o.text.replace(/\s+/g, " "), 60)}`,
@@ -90,6 +104,22 @@ function resolver(c: ResolverCtx, rng: Rng) {
       effects,
     });
   });
+
+  // Players' projects move on steadily and finish once they get there.
+  for (const p of c.projects ?? []) {
+    const done = p.progress + 15 >= 100;
+    events.push({
+      date: date(),
+      headline: done ? `${name(p.country)} completes ${clip(p.name, 50)}` : `Work advances on ${clip(p.name, 50)}`,
+      body: done ? "Officials marked the end of the project." : "Officials reported steady progress.",
+      countries: [p.country],
+      causes: [],
+      effects: [
+        { type: "advanceProject", projectId: p.id, progress: 15, ...(p.progress < 30 ? { milestone: 0 } : {}), note: "Steady progress." },
+        ...(done ? [{ type: "endProject", projectId: p.id, outcome: "completed" }] : []),
+      ],
+    });
+  }
 
   // Battle plans: offensives take the first regions along their route (the engine drops any the
   // attacker already holds or can't reach); hold lines just dig in.
@@ -138,7 +168,19 @@ function resolver(c: ResolverCtx, rng: Rng) {
   }
 
   events.sort((a, b) => String(a.date).localeCompare(String(b.date)));
-  return { orderVerdicts: verdicts, events, ...(c.days === 0 ? { stopDate: end } : {}) };
+
+  // Now and then an AI government writes to a player unprompted (drawn last, so the rest is unchanged).
+  const outreach: Record<string, unknown>[] = [];
+  const player = c.humans?.[0];
+  if (player && npcs.length && rng() < 0.35) {
+    const from = pick(rng, npcs);
+    outreach.push({
+      from, to: player,
+      message: `${name(from)} has followed recent events in ${name(player)} closely and would welcome closer economic ties.`,
+      proposal: { kind: "treaty", treatyType: "trade", members: [from, player], terms: "Cut tariffs on manufactured goods and open talks on investment." },
+    });
+  }
+  return { orderVerdicts: verdicts, events, outreach, ...(c.days === 0 ? { stopDate: end } : {}) };
 }
 
 interface DirectorCtx {
@@ -181,6 +223,7 @@ function chat(c: { speaker: string; speakerName: string; player: string; playerN
   }[tone];
   const out: Record<string, unknown> = {
     speaker: c.speaker, reply, tone, relationDelta: { warm: 2, neutral: 1, cold: 0, hostile: -1 }[tone],
+    memory: `${c.playerName} opened talks with ${c.speakerName}${c.hasProposal ? " and tabled a proposal" : ""}; ${c.speakerName} answered in a ${tone} tone.`,
   };
   if (c.hasProposal) {
     // Peace is judged on the war, not on friendship: exhausted or losing sides settle.
@@ -236,9 +279,19 @@ function respond(req: AiRequest, rng: Rng): unknown {
       const name = String(ctx.name ?? ctx.country ?? "our country");
       const wars = (ctx.wars ?? []) as string[];
       const stab = Math.round(Number(ctx.stability ?? 50));
-      return `${name} is ${stab >= 55 ? "stable at home" : "under domestic strain"} (stability ${stab}). ` +
+      const text = `${name} is ${stab >= 55 ? "stable at home" : "under domestic strain"} (stability ${stab}). ` +
         (wars.length ? `The ${wars[0]} dominates everything: secure allies and supplies before attempting anything ambitious. ` : "We are at peace, which gives us room to build. ") +
         "My advice: deepen trade with the largest neighbour, invest in infrastructure while borrowing is cheap, and avoid commitments we cannot back with force.";
+      // Most of the time, a chart of the neighbourhood built only from the figures in the context.
+      const nb = (ctx.neighbours ?? []) as { tag: string; gdp: number; military: number; relation: number }[];
+      if (!nb.length || rng() < 0.3) return text;
+      const me = { tag: String(ctx.country), gdp: Math.round(Number(ctx.gdp)), military: Math.round(Number(ctx.military)) };
+      const chart = pick(rng, [
+        { type: "bar", title: "GDP of our neighbourhood", unit: "$bn", labels: [me, ...nb].map((c) => c.tag), series: [{ name: "GDP", values: [me, ...nb].map((c) => c.gdp) }] },
+        { type: "bar", title: "Military strength against our neighbours", labels: [me, ...nb].map((c) => c.tag), series: [{ name: "Military", values: [me, ...nb].map((c) => c.military) }] },
+        { type: "bar", title: "Our relations with our neighbours", labels: nb.map((c) => c.tag), series: [{ name: "Relation", values: nb.map((c) => c.relation) }] },
+      ]);
+      return `${text}\n\n\`\`\`chart\n${JSON.stringify(chart)}\n\`\`\`\n\nThe figures above should frame our next orders.`;
     }
   }
 }

@@ -2,12 +2,12 @@
 
 import {
   addDays, BrainstormOutputSchema, countryAdjacency, countryByTag, countryIndex, formablesFor, formableStatus, getRelation, humanTags,
-  PolishOutputSchema,
+  joinChartParts, PolishOutputSchema, splitChartBlocks,
   type GameState,
 } from "@worldline/shared";
 import type { EngineDeps } from "./api.ts";
 import {
-  calendarBlock, countryBrief, countryDetail, fmtGdp, memoryBlock, nameOf, orderHistoryBlock, recentEventsBlock, treatiesBlock,
+  calendarBlock, countryBrief, countryDetail, fmtGdp, memoryBlock, nameOf, orderHistoryBlock, projectsBlock, recentEventsBlock, treatiesBlock,
 } from "./context.ts";
 import { callJson, callText } from "./llm.ts";
 import { advisorSystem, BRAINSTORM_SYSTEM, POLISH_SYSTEM } from "./prompts.ts";
@@ -50,6 +50,7 @@ export function countryContext(state: GameState, deps: EngineDeps, tag: string) 
     orgs.length ? `MEMBERSHIPS: ${orgs.map((o) => `${o.id} ${o.abbrev}`).join(", ")}` : "",
     pending.length ? `PENDING VOTES: ${pending.join("; ")}` : "",
     formations.length ? `FORMABLE NATIONS: ${formations.join("; ")}` : "",
+    projectsBlock(state, new Set([tag])).replace("PROJECTS (long-running efforts under way; ids for advanceProject/endProject)", "YOUR PROJECTS"),
     `ECONOMY RANK: #${rank(state, tag)} by GDP (${fmtGdp(k.gdp)})`,
     orderHistoryBlock(state, { country: tag }),
     recentEventsBlock(state, { max: 25 }),
@@ -63,17 +64,24 @@ const rank = (state: GameState, tag: string) =>
 export async function advisor(state: GameState, deps: EngineDeps, opts: { country: string; question?: string }) {
   const k = countryByTag(state, opts.country);
   const question = opts.question?.trim();
-  return callText(deps, state, {
+  const idx = countryIndex(state, opts.country);
+  const neighbours = [...(countryAdjacency(state.owners, deps.map).get(idx) ?? [])].map((i) => state.countries[i]).filter((c) => c?.alive)
+    .slice(0, 5).map((c) => ({ tag: c.tag, gdp: Math.round(c.gdp), military: Math.round(c.military), relation: getRelation(state, opts.country, c.tag) }));
+  const text = await callText(deps, state, {
     kind: "advisor",
     system: advisorSystem(k?.name ?? opts.country),
     user: `${countryContext(state, deps, opts.country)}\n\n${question ? `THE LEADER ASKS: ${question}` : "TASK: Give your situation briefing and recommendations."}`,
     maxTokens: 1500,
     temperature: 0.7,
     mockContext: {
-      country: opts.country, name: k?.name, stability: k?.stability, gdp: k?.gdp, question,
+      country: opts.country, name: k?.name, stability: k?.stability, gdp: k?.gdp, military: k?.military, question, neighbours,
       wars: state.wars.filter((w) => [...w.attackers, ...w.defenders].includes(opts.country)).map((w) => w.name),
     },
   });
+  // Clients render chart blocks verbatim, so only ever hand them one valid, compact block.
+  const clean = joinChartParts(splitChartBlocks(text));
+  if (!clean) throw new Error("AI advisor returned an empty reply");
+  return clean;
 }
 
 export async function polish(state: GameState, deps: EngineDeps, opts: { country: string; text: string }) {

@@ -44,7 +44,6 @@ export interface DraftOrder {
 export interface OperationDraft {
   kind: OperationKind;
   regions: number[];
-  divisions: number;
   stance: OperationStance;
   name: string;
   /** Order being edited, if any. */
@@ -60,7 +59,7 @@ export interface ChatWindowState {
   preset?: "peace";
 }
 
-export type LeftTab = "orders" | "advisor" | "orgs" | "formation" | "history";
+export type LeftTab = "orders" | "advisor" | "orgs" | "formation" | "projects" | "history";
 export type FeedTab = "player" | "world" | "annals";
 
 export interface GameStore {

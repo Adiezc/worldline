@@ -101,6 +101,18 @@ export function describeEffects(effects: Effect[], view: Pick<GameView, "countri
       case "cancelScheduled":
         add("A scheduled date is called off");
         break;
+      case "nuclearStrike":
+        add(`${name(e.by)} ${e.scale === "strategic" ? "strategic" : "tactical"} nuclear strike on ${name(e.target)}`, "down");
+        break;
+      case "startProject":
+        add(`${name(e.country)} starts a project: ${e.name}`, "up");
+        break;
+      case "advanceProject":
+        if (Math.round(e.progress)) add(`Project ${e.progress > 0 ? "advances" : "slips"} ${signed(Math.round(e.progress), "%")}`, e.progress > 0 ? "up" : "down");
+        break;
+      case "endProject":
+        add(`Project ${e.outcome}`, e.outcome === "completed" ? "up" : "down");
+        break;
       case "updateAgenda":
         break; // internal to the AI
     }

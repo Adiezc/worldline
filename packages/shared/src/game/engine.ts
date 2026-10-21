@@ -3,8 +3,12 @@
 // in an event legitimises an occupation later in the same event.
 
 import type { MapIndex } from "./mapIndex.ts";
+import { applyNuclearStrike, MAX_STRIKES_PER_TURN, strikeProvince } from "./nuclear.ts";
 import {
-  atWar, countryByTag, countryIndex, daysBetween, getRelation, humanTags, nextId, relKey, warsOf,
+  activeProjects, COMPLETE_AT, MAX_ACTIVE_PROJECTS, MAX_MILESTONES, MAX_NEW_PROJECTS_PER_TURN, MAX_SETBACK, projectPace,
+} from "./projects.ts";
+import {
+  addDays, atWar, countryByTag, countryIndex, daysBetween, getRelation, humanTags, nextId, relKey, warsOf,
   type Difficulty, type Effect, type GameEvent, type GameState, type ScheduledItem, type StatKey,
 } from "./state.ts";
 import { pickColor } from "./colors.ts";
@@ -18,7 +22,7 @@ const UNION_TREATIES = new Set(["alliance", "vassal", "customs_union"]);
 export const DIFFICULTY: Record<Difficulty, { stat: number; occupy: number; wars: number; text: string }> = {
   easy: {
     stat: 1.6, occupy: 1.6, wars: 3,
-    text: "Easy: be generous to the player. Well-reasoned plans usually succeed; setbacks are mild.",
+    text: "Easy: be generous to the player. Well-reasoned plans usually succeed; setbacks are mild. Atrocities and nuclear use still meet the world's full reaction.",
   },
   normal: {
     stat: 1, occupy: 1, wars: 2,
@@ -55,6 +59,12 @@ export interface TurnContext {
   operations?: { orderId: string; country: string; kind: "offensive" | "hold"; allowed: Set<number>; cap: number; used: number }[];
   /** Scenario calendar entries due this turn (ids `cal<index>`), which events may hold too. */
   calendar?: ScheduledItem[];
+  /** Projects started this turn, per country. */
+  projectsStarted?: Map<string, number>;
+  /** Progress granted this turn, per project id. */
+  projectUsed?: Map<string, number>;
+  /** Nuclear strikes made this turn, per country. */
+  nuclearUsed?: Map<string, number>;
 }
 
 export function newTurnContext(days: number, orders: { id: string; country: string }[]): TurnContext {
@@ -414,6 +424,8 @@ export function applyEvent(state: GameState, map: MapIndex, event: GameEvent, ct
         // order, a scheduled vote, or real instability.
         const govLocked = humans.has(k.tag) && !causedBy.has(k.tag) && !heldFor.has(k.tag) && k.stability >= 30;
         k.leader = effect.leader;
+        // A collapsed government's successor is now named.
+        if (state.successions?.some((x) => x.country === k.tag)) state.successions = state.successions.filter((x) => x.country !== k.tag);
         if (effect.government && effect.government !== k.government && govLocked) {
           const { government: _, ...leaderOnly } = effect;
           applied.push(leaderOnly);
@@ -559,6 +571,73 @@ export function applyEvent(state: GameState, map: MapIndex, event: GameEvent, ct
         }
         state.claims = (state.claims ?? []).filter((c) => c.provinces.length);
         if (!dropped) { reject("no such claim"); break; }
+        ok();
+        break;
+      }
+      case "nuclearStrike": {
+        const by = countryByTag(state, effect.by);
+        if (!by?.alive || !alive(effect.target) || effect.by === effect.target) { reject("unknown country"); break; }
+        if (!by.nuclear) { reject(`${effect.by} has no nuclear weapons`); break; }
+        if (!humanOk(effect.by)) { reject(`${effect.by} is player-controlled; it uses nuclear weapons only by its own order`); break; }
+        // A declareWar earlier in the same event counts: effects apply in order.
+        if (!atWar(state, effect.by, effect.target)) { reject(`${effect.by} is not at war with ${effect.target}; declare the war first`); break; }
+        const used = ctx.nuclearUsed ??= new Map();
+        if ((used.get(effect.by) ?? 0) >= MAX_STRIKES_PER_TURN) { reject(`at most ${MAX_STRIKES_PER_TURN} nuclear strikes per country per turn`); break; }
+        const province = strikeProvince(state, effect.target, effect.province);
+        if (!province) { reject(`${effect.target} holds no region to strike`); break; }
+        used.set(effect.by, (used.get(effect.by) ?? 0) + 1);
+        const notes = applyNuclearStrike(state, { turn: state.turn, date: event.date, by: effect.by, target: effect.target, province, scale: effect.scale });
+        // The engine's own tally of the consequences, so players and the next prompt see the real cost.
+        event.body = [event.body, ...notes].filter(Boolean).join(" ");
+        applied.push({ ...effect, province });
+        break;
+      }
+      case "startProject": {
+        if (!alive(effect.country)) { reject("unknown country"); break; }
+        if (humans.has(effect.country) && !causedBy.has(effect.country)) { reject(`${effect.country} is player-controlled; it starts projects only by its own orders`); break; }
+        const active = activeProjects(state, effect.country);
+        if (active.length >= MAX_ACTIVE_PROJECTS) { reject(`${effect.country} already runs ${MAX_ACTIVE_PROJECTS} projects; finish or end one first`); break; }
+        if (active.some((p) => p.name.toLowerCase() === effect.name.trim().toLowerCase())) { reject("a project with this name is already under way"); break; }
+        const started = ctx.projectsStarted ??= new Map();
+        if ((started.get(effect.country) ?? 0) >= MAX_NEW_PROJECTS_PER_TURN) { reject(`at most ${MAX_NEW_PROJECTS_PER_TURN} new projects per country per turn`); break; }
+        started.set(effect.country, (started.get(effect.country) ?? 0) + 1);
+        (state.projects ??= []).push({
+          id: nextId(state, "pj"), country: effect.country, name: effect.name.trim().slice(0, 80), goal: effect.goal.trim().slice(0, 300),
+          started: event.date, due: addDays(event.date, Math.round(effect.months * 30.4)), progress: 0, status: "active",
+          milestones: effect.milestones.slice(0, MAX_MILESTONES).map((text) => ({ text: text.trim().slice(0, 120) })).filter((m) => m.text),
+        });
+        ok();
+        break;
+      }
+      case "advanceProject": {
+        const p = state.projects?.find((x) => x.id === effect.projectId);
+        if (!p || p.status !== "active") { reject("no such active project"); break; }
+        // One project, one pace: several events in a turn share the same allowance.
+        const used = ctx.projectUsed ??= new Map();
+        const pace = projectPace(state, ctx.days);
+        const room = pace - (used.get(p.id) ?? 0);
+        let delta = effect.progress;
+        if (delta > room) { delta = Math.max(0, room); noteClamp(`progress capped at +${pace} per project this turn`); }
+        if (delta < -MAX_SETBACK) { delta = -MAX_SETBACK; noteClamp(`setbacks capped at -${MAX_SETBACK}`); }
+        if (delta > 0) used.set(p.id, (used.get(p.id) ?? 0) + delta);
+        p.progress = round(clamp(p.progress + delta, 0, 100));
+        const m = effect.milestone !== undefined ? p.milestones[effect.milestone] : undefined;
+        if (m && !m.done) m.done = event.date;
+        if (effect.note?.trim()) p.note = effect.note.trim().slice(0, 200);
+        applied.push({ ...effect, progress: delta });
+        break;
+      }
+      case "endProject": {
+        const p = state.projects?.find((x) => x.id === effect.projectId);
+        if (!p || p.status !== "active") { reject("no such active project"); break; }
+        if (effect.outcome === "abandoned" && humans.has(p.country) && !causedBy.has(p.country)) { reject(`${p.country} is player-controlled; only its own orders abandon its projects`); break; }
+        if (effect.outcome === "completed" && p.progress < COMPLETE_AT) { reject(`only ${p.progress}% done; a project completes from ${COMPLETE_AT}%`); break; }
+        p.status = effect.outcome;
+        p.ended = event.date;
+        if (effect.outcome === "completed") {
+          p.progress = 100;
+          for (const ms of p.milestones) ms.done ??= event.date;
+        }
         ok();
         break;
       }

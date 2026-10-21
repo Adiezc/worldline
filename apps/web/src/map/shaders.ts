@@ -110,7 +110,7 @@ vec3 landColor(uint id, vec2 world) {
     float period = 9.0 * max(uDpr, 1.0) / uZoom;
     float aa = 1.0 / (period * uZoom);
     float d = abs(fract((world.x - world.y) / period) - 0.5);
-    c = mix(c, countryColor(mark - 2u) * 0.92, smoothstep(0.24 - aa, 0.24 + aa, d) * 0.9);
+    c = mix(c, countryColor(mark - 2u) * 0.92, smoothstep(0.33 - aa, 0.33 + aa, d) * 0.6);
   }
   if (mark == 1u) {
     // Picked for a peace deal: a gold wash with a fine cross-hatch (unlike occupation's
@@ -416,6 +416,7 @@ uniform float uDashK; // 0 = no dashes
 uniform float uSpeed; // dash march, CSS px per second
 uniform float uGaps;  // 1 = dashed line whose gaps are uDash at alpha uDashK (claim lines)
 uniform float uPeriodPx; // dash period in CSS px (0 = scale with the line width)
+uniform float uAlpha;    // opacity of a gapped line's dashes
 in vec2 vLocal;
 in float vAlong;
 flat in float vLen;
@@ -433,9 +434,11 @@ void main() {
   float e = 1.2 * uDpr / period;
   float dash = smoothstep(0.0, e, u) * (1.0 - smoothstep(0.45, 0.45 + e, u));
   if (uGaps > 0.5) {
-    // Pale, half-clear gaps break up any border underneath, so the line reads as dashed even
-    // where it runs along a drawn frontier.
-    outColor = dash > 0.5 ? vec4(uCore, 1.0) : vec4(uDash * uDashK, uDashK);
+    // Butt ends: round caps would overlap the next segment and bead the translucent line.
+    if (vLocal.x < 0.0 || vLocal.x >= vLen) discard;
+    // Translucent dashes, and faint pale gaps that soften any border underneath so the line
+    // still reads as dashed where it runs along a drawn frontier.
+    outColor = dash > 0.5 ? vec4(uCore * uAlpha, uAlpha) : vec4(uDash * uDashK, uDashK);
     return;
   }
   vec3 c = mix(uCore, uDash, dash * uDashK);

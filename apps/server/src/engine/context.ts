@@ -2,8 +2,8 @@
 // every section is one line per item, capped, and limited to the countries that matter this turn.
 
 import {
-  addDays, computeTiers, countryByTag, countryIndex, DIFFICULTY, getRelation, humanTags, provincesOf,
-  type Country, type GameState, type MapIndex, type ScenarioSeed, type ScheduledItem, type Tiers, type War,
+  activeProjects, addDays, computeTiers, countryByTag, countryIndex, DIFFICULTY, getRelation, humanTags, projectStatus, provincesOf, warCollapse,
+  type Country, type Effect, type GameState, type MapIndex, type ScenarioSeed, type ScheduledItem, type Tiers, type War,
 } from "@worldline/shared";
 
 // ---- formatting ----
@@ -137,9 +137,26 @@ export function warsBlock(state: GameState, map?: MapIndex) {
     const occ = occupationSummary(state, w, map);
     if (occ) s += `; occupation: ${occ}`;
     if (w.calls?.length) s += `; CALLS TO ARMS pending: ${w.calls.map((c) => `${c.tag} (via ${c.via})`).join(", ")}`;
+    const broken = [...w.attackers, ...w.defenders].filter((t) => warCollapse(state, t));
+    if (broken.length) s += `; COLLAPSING, cannot fight on and must seek peace: ${broken.join(", ")}`;
     return s;
   });
   return `WARS:\n${lines.join("\n")}`;
+}
+
+/** Fallen governments awaiting a successor, and every nuclear detonation so far. */
+export function crisisBlock(state: GameState, map?: MapIndex) {
+  const parts: string[] = [];
+  const fallen = (state.successions ?? []).filter((x) => countryByTag(state, x.country)?.alive);
+  if (fallen.length) {
+    parts.push(`GOVERNMENT CRISES (the government fell; a caretaker holds office). This period, say who takes power in each, by coup, resignation, election or junta, with a changeLeader effect for it:\n${fallen.map((x) => `- ${x.country} ${nameOf(state, x.country)}: ${x.previous} fell (turn ${x.since})`).join("\n")}`);
+  }
+  const strikes = state.nuclearStrikes ?? [];
+  if (strikes.length) {
+    const lines = strikes.slice(-12).map((x) => `- ${x.date} ${x.by} → ${x.target}: ${x.scale} strike on ${map ? regionName(map, x.province) : `region ${x.province}`}`);
+    parts.push(`NUCLEAR USE SO FAR (${strikes.length} detonation${strikes.length === 1 ? "" : "s"}; the world remembers and reacts):\n${lines.join("\n")}`);
+  }
+  return parts.join("\n\n");
 }
 
 export function sanctionsBlock(state: GameState, max = 25) {
@@ -308,7 +325,6 @@ export function diplomacyBlock(state: GameState, opts: { involving?: Set<string>
     .filter((c) => !opts.involving || c.members.some((t) => opts.involving!.has(t)))
     .sort((a, b) => b.lastTurn - a.lastTurn)
     .slice(0, opts.maxChats ?? 8);
-  if (!recent.length) return "";
   const blocks = recent.map((c) => {
     const lines = c.messages.slice(-6).map((m) => {
       let line = `  ${m.at} ${m.from}: ${m.text ? `"${clip(m.text.replace(/\s+/g, " "), 260)}"` : "(proposal only)"}`;
@@ -321,10 +337,48 @@ export function diplomacyBlock(state: GameState, opts: { involving?: Set<string>
       }
       return line;
     });
-    return `${c.members.join(" / ")}:\n${lines.join("\n")}`;
+    return `${c.members.join(" / ")}:${c.summary ? `\n  record: ${c.summary}` : ""}\n${lines.join("\n")}`;
   });
-  return `DIPLOMACY (recent talks between governments, latest last; accepted proposals have already taken effect):\n${blocks.join("\n")}`;
+  // Quieter channels still bind: their running record is one line each.
+  const earlier = state.chats
+    .filter((c) => c.summary && c.lastTurn < state.turn - 2 && c.lastTurn >= state.turn - 12)
+    .filter((c) => !opts.involving || c.members.some((t) => opts.involving!.has(t)))
+    .sort((a, b) => b.lastTurn - a.lastTurn)
+    .slice(0, 8)
+    .map((c) => `- ${c.members.join(" / ")} (turn ${c.lastTurn}): ${c.summary}`);
+  if (!blocks.length && !earlier.length) return "";
+  return `DIPLOMACY (recent talks between governments, latest last; accepted proposals have already taken effect):\n${blocks.join("\n")}` +
+    (earlier.length ? `${blocks.length ? "\n" : ""}EARLIER TALKS (running records):\n${earlier.join("\n")}` : "");
 }
+
+const SCHEDULE_LABEL: Record<string, string> = { overdue: "OVERDUE", dueSoon: "due soon", behind: "behind schedule", onTrack: "on track" };
+
+/** Active projects of the given countries (all when omitted), with progress and schedule. */
+export function projectsBlock(state: GameState, involving?: Set<string>, max = 24) {
+  const list = activeProjects(state).filter((p) => !involving || involving.has(p.country));
+  if (!list.length) return "";
+  const lines = cap(list, max).map((p) => {
+    const ms = p.milestones.length ? `; milestones: ${p.milestones.map((m, i) => `${i}${m.done ? "✓" : "·"} ${m.text}`).join(" | ")}` : "";
+    return `${p.id} [${p.country}] "${p.name}": ${p.goal || "no stated goal"}; ${Math.round(p.progress)}% done, due ${p.due} (${SCHEDULE_LABEL[projectStatus(p, state.date)]})${ms}${p.note ? `; latest: ${p.note}` : ""}`;
+  });
+  return `PROJECTS (long-running efforts under way; ids for advanceProject/endProject):\n${lines.join("\n")}${more(list.length, max)}`;
+}
+
+/**
+ * What the rules engine refused or scaled down last turn. Without it the model keeps believing its
+ * own narration (a takeover it wrote but the map never showed), and the story drifts from the state.
+ */
+export function receiptBlock(state: GameState, max = 16) {
+  const last = state.events.filter((e) => e.turn === state.turn - 1 && (e.rejected?.length || e.clamped?.length));
+  const lines = last.flatMap((e) => [
+    ...(e.rejected ?? []).map((r) => `- REFUSED in "${clip(e.headline, 70)}": ${describeEffect(r.effect)} — ${r.reason}`),
+    ...(e.clamped ?? []).map((r) => `- SCALED DOWN in "${clip(e.headline, 70)}": ${describeEffect(r.effect)} — ${r.reason}`),
+  ]);
+  if (!lines.length) return "";
+  return `ENGINE RECEIPT (last turn, these changes did NOT happen as narrated; the state above is the truth):\n${cap(lines, max).join("\n")}${more(lines.length, max)}`;
+}
+
+const describeEffect = (e: Effect) => clip(JSON.stringify(e), 160);
 
 /**
  * What falls due between `from` and `to`: the scenario's calendar (ids `cal<index>`) and the dates
@@ -356,6 +410,8 @@ export const rulesBlock = (seed: ScenarioSeed) => (seed.rules ? `SCENARIO RULES:
 
 export interface WorldContext {
   text: string;
+  /** Length of the prefix of `text` that stays the same from turn to turn (see AiRequest.cacheUpto). */
+  stable: number;
   tiers: Tiers;
   end: string;
   front: FrontRegion[];
@@ -369,25 +425,32 @@ export function worldContext(state: GameState, deps: { map: MapIndex; seed: Scen
   const tiered = new Set([...focus, ...tiers.background]);
   const others = [...topByGdp(state, tiered), ...tiers.background];
   const front = state.wars.flatMap((w) => frontLines(state, map, w));
-  const text = [
-    windowLine(state, days),
+  // Settings, scenario rules and the chronicle rarely change, so they lead: providers that cache
+  // prompt prefixes then reuse them across turns. Everything dated follows.
+  const head = [
     difficultyLine(state),
     behaviourLine(state),
     rulesBlock(seed),
     memoryBlock(state, seed),
+  ].filter(Boolean).join("\n\n");
+  const text = [
+    head,
+    windowLine(state, days),
     countriesBlock(state, focus, others),
     relationsBlock(state, tiered),
     treatiesBlock(state, tiered),
     warsBlock(state, deps.map),
+    crisisBlock(state, map),
     disputesBlock(state, map),
     sanctionsBlock(state),
     orgsBlock(state),
+    projectsBlock(state, new Set([...focus, ...humanTags(state)])),
     regionsBlock(state, map),
     recentEventsBlock(state),
     diplomacyBlock(state),
     calendarBlock(state, seed, state.date, end),
   ].filter(Boolean).join("\n\n");
-  return { text, tiers, end, front };
+  return { text, stable: head.length, tiers, end, front };
 }
 
 /** Relation summary between one country and a list of others, e.g. "DEU +62, FRA +40". */

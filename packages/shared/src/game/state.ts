@@ -29,6 +29,8 @@ export interface Country {
   alive: boolean;
   /** Nuclear-armed; informs AI deterrence reasoning. */
   nuclear?: boolean;
+  /** Turn its government last collapsed (see collapse.ts), so a collapse can't repeat right away. */
+  collapsedTurn?: number;
   /** Capital city: its map position (px) and the region it lies in. null = none (uninhabited entries). */
   capital?: { name: string; x: number; y: number; province: number } | null;
   /**
@@ -144,7 +146,49 @@ export type Effect =
   | { type: "addClaim"; claimant: string; provinces: number[]; note: string }
   | { type: "dropClaim"; claimant: string; provinces?: number[] }
   | { type: "scheduleEvent"; country: string; date: string; kind: CalendarEntry["kind"]; title: string }
-  | { type: "cancelScheduled"; id: string };
+  | { type: "cancelScheduled"; id: string }
+  | { type: "startProject"; country: string; name: string; goal: string; months: number; milestones: string[] }
+  | { type: "advanceProject"; projectId: string; progress: number; milestone?: number; note?: string }
+  | { type: "endProject"; projectId: string; outcome: "completed" | "failed" | "abandoned" }
+  /** A nuclear detonation. The engine works out the casualties and the world's reaction (see nuclear.ts). */
+  | { type: "nuclearStrike"; by: string; target: string; province?: number; scale: NuclearScale };
+
+export type NuclearScale = "tactical" | "strategic";
+
+/** A nuclear detonation that happened, kept for the AI's memory, fallout and escalation. */
+export interface NuclearStrike {
+  id: string;
+  turn: number;
+  date: string;
+  by: string;
+  target: string;
+  province: number;
+  scale: NuclearScale;
+}
+
+/**
+ * A long-running national effort (a programme, megaproject, reform or build-up) that spans many
+ * turns. The resolver starts it from an order and advances it period by period; whether it is
+ * overdue is derived from the game date (see projectStatus), never stored.
+ */
+export interface Project {
+  id: string;
+  country: string;
+  name: string;
+  /** What finishing achieves, concretely. */
+  goal: string;
+  started: string;
+  /** Target completion date. */
+  due: string;
+  /** 0–100. */
+  progress: number;
+  status: "active" | "completed" | "failed" | "abandoned";
+  /** `done`: the date it was reached. */
+  milestones: { text: string; done?: string }[];
+  /** Latest one-line progress note. */
+  note?: string;
+  ended?: string;
+}
 
 export interface GameEvent {
   id: string;
@@ -207,6 +251,8 @@ export interface ChatMessage {
   text: string;
   at: string;
   proposal?: Proposal;
+  /** Sent by an AI government on its own initiative, not as a reply. */
+  unprompted?: boolean;
 }
 
 export type PeaceTerms = "white" | "keep_occupied";
@@ -240,6 +286,11 @@ export interface Chat {
   messages: ChatMessage[];
   /** Turn of the last message, so salience can treat active chat partners as engaged. */
   lastTurn: number;
+  /**
+   * Running record of the whole conversation (asks, offers, promises, refusals), rewritten by the
+   * AI side with each reply, so long negotiations stay consistent after old messages scroll out.
+   */
+  summary?: string;
 }
 
 /**
@@ -280,6 +331,8 @@ export interface UsageStats {
   requests: number;
   promptTokens: number;
   completionTokens: number;
+  /** Prompt tokens the provider served from its cache (older saves lack it). */
+  cachedTokens?: number;
   lastModel?: string;
   failures: number;
 }
@@ -310,6 +363,17 @@ export interface GameState {
   claims?: Claim[];
   /** Dates governments set during the game, until they are held (older saves may lack it). */
   schedule?: ScheduledItem[];
+  /** Every nuclear detonation so far (older saves lack it). */
+  nuclearStrikes?: NuclearStrike[];
+  /**
+   * Governments that collapsed and whose successor the resolver has yet to name (a changeLeader for
+   * the country clears it). `previous` is the fallen leader, for the narrative.
+   */
+  successions?: { country: string; previous: string; since: number }[];
+  /** Turn a collapsing nation last asked a player for terms, keyed "AAA>BBB", so offers don't repeat every turn. */
+  surrenderOffers?: Record<string, number>;
+  /** Long-running national efforts, active and finished (older saves lack it). */
+  projects?: Project[];
   players: Player[];
   /** Pending orders this turn, keyed by player id. */
   orders: Record<string, Order[]>;

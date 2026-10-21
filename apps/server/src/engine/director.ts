@@ -7,7 +7,7 @@ import {
 } from "@worldline/shared";
 import type { EngineDeps } from "./api.ts";
 import {
-  calendarBlock, calendarIn, countriesBlock, diplomacyBlock, disputesBlock, memoryBlock, nameOf, orgsBlock, recentEventsBlock, relationsBlock,
+  calendarBlock, calendarIn, countriesBlock, crisisBlock, diplomacyBlock, disputesBlock, memoryBlock, nameOf, orgsBlock, recentEventsBlock, relationsBlock,
   sanctionsBlock, treatiesBlock, warsBlock, windowEnd, windowLine,
 } from "./context.ts";
 import { makeEvent, spreadDate } from "./game.ts";
@@ -59,12 +59,16 @@ export async function planDirector(state: GameState, deps: EngineDeps, opts: { d
   if (!acting.length) return null;
 
   const scope = new Set([...acting, ...humans]);
+  // The memory changes every few turns and the date every turn: the stable part goes first, so
+  // providers that cache prompt prefixes reuse it from one turn to the next.
+  const stable = memoryBlock(state, deps.seed);
   const user = [
+    stable,
     windowLine(state, opts.days),
-    memoryBlock(state, deps.seed),
     countriesBlock(state, acting, [...humans]).replace("COUNTRIES IN FOCUS:", "ACTING COUNTRIES:"),
     relationsBlock(state, scope),
     warsBlock(state, deps.map),
+    crisisBlock(state, deps.map),
     disputesBlock(state, deps.map, scope),
     treatiesBlock(state, new Set(acting), 30),
     sanctionsBlock(state, 15),
@@ -80,6 +84,7 @@ export async function planDirector(state: GameState, deps: EngineDeps, opts: { d
     schemaName: "DirectorOutput",
     system: directorSystem(state),
     user,
+    cacheUpto: stable.length,
     maxTokens: 6000,
     temperature: 0.8,
     mockContext: {

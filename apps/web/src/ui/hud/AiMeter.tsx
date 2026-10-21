@@ -1,3 +1,4 @@
+import { aiLabel } from "../../game/format.ts";
 import { useGame } from "../../game/store.ts";
 
 /** Top-right: AI provider badge and today's request budget. */
@@ -17,7 +18,7 @@ export function AiMeter() {
           ai.provider === "mock" ? "border-white/20 text-parchment/60" : "border-gold/60 text-gold-bright"
         }`}
       >
-        {ai.provider === "mock" ? "Mock AI" : "OpenRouter"}
+        {aiLabel(ai)}
       </span>
       <div className="w-20">
         <div className="h-1 overflow-hidden rounded-full bg-black/50">

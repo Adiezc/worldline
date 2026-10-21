@@ -11,6 +11,8 @@ export interface AiCallUsage {
   model: string;
   promptTokens: number;
   completionTokens: number;
+  /** Prompt tokens served from the provider's cache (cheaper and faster), when it reports them. */
+  cachedTokens?: number;
 }
 
 export interface AiRequest {
@@ -23,6 +25,11 @@ export interface AiRequest {
   jsonSchema?: unknown;
   /** Structured inputs the mock provider can use to produce semantically valid output. */
   mockContext?: unknown;
+  /**
+   * `user[0, cacheUpto)` is the same from one turn to the next. Providers with explicit prompt
+   * caching put a cache breakpoint there; the system prompt is always treated as cacheable.
+   */
+  cacheUpto?: number;
   maxTokens?: number;
   temperature?: number;
   /** "setting" uses the host's reasoning effort; "off" disables reasoning for speed (the default). */
@@ -37,6 +44,7 @@ export interface AiCallInfo {
   latencyMs: number;
   promptTokens: number;
   completionTokens: number;
+  cachedTokens?: number;
   ok: boolean;
   /** HTTP attempts, including retries and the structured-output fallback. */
   attempts: number;
@@ -49,7 +57,10 @@ export interface AiResponse {
 }
 
 export interface AiProvider {
-  readonly name: "openrouter" | "mock";
+  /** "live" = the router over configured backends (see ai/router.ts). */
+  readonly name: "live" | "openrouter" | "mock";
+  /** Backends with a key configured, e.g. ["openrouter", "anthropic"]; empty for the mock. */
+  readonly configured?: readonly string[];
   complete(req: AiRequest, settings: { modelChain: string[]; reasoningEffort: string }): Promise<AiResponse>;
   /** Requests made today and the daily cap (OpenRouter free tier: 50, or 1000 with credits). */
   quota(): { usedToday: number; dailyLimit: number };
@@ -91,6 +102,8 @@ export interface EngineApi {
   brainstorm(state: GameState, deps: EngineDeps, opts: { country: string }): Promise<string[]>;
   proposeResolution(state: GameState, opts: { orgId: string; proposer: string; resolutionType: ResolutionType; target?: string; text: string }): { ok: boolean; message: string };
   castVote(state: GameState, opts: { resolutionId: string; country: string; vote: "yes" | "no" | "abstain" }): { ok: boolean; message: string };
+  /** The player drops one of its own projects at once. */
+  abandonProject(state: GameState, opts: { country: string; projectId: string; map: MapIndex }): { ok: boolean; message: string };
   /** Rebuild the last resolved turn from its pre-turn snapshot, stopping at `eventId`. */
   intervene(state: GameState, deps: EngineDeps, opts: { snapshot: GameState; eventId: string }): InterveneResult;
 }

@@ -1,12 +1,13 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { GameSummary, HealthResponse, ScenarioInfo } from "@worldline/shared";
 import { api, ApiError } from "../../net/api.ts";
+import { importGame } from "../../net/gameFile.ts";
 import { storage, type RecentGame } from "../../net/storage.ts";
 import { refreshMe, signOut, useAuth } from "../../net/auth.ts";
 import { backdropOf, DEFAULT_SCENARIO, listScenarios, loadSeed, STATIC_START } from "../../net/scenarios.ts";
 import { editorPath, navigate, parseGameRef } from "../../router.ts";
 import { useMap } from "../../store.ts";
-import { fmtDate, fmtShortDate } from "../../game/format.ts";
+import { aiLabel, fmtDate, fmtShortDate } from "../../game/format.ts";
 import { Badge, Button, Field, Spinner } from "../common/ui.tsx";
 import { Icon } from "../common/Icon.tsx";
 import { AuthForm } from "../common/AuthForm.tsx";
@@ -98,7 +99,7 @@ export function MainMenu() {
         <div className="flex min-w-0 flex-col gap-4">
           <AccountCard offline={offline} />
           <JoinCard name={name} offline={offline} />
-          <RecentCard offline={offline} />
+          <RecentCard name={name} offline={offline} />
           <EditorCard scenarioId={selected?.id ?? null} />
         </div>
       </div>
@@ -302,11 +303,34 @@ interface ResumeEntry {
 
 const COUNTRY_NAMES = new Map(STATIC_START.countries.map((c) => [c.tag, c.name]));
 
-function RecentCard({ offline }: { offline: boolean }) {
+function RecentCard({ name, offline }: { name: string; offline: boolean }) {
   const [recent, setRecent] = useState<RecentGame[]>(() => storage.recent());
   const [summaries, setSummaries] = useState<Record<string, GameSummary | null>>({});
   const token = useAuth((s) => s.token);
   const me = useAuth((s) => s.me);
+  const file = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+
+  function pickFile() {
+    if (!name.trim()) return setImportError("Enter your name in the New Game form first.");
+    setImportError(null);
+    file.current?.click();
+  }
+
+  // A file exported from a game's History panel opens as a new game, hosted by whoever joins first.
+  async function importFile(f: File) {
+    storage.setName(name);
+    setImporting(true);
+    setImportError(null);
+    try {
+      const gameId = await importGame(f);
+      navigate(`/game/${encodeURIComponent(gameId)}`);
+    } catch (err) {
+      setImportError(err instanceof ApiError && err.status === 0 ? "The game server is offline." : String((err as Error).message));
+      setImporting(false);
+    }
+  }
 
   useEffect(() => {
     if (token && !offline) void refreshMe();
@@ -340,7 +364,28 @@ function RecentCard({ offline }: { offline: boolean }) {
   }, [entries, offline]);
 
   return (
-    <Card title="Resume" right={token && me ? <span className="text-[10.5px] text-parchment/40">Your games · this device</span> : undefined}>
+    <Card
+      title="Resume"
+      right={
+        <>
+          {token && me && <span className="text-[10.5px] text-parchment/40">Your games · this device</span>}
+          <Button size="sm" variant="ghost" icon="plus" busy={importing} disabled={offline} onClick={pickFile} title="Open a game file exported from the History panel">
+            Import game
+          </Button>
+          <input
+            ref={file}
+            type="file"
+            accept=".json,application/json"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = "";
+              if (f) void importFile(f);
+            }}
+          />
+        </>
+      }
+    >
       {entries.length === 0 ? (
         <p className="text-xs text-parchment/45 italic">{token ? "Games you play will be listed here, on any device." : "Games you play will be listed here."}</p>
       ) : (
@@ -386,6 +431,7 @@ function RecentCard({ offline }: { offline: boolean }) {
           })}
         </ul>
       )}
+      {importError && <p className="mt-2 text-xs text-[#f0b2aa]">{importError}</p>}
     </Card>
   );
 }
@@ -430,7 +476,7 @@ function HealthFooter({ health }: { health: Health }) {
           <span>Server online</span>
           <span className="h-3 w-px bg-panel-edge" />
           <span>
-            AI: <b className="font-semibold text-parchment/90">{health.data.ai === "openrouter" ? "OpenRouter" : "Mock"}</b>
+            AI: <b className="font-semibold text-parchment/90">{aiLabel({ provider: health.data.ai, backends: health.data.backends })}</b>
           </span>
           <span className="h-3 w-px bg-panel-edge" />
           <span>

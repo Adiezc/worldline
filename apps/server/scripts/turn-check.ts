@@ -1,6 +1,7 @@
 // Live check on a copy of a saved game: plan the AI governments ahead, then time the turn itself
 // and list structural changes. The saved game is never modified.
 //   bun scripts/turn-check.ts <gameId>
+import "../src/env.ts";
 import { Database } from "bun:sqlite";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";

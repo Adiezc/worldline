@@ -1,12 +1,9 @@
 // Client glue for battle plans: builds the map overlay (arrows + hold lines) from your orders,
-// the plan being drawn, allies' plans and last turn's results, and sizes plans for the composer.
-import {
-  frontAt, operationRoute, STANCE_LABELS,
-  type GameView, type MapIndex, type MapMeta, type Operation,
-} from "@worldline/shared";
+// the plan being drawn, allies' plans and last turn's results.
+import { operationRoute, STANCE_LABELS, type GameView, type MapIndex, type Operation } from "@worldline/shared";
 import { getMap, type OperationArrow } from "../map/controller.ts";
 import { provinceName, useMap } from "../store.ts";
-import { frontsForView, mapIndexFor } from "./fronts.ts";
+import { mapIndexFor } from "./fronts.ts";
 import { useGame } from "./store.ts";
 
 /** Country indices fighting on `tag`'s side in any war (including itself). */
@@ -54,11 +51,6 @@ function holdPairs(view: GameView, map: MapIndex, tag: string, regions: number[]
   return pairs;
 }
 
-function caption(op: Operation) {
-  const name = op.name?.trim() || "Offensive";
-  return `${name} · ${op.divisions} div`;
-}
-
 /** Push the battle-plan overlay for the current view (cleared outside a game and in the editor). */
 export function pushOperations() {
   const map = getMap();
@@ -73,6 +65,8 @@ export function pushOperations() {
   const idx = mapIndexFor(meta);
   const arrows: OperationArrow[] = [];
   const holds: [number, number][] = [];
+  const colorOf = (tag: string) => view.countries.find((c) => c.tag === tag)?.color ?? "";
+  const nameOf = (op: Operation) => op.name?.trim() || "Offensive";
   const add = (id: string, tag: string, op: Operation, style: OperationArrow["style"]) => {
     if (op.kind === "hold") {
       holds.push(...holdPairs(view, idx, tag, op.regions));
@@ -80,7 +74,10 @@ export function pushOperations() {
     }
     if (op.regions.length < 2) return;
     const route = operationRoute(idx, op.regions);
-    arrows.push({ id, points: routePoints(idx, route), style, label: style === "draft" ? undefined : caption(op) });
+    arrows.push({
+      id, points: routePoints(idx, route), style, color: colorOf(tag),
+      ...(style === "draft" ? {} : { name: nameOf(op), detail: STANCE_LABELS[op.stance] }),
+    });
   };
 
   for (const o of orders) if (o.operation && o.id !== opDraft?.orderId) add(o.id, me, o.operation, "plan");
@@ -96,18 +93,13 @@ export function pushOperations() {
       const route = operationRoute(idx, op.regions);
       let reached = 0;
       for (let i = 1; i < route.length && side.has(view.controllers[route[i]]); i++) reached = i;
-      arrows.push({ id: `done:${v.orderId}`, points: routePoints(idx, route), style: "result", reached, label: `${op.name?.trim() || "Offensive"} · ${reached ? `+${reached}` : "no gain"}` });
+      arrows.push({
+        id: `done:${v.orderId}`, points: routePoints(idx, route), style: "result", color: colorOf(me),
+        reached, name: nameOf(op), detail: reached ? `+${reached}` : "no gain",
+      });
     }
   }
   map.setOperations(arrows, holds.length ? holds : null);
-}
-
-/** Odds for a plan as the composer shows them: your divisions there and the enemy's. */
-export function planOdds(view: GameView, meta: MapMeta, tag: string, regions: number[]) {
-  const { fronts, forces } = frontsForView(view, meta);
-  const at = frontAt(view, fronts, forces, tag, regions);
-  const total = forces.countries[tag]?.total ?? 0;
-  return { total, own: at?.own ?? 0, enemy: at?.enemy ?? 0, enemyTag: at?.enemyTag ?? null };
 }
 
 /** Plain-words order text for a plan (players can add notes after it). */
@@ -115,5 +107,5 @@ export function describeOperation(op: Operation) {
   const names = op.regions.map(provinceName);
   if (op.kind === "hold") return `${op.name?.trim() || "Hold line"}: hold the line at ${names.join(", ")}.`;
   const [from, ...to] = names;
-  return `${op.name?.trim() || "Offensive"}: ${op.divisions} divisions attack from ${from} toward ${to.join(", then ")} (${STANCE_LABELS[op.stance].toLowerCase()}).`;
+  return `${op.name?.trim() || "Offensive"}: attack from ${from} toward ${to.join(", then ")} (${STANCE_LABELS[op.stance].toLowerCase()}).`;
 }

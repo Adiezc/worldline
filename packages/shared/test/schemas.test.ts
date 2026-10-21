@@ -33,7 +33,7 @@ describe("ResolverOutputSchema", () => {
     expect(fx[1]).toMatchObject({ delta: -4.5 });
     expect(fx[4]).toMatchObject({ provinces: [12] });
     expect(r.events[1]).toEqual({ date: "2026-02-03", headline: "Quiet week", body: "", countries: [], causes: [], effects: [] });
-    expect(ResolverOutputSchema.parse({})).toEqual({ orderVerdicts: [], events: [] });
+    expect(ResolverOutputSchema.parse({})).toEqual({ orderVerdicts: [], events: [], outreach: [] });
   });
 
   test("rejects malformed output", () => {
@@ -60,6 +60,7 @@ describe("ResolverOutputSchema", () => {
       declareWar: true, joinWar: true, makePeace: true, spawnCountry: true, annexCountry: true, changeLeader: true, joinOrg: true,
       leaveOrg: true, createOrg: true, proposeResolution: true, applyToOrg: true, imposeSanctions: true, liftSanctions: true,
       updateAgenda: true, addClaim: true, dropClaim: true, scheduleEvent: true, cancelScheduled: true,
+      startProject: true, advanceProject: true, endProject: true, nuclearStrike: true,
     };
     const types = EffectSchema.options.map((o) => o.shape.type.value as string).sort();
     expect(types).toEqual(Object.keys(ALL).sort());
@@ -106,7 +107,7 @@ describe("jsonSchemaOf", () => {
       expect(() => JSON.stringify(js)).not.toThrow();
     }
     const resolver = jsonSchemaOf(ResolverOutputSchema) as { properties: Record<string, unknown> };
-    expect(Object.keys(resolver.properties).sort()).toEqual(["events", "orderVerdicts", "stopDate"]);
+    expect(Object.keys(resolver.properties).sort()).toEqual(["events", "orderVerdicts", "outreach", "stopDate"]);
   });
 });
 

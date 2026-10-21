@@ -6,6 +6,7 @@ import { openChat, respondProposal, sendChat } from "./chat.ts";
 import { createGame } from "./game.ts";
 import { intervene } from "./intervene.ts";
 import { runTurn, startDirectorPlan } from "./pipeline.ts";
+import { abandonProject } from "./projects.ts";
 import { castVote, proposeResolution } from "./votes.ts";
 
 export const engine: EngineApi = {
@@ -20,6 +21,7 @@ export const engine: EngineApi = {
   proposeResolution,
   castVote,
   intervene,
+  abandonProject,
   planDirector: startDirectorPlan,
 };
 

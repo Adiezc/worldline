@@ -3,6 +3,8 @@ import type { Snapshot } from "@worldline/shared";
 import { rewindTo } from "../../game/actions.ts";
 import { fmtDate, fmtShortDate } from "../../game/format.ts";
 import { useGame } from "../../game/store.ts";
+import { errorText } from "../../net/api.ts";
+import { exportGame } from "../../net/gameFile.ts";
 import { Badge, Button, ConfirmDialog, Empty, Panel, SectionTitle } from "../common/ui.tsx";
 import { Icon } from "../common/Icon.tsx";
 
@@ -11,9 +13,27 @@ export function HistoryPanel({ onClose }: { onClose: () => void }) {
   const view = useGame((s) => s.view)!;
   const pending = useGame((s) => !!s.timeTravel && Date.now() - s.timeTravel.at < 20_000);
   const [confirm, setConfirm] = useState<Snapshot | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [exportNote, setExportNote] = useState<string | null>(null);
   const isHost = view.you.isHost;
   const resolving = view.phase === "resolving";
   const snapshots = [...view.snapshots].sort((a, b) => b.turn - a.turn);
+
+  async function download() {
+    setExporting(true);
+    setExportError(null);
+    setExportNote(null);
+    try {
+      const secret = useGame.getState().secret;
+      if (!secret) throw new Error("Reconnect to the game, then export.");
+      const dropped = await exportGame(view.id, view.you.playerId, secret);
+      if (dropped) setExportNote(`To keep the file importable, it leaves out the ${dropped} oldest rewind point${dropped === 1 ? "" : "s"}.`);
+    } catch (err) {
+      setExportError(errorText(err, "The game server"));
+    }
+    setExporting(false);
+  }
 
   return (
     <Panel title="History" subtitle={isHost ? "Rewind the world to an earlier turn" : "Kept by the host"} onClose={onClose} className="h-full" bodyClassName="p-4">
@@ -54,6 +74,16 @@ export function HistoryPanel({ onClose }: { onClose: () => void }) {
             })}
           </ol>
           {resolving && <p className="mt-3 text-[11px] text-parchment/45 italic">Wait for the current turn to finish resolving.</p>}
+
+          <SectionTitle>Saved game</SectionTitle>
+          <p className="text-[11.5px] leading-relaxed text-parchment/55">
+            One file with the world and every saved turn. Import it from the main menu to carry on elsewhere; players pick their countries again.
+          </p>
+          <Button size="sm" variant="secondary" icon="download" className="mt-2" busy={exporting} disabled={resolving} onClick={() => void download()}>
+            Export game
+          </Button>
+          {exportError && <p className="mt-2 text-xs text-[#f0b2aa]">{exportError}</p>}
+          {exportNote && <p className="mt-2 text-xs text-parchment/55">{exportNote}</p>}
         </>
       )}
 

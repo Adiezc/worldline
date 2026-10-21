@@ -7,8 +7,10 @@ import {
   type GameState, type NationChange, type StatKey, type TurnResult,
 } from "@worldline/shared";
 import type { EngineDeps } from "./api.ts";
+import { deliverOutreach } from "./chat.ts";
 import { consolidate, needsConsolidation } from "./consolidate.ts";
 import { calendarIn, windowEnd } from "./context.ts";
+import { collapseGovernments, offerSurrenders } from "./crisis.ts";
 import { proclaimFormables } from "./formation.ts";
 import { planDirector, runDirector, type NpcIntent } from "./director.ts";
 import { makeEvent } from "./game.ts";
@@ -126,6 +128,8 @@ async function resolveTurn(state: GameState, deps: EngineDeps): Promise<Omit<Tur
       countries: [r.tag],
     }));
   }
+  // Once the period's events and the drift are in: governments at rock bottom fall.
+  collapseGovernments(state, toDate);
 
   // Chronological log for playback; effects were already applied in validation order.
   const fresh = state.events.splice(firstEvent).map((e, i) => ({ e, i }));
@@ -142,6 +146,9 @@ async function resolveTurn(state: GameState, deps: EngineDeps): Promise<Omit<Tur
   state.verdictLog = [...(state.verdictLog ?? []), ...res.verdicts.map((v) => ({ ...v, turn, date: fromDate }))].slice(-500);
   state.phase = "orders";
   for (const p of state.players) p.ready = false;
+  // After the turn advances, so the channels count as active in the new one.
+  deliverOutreach(state, res.outreach, toDate);
+  offerSurrenders(state, toDate);
 
   if (needsConsolidation(state, turn)) {
     progress("consolidating");

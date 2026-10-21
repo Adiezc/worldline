@@ -1,13 +1,15 @@
 import type { Country, GameView } from "@worldline/shared";
 import { claimCountry, openDiplomacy, selectCountry, selectOrg, setLeftTab } from "../../game/actions.ts";
-import { fmtGdp, fmtPop, fmtRelation, fmtShortDate, relationWord } from "../../game/format.ts";
+import { fmtRelation, fmtShortDate, relationWord } from "../../game/format.ts";
 import { relationColor, SHOW_DISPUTES } from "../../game/mapModes.ts";
 import { countryMap, focusTag, relationBetween, TREATY_LABELS } from "../../game/selectors.ts";
 import { useGame } from "../../game/store.ts";
 import { getMap } from "../../map/controller.ts";
 import { provinceName, useMap } from "../../store.ts";
-import { Badge, Bar, Button, CountryChip, Empty, Panel, SectionTitle } from "../common/ui.tsx";
+import { Badge, Button, CountryChip, Empty, Panel, SectionTitle } from "../common/ui.tsx";
 import { Flag } from "../common/Flag.tsx";
+import { Government } from "../common/Government.tsx";
+import { NationStats } from "../common/NationStats.tsx";
 import { Icon } from "../common/Icon.tsx";
 import { ForcesSection } from "./ForcesSection.tsx";
 
@@ -53,7 +55,6 @@ function CountryDetails({ view, c }: { view: GameView; c: Country }) {
           )}
         </span>
       }
-      subtitle={`${c.government} · ${c.leader}`}
       actions={
         <button title="Show on map" className="rounded p-1 text-parchment/50 hover:bg-white/5 hover:text-parchment" onClick={() => getMap()?.focusOn({ country: index }, { maxZoom: 1.6 })}>
           <Icon name="map" size={14} />
@@ -73,6 +74,8 @@ function CountryDetails({ view, c }: { view: GameView; c: Country }) {
         </div>
       </div>
 
+      <Government country={c} className="mb-3" />
+
       <RegionLine view={view} tag={c.tag} />
 
       {rel !== null && (
@@ -87,15 +90,7 @@ function CountryDetails({ view, c }: { view: GameView; c: Country }) {
         </div>
       )}
 
-      <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-[12.5px]">
-        <Stat label="GDP" value={fmtGdp(c.gdp)} />
-        <Stat label="Population" value={fmtPop(c.population)} />
-      </dl>
-      <div className="mt-2.5 space-y-2">
-        <Meter label="Stability" value={c.stability} color={c.stability > 60 ? "#6fbf73" : c.stability > 35 ? "#d9a441" : "#d0574d"} />
-        <Meter label="Military" value={c.military} color="#8fa9c9" />
-        <Meter label="War exhaustion" value={c.warExhaustion} color={c.warExhaustion > 50 ? "#d0574d" : "#b98a5a"} />
-      </div>
+      <NationStats country={c} always />
 
       <div className="mt-4 flex flex-wrap gap-1.5">
         {canTake && (
@@ -253,27 +248,6 @@ function CountryDetails({ view, c }: { view: GameView; c: Country }) {
         </button>
       )}
     </Panel>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded border border-panel-edge/30 bg-black/15 px-2.5 py-1.5">
-      <dt className="hud-label text-[9.5px]">{label}</dt>
-      <dd className="mt-0.5 font-display text-[15px] text-parchment tabular-nums">{value}</dd>
-    </div>
-  );
-}
-
-function Meter({ label, value, color }: { label: string; value: number; color: string }) {
-  return (
-    <div>
-      <div className="mb-1 flex justify-between text-[11.5px]">
-        <span className="text-parchment/60">{label}</span>
-        <span className="text-parchment/85 tabular-nums">{Math.round(value)}</span>
-      </div>
-      <Bar value={value} color={color} />
-    </div>
   );
 }
 

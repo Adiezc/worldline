@@ -4,6 +4,8 @@
 //   GET  /api/health            → HealthResponse
 //   POST /api/games             CreateGameRequest → { gameId }          (Authorization optional)
 //   GET  /api/games/:id         → GameSummary
+//   GET  /api/games/:id/export?player=<playerId>  → GameBundle as a file  (host's player id only)
+//   POST /api/games/import      GameBundle (+ optional `name`) → { gameId }   (60 MB max)
 //   GET  /api/scenarios         → ScenarioInfo[]
 //   GET  /api/scenarios/:id     → ScenarioSeed (full, used by the editor and menu previews)
 //   POST /api/scenarios         CustomScenarioRequest → { id }          (Authorization required)
@@ -24,7 +26,9 @@ export const SERVER_PORT = 3001;
 
 export interface HealthResponse {
   ok: true;
-  ai: "openrouter" | "mock";
+  ai: "live" | "openrouter" | "mock";
+  /** Configured AI backends, e.g. ["openrouter", "anthropic"]. */
+  backends: string[];
   /** Local daily cap; 0 = none (OpenRouter's own limits still apply). */
   dailyLimit: number;
   usedToday: number;
@@ -33,6 +37,15 @@ export interface HealthResponse {
 export interface CreateGameRequest {
   name: string;
   scenarioId?: string;
+}
+
+/** A saved game as a single file: the state plus every per-turn snapshot (oldest first), so
+ * rewind keeps working after import. Player ids are replaced by aliases on export. */
+export interface GameBundle {
+  format: "worldline-game/1";
+  exportedAt: string;
+  game: GameState;
+  snapshots: GameState[];
 }
 
 export interface ScenarioInfo {
@@ -95,7 +108,7 @@ export type GameView = Omit<GameState, "orders" | "chats" | "events" | "jumpVote
   snapshots: Snapshot[];
   /** Event ids of the last resolved turn the host may intervene at (empty once new orders exist). */
   intervenable: string[];
-  ai: { provider: "openrouter" | "mock"; usedToday: number; dailyLimit: number };
+  ai: { provider: "live" | "openrouter" | "mock"; backends: string[]; usedToday: number; dailyLimit: number };
   /** Battle plans of human allies (same side of a war) for this turn; enemies' stay hidden. */
   allyOperations: { country: string; orderId: string; operation: Operation }[];
 };
@@ -148,6 +161,7 @@ export type ClientMessage =
   | { t: "proposal.respond"; chatId: string; proposalId: string; accept: boolean }
   | { t: "org.propose"; orgId: string; resolutionType: ResolutionType; target?: string; text: string }
   | { t: "org.vote"; resolutionId: string; vote: "yes" | "no" | "abstain" }
+  | { t: "project.abandon"; projectId: string }
   /** Host: restore the game to the start of an earlier turn (from per-turn snapshots). */
   | { t: "rewind"; turn: number }
   /** Host: stop the last turn at this event; later events are discarded and the date set to it. */
