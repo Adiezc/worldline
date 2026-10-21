@@ -53,6 +53,8 @@ export interface TurnContext {
    * cessions may include land the receiver does not occupy. AI-written events never set it.
    */
   negotiated?: boolean;
+  /** Set only by code applying a signed surrender: these countries consented to being annexed. */
+  surrendered?: Set<string>;
   /**
    * Players' battle plans this turn. An offensive's gains must lie on its axis and stay within its
    * pace; a hold line limits how many of its regions the enemy can take.
@@ -400,7 +402,7 @@ export function applyEvent(state: GameState, map: MapIndex, event: GameEvent, ct
         const owned = state.owners.filter((o) => o === tIdx).length;
         const held = state.owners.filter((o, id) => o === tIdx && state.controllers[id] === bIdx).length;
         const vassal = state.treaties.some((t) => t.type === "vassal" && t.members[0] === by.tag && t.members.includes(target.tag));
-        const voluntary = causedBy.has(target.tag) || unionPairs.has(relKey(target.tag, by.tag));
+        const voluntary = causedBy.has(target.tag) || unionPairs.has(relKey(target.tag, by.tag)) || !!ctx.surrendered?.has(target.tag);
         if (!vassal && !voluntary && !(atWar(state, by.tag, target.tag) && held >= owned * 0.6)) {
           reject("annexation needs a vassal relationship, a voluntary union, or occupation of 60% of the target");
           break;

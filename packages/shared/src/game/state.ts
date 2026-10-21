@@ -287,7 +287,7 @@ export interface ChatMessage {
   unprompted?: boolean;
 }
 
-export type PeaceTerms = "white" | "keep_occupied";
+export type PeaceTerms = "white" | "keep_occupied" | "surrender";
 
 /** Land a peace deal hands over by name, whether or not the receiver occupies it. */
 export interface ProposalCession {
@@ -300,8 +300,13 @@ export interface Proposal {
   id: string;
   kind: "treaty" | "endWar" | "joinOrg" | "custom";
   treatyType?: TreatyType;
-  /** endWar only: "white" returns all occupied land; "keep_occupied" cedes it to whoever holds it. */
+  /**
+   * endWar only: "white" returns all occupied land; "keep_occupied" cedes it to whoever holds it;
+   * "surrender" ends the war with one side's state annexed whole (see `surrender`).
+   */
   peace?: PeaceTerms;
+  /** peace "surrender" only: the country that surrenders and the one that annexes it. */
+  surrender?: { from: string; to: string };
   /** endWar only: regions picked by the proposer that change hands on top of the base terms. */
   cessions?: ProposalCession[];
   members: string[];

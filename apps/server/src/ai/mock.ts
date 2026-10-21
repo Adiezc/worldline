@@ -212,7 +212,7 @@ function director(c: DirectorCtx, rng: Rng) {
   return { intents, agendaUpdates: [], resolutions: [] };
 }
 
-function chat(c: { speaker: string; speakerName: string; player: string; playerName: string; relation: number; hasProposal: boolean; reaction?: "accepted" | "rejected"; peace?: { exhaustion: number; landLost: number; unheldDemand?: number } }) {
+function chat(c: { speaker: string; speakerName: string; player: string; playerName: string; relation: number; hasProposal: boolean; reaction?: "accepted" | "rejected"; peace?: { exhaustion: number; landLost: number; unheldDemand?: number; surrender?: "self" | "enemy" } }) {
   const r = c.relation ?? 0;
   const tone = r > 40 ? "warm" : r > 0 ? "neutral" : r > -40 ? "cold" : "hostile";
   const reply = {
@@ -235,7 +235,10 @@ function chat(c: { speaker: string; speakerName: string; player: string; playerN
   if (c.hasProposal) {
     // Peace is judged on the war, not on friendship: exhausted or losing sides settle.
     // Demands for land the enemy has not taken only pass when this side is close to collapse.
-    const accept = c.peace
+    // Surrendering means ceasing to exist: only a spent state signs it; an enemy's surrender is welcome.
+    const accept = c.peace?.surrender
+      ? c.peace.surrender === "enemy" || c.peace.exhaustion >= 90
+      : c.peace
       ? (c.peace.exhaustion >= 25 || c.peace.landLost > 0) && (!c.peace.unheldDemand || c.peace.exhaustion >= 60)
       : r > 20;
     out.acceptsPlayerProposal = accept;

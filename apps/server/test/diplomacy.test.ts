@@ -73,6 +73,51 @@ describe("deals in chat", () => {
   });
 });
 
+describe("unconditional surrender", () => {
+  const demand = { kind: "endWar" as const, peace: "surrender" as const, members: ["RUS", "UKR"], terms: "Surrender unconditionally." };
+  const ukrLand = (s: GameState) => [...Array(map.count + 1).keys()].filter((id) => id > 0 && s.owners[id] === countryIndex(s, "UKR"));
+
+  test("a collapsing state must sign, and is annexed whole by the winner", async () => {
+    const s = game();
+    s.countries[countryIndex(s, "UKR")].warExhaustion = 100;
+    const land = ukrLand(s);
+    const chatId = engine.openChat(s, { from: "RUS", with: ["UKR"] });
+    // The model would refuse; collapse decides it.
+    await engine.sendChat(s, deps(new ChatScript((out) => { out.acceptsPlayerProposal = false; })), { chatId, playerId: "p1", text: "", proposal: demand });
+    const p = s.chats.find((c) => c.id === chatId)!.messages[0].proposal!;
+    expect(p).toMatchObject({ status: "accepted", peace: "surrender", surrender: { from: "UKR", to: "RUS" } });
+    expect(s.countries[countryIndex(s, "UKR")].alive).toBe(false);
+    for (const id of land) expect(s.owners[id]).toBe(countryIndex(s, "RUS"));
+    expect(s.wars.some((w) => w.attackers.includes("RUS") && w.defenders.includes("UKR"))).toBe(false);
+  });
+
+  test("a state still able to fight refuses, and nothing changes", async () => {
+    const s = game();
+    const land = ukrLand(s);
+    const chatId = engine.openChat(s, { from: "RUS", with: ["UKR"] });
+    await engine.sendChat(s, deps(), { chatId, playerId: "p1", text: "", proposal: demand });
+    expect(s.chats.find((c) => c.id === chatId)!.messages[0].proposal?.status).toBe("rejected");
+    expect(ukrLand(s)).toEqual(land);
+  });
+
+  test("an AI may offer its own surrender, never demand a player's", async () => {
+    const s = game();
+    const chatId = engine.openChat(s, { from: "RUS", with: ["UKR"] });
+    const ai = new ChatScript((out) => { out.proposal = { kind: "endWar", peace: "surrender", members: ["UKR", "RUS"], terms: "We lay down our arms." }; });
+    await engine.sendChat(s, deps(ai), { chatId, playerId: "p1", text: "Give up." });
+    const offer = lastMessage(s, chatId).proposal!;
+    expect(offer.surrender).toEqual({ from: "UKR", to: "RUS" });
+    engine.respondProposal(s, { chatId, proposalId: offer.id, byTag: "RUS", accept: true, map });
+    expect(s.countries[countryIndex(s, "UKR")].alive).toBe(false);
+
+    // Russia is a player: Ukraine's government cannot be handed Russia's surrender to sign.
+    const t = game("UKR");
+    const id2 = engine.openChat(t, { from: "UKR", with: ["RUS"] });
+    await expect(engine.sendChat(t, deps(), { chatId: id2, playerId: "p1", text: "", proposal: { ...demand, members: ["UKR", "RUS"], surrender: { from: "UKR", to: "RUS" } } }))
+      .rejects.toThrow(/cannot be surrendered/);
+  });
+});
+
 describe("answers to decisions", () => {
   test("the AI that made an offer answers when the player accepts or rejects it", async () => {
     const s = game("GBR");
@@ -91,6 +136,40 @@ describe("answers to decisions", () => {
     engine.respondProposal(s, { chatId, proposalId: "pb", byTag: "GBR", accept: false, map });
     await engine.reactToDecision(s, deps(), { chatId, proposalId: "pb", byTag: "GBR" });
     expect(lastMessage(s, chatId)).toMatchObject({ from: "DEU", text: expect.stringMatching(/regrets/) });
+  });
+
+  test("refusals do not loop: the same deal is never re-offered, and counters stop after two refusals", async () => {
+    const s = game();
+    // An AI that answers every refusal with a peace of the given type, as Ukraine did in a real game.
+    let peace = "keep_occupied";
+    const ai = new ChatScript((out) => { out.proposal = { kind: "endWar", peace, members: ["UKR", "RUS"], terms: "A ceasefire." }; });
+    const talks = () => {
+      const chatId = engine.openChat(s, { from: "RUS", with: ["UKR"] });
+      const chat = s.chats.find((c) => c.id === chatId)!;
+      chat.messages.push({
+        id: `m${chatId}`, from: "UKR", text: "Freeze the front.", at: s.date,
+        proposal: { id: `p${chatId}`, kind: "endWar", peace: "keep_occupied", members: ["UKR", "RUS"], terms: "A ceasefire.", status: "open", awaiting: ["RUS"] },
+      });
+      const refuseLast = async () => {
+        const p = chat.messages.filter((m) => m.proposal?.status === "open").at(-1)!.proposal!;
+        engine.respondProposal(s, { chatId, proposalId: p.id, byTag: "RUS", accept: false, map });
+        await engine.reactToDecision(s, deps(ai), { chatId, proposalId: p.id, byTag: "RUS" });
+        return lastMessage(s, chatId).proposal;
+      };
+      return { chat, refuseLast };
+    };
+
+    // Re-offering the deal just refused is no counter at all.
+    expect(await talks().refuseLast()).toBeUndefined();
+
+    // A different deal is a real counter; once that is refused too, the AI waits for the player's terms.
+    s.chats = [];
+    const { chat, refuseLast } = talks();
+    peace = "white";
+    expect(await refuseLast()).toMatchObject({ peace: "white", status: "open" });
+    peace = "keep_occupied";
+    expect(await refuseLast()).toBeUndefined();
+    expect(chat.messages.filter((m) => m.proposal?.status === "open")).toHaveLength(0);
   });
 
   test("nobody answers a player's own proposal, or one still open", async () => {

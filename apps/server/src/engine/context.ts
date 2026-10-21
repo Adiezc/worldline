@@ -350,7 +350,7 @@ export function diplomacyBlock(state: GameState, opts: { involving?: Set<string>
       const p = m.proposal;
       if (p) {
         const what = p.kind === "endWar"
-          ? `peace treaty${p.cessions?.length ? ` (${p.cessions.map((x) => `${x.from} cedes ${x.provinces.length} region(s) to ${x.to}`).join("; ")})` : p.peace === "keep_occupied" ? " (each side keeps what it holds)" : " (white peace)"}`
+          ? p.peace === "surrender" && p.surrender ? `unconditional surrender (${p.surrender.from} annexed by ${p.surrender.to})` : `peace treaty${p.cessions?.length ? ` (${p.cessions.map((x) => `${x.from} cedes ${x.provinces.length} region(s) to ${x.to}`).join("; ")})` : p.peace === "keep_occupied" ? " (each side keeps what it holds)" : " (white peace)"}`
           : p.kind === "treaty" ? `${p.treatyType ?? "treaty"}` : p.kind;
         line += `\n    PROPOSAL ${what} among ${p.members.join(", ")}: ${p.status.toUpperCase()}${p.status === "open" && p.awaiting.length ? ` (awaiting ${p.awaiting.join(", ")})` : ""}`;
       }

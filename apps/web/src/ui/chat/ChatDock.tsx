@@ -69,7 +69,7 @@ function ChatWindow({ chat, win, view }: { chat: Chat; win: ChatWindowState; vie
   }, [chat.messages.length, win.minimized, typing, pending, streamed]);
 
   return (
-    <section className={`hud-panel pointer-events-auto flex ${group ? "w-[330px]" : "w-[300px]"} flex-col overflow-hidden animate-hud-in ${win.minimized ? "h-10" : "h-[440px] max-h-[calc(100vh-140px)]"}`}>
+    <section className={`hud-panel pointer-events-auto flex ${group ? "w-[330px]" : "w-[300px]"} flex-col overflow-hidden animate-hud-in ${win.minimized ? "h-10" : `${win.builder ? "h-[640px]" : "h-[440px]"} max-h-[calc(100vh-140px)]`}`}>
       <header className="flex h-10 shrink-0 cursor-pointer items-center gap-2 border-b border-panel-edge/50 px-3" onClick={() => toggleChatMinimized(chat.id)}>
         <div className="flex items-center -space-x-1.5">
           {group && <Icon name="users" size={14} className="mr-2.5 text-gold" />}
@@ -120,7 +120,8 @@ function ChatWindow({ chat, win, view }: { chat: Chat; win: ChatWindowState; vie
       )}
       {!win.minimized && (
         <>
-          <div ref={listRef} className="hud-scroll min-h-0 flex-1 space-y-2.5 px-3 py-2.5">
+          {/* Never squeezed to nothing by an open proposal builder: a few lines stay visible. */}
+          <div ref={listRef} className="hud-scroll min-h-24 flex-1 space-y-2.5 px-3 py-2.5">
             {chat.messages.length === 0 && <p className="py-6 text-center text-[11.5px] text-parchment/40 italic">The line is open. Speak, envoy.</p>}
             {chat.messages.map((m) => (
               <Message key={m.id} m={m} chatId={chat.id} view={view} mine={m.from === me} />
@@ -218,6 +219,7 @@ function Message({ m, chatId, view, mine }: { m: ChatMessage; chatId: string; vi
 const PEACE_LABELS: Record<PeaceTerms, { label: string; terms: string }> = {
   white: { label: "Returns to owner", terms: "All other occupied territory returns to its pre-war owner." },
   keep_occupied: { label: "Stays with holder", terms: "Each side keeps the other territory it occupies when the fighting stops." },
+  surrender: { label: "Unconditional surrender", terms: "The enemy surrenders unconditionally; its state is dissolved and all of its territory annexed." },
 };
 
 const KIND_LABELS: Record<Proposal["kind"], string> = { treaty: "Treaty", endWar: "Peace treaty", joinOrg: "Membership", custom: "Agreement" };
@@ -283,6 +285,20 @@ function ProposalCard({ p, chatId, view }: { p: Proposal; chatId: string; view: 
         </Badge>
       </div>
       <p className="mt-1.5 text-[12px] leading-snug whitespace-pre-line text-parchment/85 select-text">{p.terms}</p>
+      {p.kind === "endWar" && (
+        <div className="mt-1 flex items-start gap-1.5 text-[11px] leading-snug text-gold/90" title="What the treaty does to the map, whatever the wording above says">
+          <Icon name="map" size={12} className="mt-0.5 shrink-0" />
+          <span>
+            {p.peace === "surrender" && p.surrender
+              ? `On the map: ${countryMap(view.countries).get(p.surrender.from)?.name ?? p.surrender.from} is annexed whole by ${countryMap(view.countries).get(p.surrender.to)?.name ?? p.surrender.to}.`
+              : p.cessions?.length
+              ? "On the map: the named regions change hands; other occupied land stays with whoever holds it."
+              : p.peace === "keep_occupied"
+                ? "On the map: each side keeps the land it occupies now."
+                : "On the map: all occupied land returns to its pre-war owner."}
+          </span>
+        </div>
+      )}
       {p.cessions?.map((c) => (
         <button
           key={`${c.from}>${c.to}`}
@@ -476,9 +492,16 @@ function Composer({ chat, win, view, speaker }: { chat: Chat; win: ChatWindowSta
 
   if (!me) return <div className="border-t border-panel-edge/40 px-3 py-2 text-[11px] text-parchment/40 italic">Spectators cannot speak.</div>;
 
-  const cessions = peaceOpen && fight ? cessionsFor(view, me, fight.enemies, members, picked) : [];
+  // Only an AI government can be made to surrender: the enemy leading the war at the table, else any.
+  const humans = new Set(view.players.map((p) => p.country).filter(Boolean));
+  const enemyLead = fight && (fight.war.attackers.includes(fight.enemies[0]) ? fight.war.attackers[0] : fight.war.defenders[0]);
+  const yieldable = fight?.enemies.filter((t) => members.includes(t) && !humans.has(t)) ?? [];
+  const yielder = yieldable.find((t) => t === enemyLead) ?? yieldable[0];
+  const surrendering = peace === "surrender" && !!yielder;
+  // A surrender takes everything, so regions picked on the map do not apply to it.
+  const cessions = peaceOpen && fight && !surrendering ? cessionsFor(view, me, fight.enemies, members, picked) : [];
   // Naming land keeps the front where it stands too (the server applies the same rule).
-  const peaceTerms: PeaceTerms = cessions.length ? "keep_occupied" : peace;
+  const peaceTerms: PeaceTerms = surrendering ? "surrender" : cessions.length ? "keep_occupied" : peace === "surrender" ? "white" : peace;
   const unheldCount = cessions.reduce((n, c) => n + (c.to === me ? unheld(view, fight?.war, c).length : 0), 0);
 
   const submit = () => {
@@ -490,6 +513,7 @@ function Composer({ chat, win, view, speaker }: { chat: Chat; win: ChatWindowSta
       ? {
         kind, treatyType: kind === "treaty" ? treatyType : undefined, peace: kind === "endWar" ? peaceTerms : undefined,
         cessions: kind === "endWar" && cessions.length ? cessions : undefined, members, terms: peaceText,
+        surrender: kind === "endWar" && surrendering && yielder ? { from: yielder, to: me } : undefined,
       }
       : undefined;
     if ((!text.trim() && !proposal) || turning) return;
@@ -504,7 +528,7 @@ function Composer({ chat, win, view, speaker }: { chat: Chat; win: ChatWindowSta
   return (
     <div className="shrink-0 border-t border-panel-edge/40 p-2">
       {win.builder && (
-        <div className="hud-scroll mb-2 max-h-80 space-y-2 rounded border border-gold/40 bg-gold/[0.04] p-2">
+        <div className="hud-scroll mb-2 max-h-[min(24rem,calc(100vh-380px))] space-y-2 rounded border border-gold/40 bg-gold/[0.04] p-2">
           <div className="grid grid-cols-2 gap-2">
             <Field label="Kind">
               <select className="hud-input py-1 text-[12px]" value={kind} onChange={(e) => setKind(e.target.value as Proposal["kind"])}>
@@ -516,12 +540,15 @@ function Composer({ chat, win, view, speaker }: { chat: Chat; win: ChatWindowSta
               </select>
             </Field>
             {kind === "endWar" && (
-              <Field label="Other occupied land" hint={cessions.length ? "With regions named, each side also keeps what it holds." : undefined}>
+              <Field
+                label={surrendering ? "Peace terms" : "Other occupied land"}
+                hint={surrendering ? `${byTag.get(yielder!)?.name ?? yielder} would be annexed whole. Only a state close to collapse signs this.` : cessions.length ? "With regions named, each side also keeps what it holds." : undefined}
+              >
                 <select
                   className="hud-input py-1 text-[12px]" value={peaceTerms} disabled={cessions.length > 0}
                   onChange={(e) => setPeace(e.target.value as PeaceTerms)}
                 >
-                  {Object.entries(PEACE_LABELS).map(([k, l]) => (
+                  {Object.entries(PEACE_LABELS).filter(([k]) => k !== "surrender" || yielder).map(([k, l]) => (
                     <option key={k} value={k}>
                       {l.label}
                     </option>
@@ -561,7 +588,7 @@ function Composer({ chat, win, view, speaker }: { chat: Chat; win: ChatWindowSta
               })}
             </div>
           </div>
-          {peaceOpen && (
+          {peaceOpen && !surrendering && (
             <TerritoryPicker
               view={view}
               me={me}

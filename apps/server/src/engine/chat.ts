@@ -87,6 +87,8 @@ export async function sendChat(
         // Named regions the speaker would give up that the other side does not even hold.
         unheldDemand: (proposal.cessions ?? []).filter((c) => c.from === speaker)
           .reduce((n, c) => n + c.provinces.filter((id) => state.controllers[id] === state.owners[id]).length, 0),
+        // Who would be annexed, if anyone: the speaker itself, or its enemy.
+        surrender: proposal.surrender ? (proposal.surrender.from === speaker ? "self" : "enemy") : undefined,
       } : undefined,
     },
   }, ChatOutputSchema);
@@ -144,11 +146,13 @@ export function deliverOutreach(state: GameState, outreach: Outreach[], date: st
     if (p) {
       // A deal between the two governments in the channel: nobody else has agreed to it.
       const members = [o.from, o.to];
-      const valid = p.kind !== "endWar" || !!warBetween(state, [o.from, o.to]);
+      const war = p.kind === "endWar" ? warBetween(state, [o.from, o.to]) : undefined;
+      const surrender = war && p.peace === "surrender" ? surrenderTerms(war, members, o.from, o.from) : undefined;
+      const valid = p.kind !== "endWar" || (!!war && (p.peace !== "surrender" || !!surrender));
       if (valid) {
         msg.proposal = {
           id: nextId(state, "p"), kind: p.kind, treatyType: p.kind === "treaty" ? p.treatyType ?? "nonaggression" : p.treatyType,
-          peace: p.kind === "endWar" ? p.peace ?? "white" : undefined, members, terms: p.terms.trim().slice(0, 1000),
+          peace: p.kind === "endWar" ? p.peace ?? "white" : undefined, surrender, members, terms: p.terms.trim().slice(0, 1000),
           status: "open", awaiting: members.filter((m) => humans.has(m)),
         };
       }
@@ -174,9 +178,12 @@ function aiProposal(state: GameState, chat: Chat, speaker: string, p: NonNullabl
   if (p.kind === "endWar" && !warBetween(state, members)) return undefined;
   const humanMembers = chat.members.filter((m) => humans.has(m));
   const awaiting = humanMembers.filter((m) => members.includes(m));
+  // An AI can only offer its own surrender: it never demands a player sign their country away.
+  const surrender = p.kind === "endWar" && p.peace === "surrender" ? surrenderTerms(warBetween(state, members)!, members, speaker, speaker) : undefined;
+  if (p.kind === "endWar" && p.peace === "surrender" && !surrender) return undefined;
   return {
     id: nextId(state, "p"), kind: p.kind, treatyType: p.treatyType,
-    peace: p.kind === "endWar" ? p.peace ?? "white" : undefined, members,
+    peace: p.kind === "endWar" ? p.peace ?? "white" : undefined, surrender, members,
     terms: p.terms, status: "open", awaiting: awaiting.length ? awaiting : humanMembers,
   };
 }
@@ -196,8 +203,17 @@ export async function reactToDecision(state: GameState, deps: EngineDeps, opts: 
   const accepted = p.status === "accepted";
   const them = nameOf(state, opts.byTag);
   const present = chat.members.length > 2 ? chat.members.filter((m) => m !== speaker).map((t) => `${nameOf(state, t)} (${t})`) : undefined;
+  // One counter-offer per refusal streak: without a cap, every rejection drew another offer and the
+  // chat looped on deals the player had already turned down.
+  const turnedDown = chat.messages.filter((m) => m.from === speaker && m.at === state.date && m.proposal?.status === "rejected").length;
+  const mayCounter = !accepted && turnedDown < MAX_COUNTERS;
+  const reaction = accepted
+    ? "acknowledge the agreement and what comes next; make no new proposal"
+    : mayCounter
+      ? "react to the refusal in character; if your interests call for it, you may put a DIFFERENT offer on the table (the same kind and peace type again will be dropped)"
+      : `react to the refusal in character and make NO new proposal: ${them} has turned down ${turnedDown} of your offers already; say your offer stands or that you await their terms`;
   const task = `TASK: ${them} has just ${accepted ? "ACCEPTED your proposal; it has taken effect" : "REJECTED your proposal"} (${p.kind}: ${p.terms}). ` +
-    `Reply as ${nameOf(state, speaker)} in 1-2 sentences, as a counterpart would: ${accepted ? "acknowledge the agreement and what comes next; make no new proposal" : "react to the refusal in character; if your interests call for it, you may put a different offer on the table"}. Omit acceptsPlayerProposal.`;
+    `Reply as ${nameOf(state, speaker)} in 1-2 sentences, as a counterpart would: ${reaction}. Omit acceptsPlayerProposal.`;
   const out = await callJson(deps, state, {
     kind: "chat",
     schemaName: "ChatOutput",
@@ -214,12 +230,22 @@ export async function reactToDecision(state: GameState, deps: EngineDeps, opts: 
   const delta = Math.max(-5, Math.min(5, Math.round(out.relationDelta)));
   if (delta) state.relations[relKey(speaker, opts.byTag)] = Math.max(-100, Math.min(100, getRelation(state, speaker, opts.byTag) + delta));
   const reply: ChatMessage = { id: nextId(state, "m"), from: speaker, text: out.reply.trim(), at: state.date };
-  if (!accepted && out.proposal) reply.proposal = aiProposal(state, chat, speaker, out.proposal);
+  const counter = mayCounter && out.proposal ? aiProposal(state, chat, speaker, out.proposal) : undefined;
+  if (counter && !sameDeal(counter, p)) reply.proposal = counter;
   chat.messages.push(reply);
   chat.lastTurn = state.turn;
   const memory = out.memory?.replace(/\s+/g, " ").trim();
   if (memory) chat.summary = memory.slice(0, 600);
   return true;
+}
+
+/** Offers an AI may make in a row on one day before it waits for the player's own terms. */
+const MAX_COUNTERS = 2;
+
+/** The same deal in mechanical terms, whatever the wording: re-offering it is no counter at all. */
+function sameDeal(a: Proposal, b: Proposal) {
+  return a.kind === b.kind && a.treatyType === b.treatyType && (a.peace ?? "white") === (b.peace ?? "white")
+    && a.surrender?.from === b.surrender?.from && !a.cessions?.length && !b.cessions?.length;
 }
 
 export function respondProposal(
@@ -253,7 +279,22 @@ function draftToProposal(state: GameState, map: MapIndex, chat: Chat, from: stri
   // Only governments at the table can be bound by what is agreed there.
   const absent = members.filter((t) => !chat.members.includes(t));
   if (absent.length) throw new ProposalError(`${absent.map((t) => nameOf(state, t)).join(", ")} ${absent.length === 1 ? "is" : "are"} not part of this conversation.`);
-  let peace = d.kind === "endWar" ? (d.peace === "keep_occupied" ? "keep_occupied" : "white") as PeaceTerms : undefined;
+  let peace = d.kind === "endWar" ? (d.peace === "keep_occupied" || d.peace === "surrender" ? d.peace : "white") as PeaceTerms : undefined;
+  if (peace === "surrender") {
+    const war = warBetween(state, members);
+    if (!war) throw new ProposalError("There is no war between these parties.");
+    const enemySide = war.attackers.includes(from) ? war.defenders : war.attackers;
+    const loser = d.surrender?.from ?? members.find((t) => t === enemySide[0]) ?? members.find((t) => enemySide.includes(t));
+    if (!loser || !members.includes(loser)) throw new ProposalError("Name the side that surrenders.");
+    // A player's country is only given up by that player's own orders, never by a chat button.
+    if (humans.has(loser)) throw new ProposalError("A player's country cannot be surrendered in talks.");
+    const surrender = surrenderTerms(war, members, loser, from);
+    if (!surrender) throw new ProposalError(`${nameOf(state, loser)} is not fighting anyone at this table.`);
+    return {
+      id: nextId(state, "p"), kind: "endWar", peace, surrender, members, terms: d.terms.trim().slice(0, 1000), status: "open",
+      awaiting: members.filter((m) => m !== from && humans.has(m)),
+    };
+  }
   const cessions = d.kind === "endWar" ? draftCessions(state, map, members, d.cessions) : undefined;
   // A deal that names land keeps the front where it stands too: handing back occupied regions while
   // taking the land behind them left the loser holding a strip inside the winner's new territory.
@@ -265,6 +306,17 @@ function draftToProposal(state: GameState, map: MapIndex, chat: Chat, from: stri
     // Every other human party signs for itself; humans present but not party to it have no say.
     awaiting: members.filter((m) => m !== from && humans.has(m)),
   };
+}
+
+/**
+ * Who annexes a surrendering country: its enemies' war leader when at the table, else the
+ * proposer if on that side, else the first enemy present. Undefined when no enemy is present.
+ */
+function surrenderTerms(war: War, members: string[], loser: string, proposer: string): { from: string; to: string } | undefined {
+  const winners = war.attackers.includes(loser) ? war.defenders : war.defenders.includes(loser) ? war.attackers : [];
+  const present = members.filter((t) => winners.includes(t));
+  const to = present.find((t) => t === winners[0]) ?? present.find((t) => t === proposer) ?? present[0];
+  return to ? { from: loser, to } : undefined;
 }
 
 const warBetween = (state: GameState, members: string[]) =>
@@ -438,6 +490,7 @@ export function applyProposal(state: GameState, map: MapIndex, chat: Chat, p: Pr
   let effect: Effect | undefined;
   let cessions: Effect[] = [];
   let negotiated = false;
+  let surrendered: string | undefined;
   let headline = `${joined} reach an agreement`;
 
   switch (p.kind) {
@@ -451,6 +504,13 @@ export function applyProposal(state: GameState, map: MapIndex, chat: Chat, p: Pr
       const war = warBetween(state, p.members);
       if (!war) return { ok: false, message: "There is no war between these parties." };
       effect = { type: "makePeace", warId: war.id, terms: p.terms };
+      if (p.peace === "surrender") {
+        if (!p.surrender) return { ok: false, message: "The surrender names no one." };
+        cessions = [{ type: "annexCountry", by: p.surrender.to, target: p.surrender.from }];
+        surrendered = p.surrender.from;
+        headline = `${nameOf(state, p.surrender.from)} surrenders unconditionally and is annexed by ${nameOf(state, p.surrender.to)}`;
+        break;
+      }
       // Regions named in the deal go where it says; "keep what you hold" covers the rest.
       const named = new Set((p.cessions ?? []).flatMap((c) => c.provinces));
       const kept = p.peace === "keep_occupied" || named.size > 0
@@ -492,11 +552,17 @@ export function applyProposal(state: GameState, map: MapIndex, chat: Chat, p: Pr
   const ctx = newTurnContext(30, parties.map((h, i) => ({ id: causes[i], country: h })));
   // Both sides signed off on exactly these regions, so they may include unoccupied land.
   ctx.negotiated = negotiated;
+  // The surrendering government signed its own annexation.
+  if (surrendered) ctx.surrendered = new Set([surrendered]);
   const ev = makeEvent(state, {
     date: state.date, headline, body: p.terms, countries: p.members, causes: causes.length ? causes : [`chat:${chat.id}`],
     effects: effect ? [effect, ...cessions] : [], scope: "player",
   });
   applyEvent(state, map, ev, ctx);
+  if (surrendered && !ev.effects.some((e) => e.type === "annexCountry")) {
+    // The surrendering side consented, so the rules should never refuse this; flag it if they do.
+    console.warn(`[chat] surrender of ${surrendered} signed but the annexation was refused: ${(ev.rejected ?? []).map((r) => r.reason).join("; ")}`);
+  }
   if (effect && !ev.effects.length) {
     return { ok: false, message: `The agreement could not take effect: ${(ev.rejected ?? []).map((r) => r.reason).join("; ")}` };
   }
@@ -529,6 +595,9 @@ export function occupiedCessions(state: GameState, war: War): Effect[] {
 function describePeace(state: GameState, p: Proposal, map?: MapIndex) {
   const war = warBetween(state, p.members);
   if (!war) return "no war exists between these parties";
+  if (p.peace === "surrender" && p.surrender) {
+    return `UNCONDITIONAL SURRENDER: ${p.surrender.from} ceases to exist as a state; ALL of its territory, people and economy are annexed by ${p.surrender.to}, and the war ends`;
+  }
   let base: string;
   // Named cessions imply keeping what each side holds (older saves may still say "white").
   if (p.peace !== "keep_occupied" && !p.cessions?.length) base = "otherwise white peace: every other occupied region returns to its owner";
