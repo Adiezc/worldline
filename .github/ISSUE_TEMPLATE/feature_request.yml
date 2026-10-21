@@ -1,0 +1,23 @@
+name: Feature request
+description: Suggest something new for the game, the editor or the tools.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you'd like to do
+      description: Describe it from the player's side. What would you do in the game, and what should happen?
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: The situation where you missed it, or the kind of game it would make possible.
+    validations:
+      required: true
+  - type: textarea
+    id: how
+    attributes:
+      label: Ideas for how it could work
+      description: Optional. Rules, UI, prompts, anything you've thought about.

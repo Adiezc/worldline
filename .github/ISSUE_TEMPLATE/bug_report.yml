@@ -1,0 +1,56 @@
+name: Bug report
+description: Something in the game or the tools doesn't work as it should.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to reproduce
+      description: Steps from the main menu, or the orders and turn where it happened.
+      placeholder: |
+        1. Start a Modern Day game as France
+        2. Order "..."
+        3. End the turn
+    validations:
+      required: true
+  - type: dropdown
+    id: ai
+    attributes:
+      label: AI backend
+      options:
+        - Offline mock
+        - OpenRouter
+        - Anthropic
+        - OpenAI
+        - Gemini
+        - Local model
+        - Not sure
+    validations:
+      required: true
+  - type: input
+    id: model
+    attributes:
+      label: Model chain
+      description: As shown in the lobby, if it matters.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Server log or browser console
+      description: Paste the relevant lines. Remove any API keys first.
+      render: text
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      description: Bun version, OS, browser, and the commit you're on (`git rev-parse --short HEAD`).
+  - type: markdown
+    attributes:
+      value: |
+        A game export (History panel → Export game) helps a lot with turn and AI bugs. It includes the game's chats and orders, so check it before attaching. Security problems go through [private reporting](https://github.com/gazarrillo/worldline/security/advisories/new), not issues.
