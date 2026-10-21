@@ -7,6 +7,7 @@ import { LabelLayer } from "./labelLayer.ts";
 import { CounterLayer } from "./counterLayer.ts";
 import { OperationLayer } from "./operationLayer.ts";
 import { CapitalLayer } from "./capitalLayer.ts";
+import { LakeIndex, parseLakes } from "./lakes.ts";
 import { getTheme, theme } from "./theme.ts";
 import type { WorkerRequest, WorkerResponse } from "./map.worker.ts";
 import { emitMapClick, getPaintHandler, getPickHandler, publishMap, type FocusOptions, type FocusTarget, type MapController } from "./controller.ts";
@@ -36,6 +37,7 @@ export function MapView() {
     const operations = new OperationLayer(labelCanvas);
     const capitals = new CapitalLayer(labelCanvas);
     let ids: Uint16Array | null = null;
+    let lakes: LakeIndex | null = null;
     let meta: MapMeta | null = null;
     let dirty = true;
     // Only the 2D overlay changed (counter hover / tooltip).
@@ -314,6 +316,17 @@ export function MapView() {
           dirty = true;
         })
         .catch((e) => console.warn("Province mesh unavailable:", e));
+      // Lakes: water drawn over the land, and treated as sea when picking. The map works without them.
+      fetch("/map/lakes.mesh.bin")
+        .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`lakes.mesh.bin: ${r.status}`))))
+        .then((buf) => {
+          if (disposed) return;
+          const mesh = parseLakes(buf);
+          renderer.setLakes(mesh);
+          lakes = new LakeIndex(mesh, renderer.mapW);
+          dirty = true;
+        })
+        .catch((e) => console.warn("Lakes unavailable:", e));
     }
 
     // --- Input: drag to pan, wheel to zoom at the cursor, click to select.
@@ -321,10 +334,13 @@ export function MapView() {
       if (!ids) return 0;
       const r = glCanvas.getBoundingClientRect();
       const c = renderer.camera;
-      const x = Math.floor(c.cx + (clientX - r.left - r.width / 2) / c.zoom);
-      const y = Math.floor(c.cy + (clientY - r.top - r.height / 2) / c.zoom);
+      const fx = c.cx + (clientX - r.left - r.width / 2) / c.zoom;
+      const fy = c.cy + (clientY - r.top - r.height / 2) / c.zoom;
+      const x = Math.floor(fx), y = Math.floor(fy);
       if (y < 0 || y >= renderer.mapH) return 0;
       const wx = ((x % renderer.mapW) + renderer.mapW) % renderer.mapW;
+      // A lake is water even though the province bitmap has land under it.
+      if (lakes?.contains(wx + (fx - x), fy)) return 0;
       return ids[y * renderer.mapW + wx];
     };
     let drag: { x: number; y: number; moved: boolean } | null = null;
